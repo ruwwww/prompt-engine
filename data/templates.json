@@ -2,13 +2,56 @@
   "Face": "{expression} {gender}",
   "Hair": "{length} {style} {color} hair",
   "Eyes": "{color} eyes",
-  "Headwear": "{color} {style}",
-  "Sunglasses": "{color} {style} sunglasses",
-  "Cap": "{color} cap",
-  "Hoodie": "{fit} {color} {material} hoodie",
-  "CargoPants": "{fit} {color} cargo pants",
-  "Ring": "{material} ring",
-  "Shoes": "{color} shoes",
+  "Headwear": {
+    "head": "",
+    "slots": {
+      "color": { "position": "pre", "rank": 1 },
+      "style": { "position": "pre", "rank": 2 }
+    }
+  },
+  "Sunglasses": {
+    "head": "sunglasses",
+    "plural": { "irregular": "sunglasses" },
+    "slots": {
+      "color": { "position": "pre", "rank": 1 },
+      "style": { "position": "pre", "rank": 2 }
+    }
+  },
+  "Cap": {
+    "head": "cap",
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "Hoodie": {
+    "head": "hoodie",
+    "slots": {
+      "fit": { "position": "pre" },
+      "color": { "position": "pre" },
+      "material": { "position": "pre" }
+    }
+  },
+  "CargoPants": {
+    "head": "cargo pants",
+    "plural": { "irregular": "cargo pants" },
+    "slots": {
+      "fit": { "position": "pre" },
+      "color": { "position": "pre" }
+    }
+  },
+  "Ring": {
+    "head": "ring",
+    "slots": {
+      "material": { "position": "pre" }
+    }
+  },
+  "Shoes": {
+    "head": "shoes",
+    "plural": { "irregular": "shoes" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
   "CoffeeCup": "{material} coffee cup",
   "Car": "{color} car",
   "Bathtub": "{color} {material} {style} bathtub",
