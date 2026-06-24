@@ -494,6 +494,44 @@ class TestNewFeatures(unittest.TestCase):
         self.assertIn("smiling woman", out)
         self.assertIn("serious man", out)
 
+    def test_eyes_and_headwear(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Eyes": {"color": "green"},
+                    "Headwear": {"owned_item_id": "sunglasses_1"},
+                },
+                "sunglasses_1": {
+                    "type": "accessory",
+                    "template_key": "Sunglasses",
+                    "style": "aviator",
+                    "color": "black",
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("green eyes", out)
+        self.assertIn("black aviator sunglasses", out)
+
+        # Test native headwear
+        scene_native = {
+            "camera": {"framing": "close_up"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Headwear": {"color": "black", "style": "baseball cap"},
+                }
+            }
+        }
+        out_native = self.c.compile_scene(scene_native)
+        self.assertIn("wearing black baseball cap", out_native)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

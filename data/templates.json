@@ -1,6 +1,10 @@
 {
   "Face": "{expression} {gender}",
   "Hair": "{length} {style} {color} hair",
+  "Eyes": "{color} eyes",
+  "Headwear": "{color} {style}",
+  "Sunglasses": "{color} {style} sunglasses",
+  "Cap": "{color} cap",
   "Hoodie": "{fit} {color} {material} hoodie",
   "CargoPants": "{fit} {color} cargo pants",
   "Ring": "{material} ring",

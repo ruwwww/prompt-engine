@@ -94,9 +94,9 @@ class VisibilitySystem:
     """Resolves active body zones from camera framing + pose occlusion."""
 
     CAMERA_ZONES = {
-        "close_up":  ["Face", "Hair"],
-        "medium":    ["Face", "Hair", "UpperBody", "Hands"],
-        "full_body": ["Face", "Hair", "UpperBody", "Hands", "LowerBody", "Feet"],
+        "close_up":  ["Face", "Hair", "Eyes", "Headwear"],
+        "medium":    ["Face", "Hair", "Eyes", "Headwear", "UpperBody", "Hands"],
+        "full_body": ["Face", "Hair", "Eyes", "Headwear", "UpperBody", "Hands", "LowerBody", "Feet"],
     }
 
     def __init__(self, poses_db: dict):
@@ -508,6 +508,7 @@ class RenderSystem:
 
             face_frag = my_natives.get("Face")
             hair_frag = my_natives.get("Hair")
+            eyes_frag = my_natives.get("Eyes")
 
             if face_frag:
                 face_clean = face_frag.text.replace(f" {gender}", "").strip()
@@ -515,10 +516,23 @@ class RenderSystem:
             else:
                 subject = gender
 
+            with_parts = []
             if hair_frag:
-                subject = f"{subject} with {hair_frag.text}"
+                with_parts.append(hair_frag.text)
+            if eyes_frag:
+                with_parts.append(eyes_frag.text)
+
+            if with_parts:
+                if len(with_parts) == 1:
+                    subject = f"{subject} with {with_parts[0]}"
+                else:
+                    subject = f"{subject} with {with_parts[0]} and {with_parts[1]}"
 
             # Clothing aggregation ("wearing X, Y and Z")
+            headwear_frag = my_natives.get("Headwear")
+            if headwear_frag:
+                my_clothing.append(headwear_frag)
+
             if my_clothing:
                 items = [c.text for c in my_clothing]
                 if len(items) == 1:

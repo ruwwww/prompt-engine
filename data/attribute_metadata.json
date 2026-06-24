@@ -7,6 +7,14 @@
     "tags": ["identity"],
     "priority": 85
   },
+  "eyes": {
+    "tags": ["identity"],
+    "priority": 82
+  },
+  "headwear": {
+    "tags": ["accessory"],
+    "priority": 68
+  },
   "clothing": {
     "tags": ["clothing"],
     "priority": 70
