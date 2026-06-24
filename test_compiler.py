@@ -829,6 +829,70 @@ class TestSlotDescriptors(unittest.TestCase):
         self.assertIn("hugging her", out)
         self.assertNotIn("hugging smiling woman", out)
 
+    def test_linguistic_tone_controllers(self):
+        # 1. Test template-level head tone mapping
+        forest_poetic_descriptor = {
+            "head": {
+                "default": "forest",
+                "poetic": "woodlands"
+            },
+            "slots": {
+                "weather": { "position": "pre" }
+            }
+        }
+        # default tone
+        self.assertEqual(
+            safe_format(forest_poetic_descriptor, {"weather": "foggy", "_tone": "default"}),
+            "foggy forest"
+        )
+        # poetic tone
+        self.assertEqual(
+            safe_format(forest_poetic_descriptor, {"weather": "foggy", "_tone": "poetic"}),
+            "foggy woodlands"
+        )
+
+        # 2. Test value-level attribute tone mapping (passed in components)
+        scene = {
+            "camera": {"framing": "medium"},
+            "tone": "vivid",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {
+                        "expression": {
+                            "default": "smiling",
+                            "vivid": "beaming",
+                            "concise": "calm"
+                        }
+                    }
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("beaming woman", out)
+
+        # 3. Test concise tone (should resolve to concise mapping)
+        scene_concise = {
+            "camera": {"framing": "medium"},
+            "tone": "concise",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {
+                        "expression": {
+                            "default": "smiling",
+                            "vivid": "beaming",
+                            "concise": "calm"
+                        }
+                    }
+                }
+            }
+        }
+        out_concise = self.c.compile_scene(scene_concise)
+        self.assertIn("calm woman", out_concise)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

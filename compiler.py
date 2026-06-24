@@ -15,6 +15,24 @@ from typing import Optional
 def safe_format(template_str, context: dict) -> str:
     """Format a template string or slot descriptor, replacing missing keys with empty string
     and collapsing any resulting multi-spaces."""
+    # Resolve tone
+    tone = context.get("_tone")
+    if not tone:
+        compiler_cls = globals().get("PromptCompiler")
+        if compiler_cls and hasattr(compiler_cls, "active_tone"):
+            tone = compiler_cls.active_tone
+        else:
+            tone = "default"
+
+    def resolve_tone_value(val):
+        if isinstance(val, dict):
+            # Check if this is a tone map or singular/plural verb map
+            if "singular" in val or "plural" in val:
+                return val
+            if any(k in val for k in ("default", "poetic", "vivid", "concise", "technical")):
+                return val.get(tone) or val.get("default") or ""
+        return val
+
     def adjust_articles(text: str) -> str:
         # Convert 'a' to 'an' before vowels
         text = re.sub(r"\b([aA])\s+([aeiouAEIOU][a-zA-Z]*)", lambda m: m.group(1) + "n " + m.group(2), text)
@@ -38,8 +56,13 @@ def safe_format(template_str, context: dict) -> str:
         "material": 8
     }
 
+    # Resolve tone on the template itself if it's a tone map string
+    template_str = resolve_tone_value(template_str)
+
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
+        head = resolve_tone_value(head)
+        
         # Resolve head if it's a dict containing singular/plural
         if isinstance(head, dict):
             agreement_role = head.get("agreement_with", "actor")
@@ -48,7 +71,8 @@ def safe_format(template_str, context: dict) -> str:
                 is_plural = context.get("_plural_self", False)
             else:
                 is_plural = context.get(f"_plural_{agreement_role}", False)
-            head = head.get("plural" if is_plural else "singular", "")
+            head_val = head.get("plural" if is_plural else "singular", "")
+            head = resolve_tone_value(head_val)
         else:
             # Apply noun pluralization rules if _plural_self is true
             if context.get("_plural_self", False) and "plural" in template_str:
@@ -65,6 +89,7 @@ def safe_format(template_str, context: dict) -> str:
         
         for slot_name, slot_cfg in slots.items():
             val = context.get(slot_name)
+            val = resolve_tone_value(val)
             val_str = str(val).strip() if val is not None else ""
             if not val_str:
                 continue
@@ -91,7 +116,12 @@ def safe_format(template_str, context: dict) -> str:
         return adjust_articles(rendered)
 
     placeholders = re.findall(r"\{([a-zA-Z0-9_]+)\}", str(template_str))
-    kwargs = {p: str(context.get(p) or "") for p in placeholders}
+    kwargs = {}
+    for p in placeholders:
+        val = context.get(p)
+        val = resolve_tone_value(val)
+        kwargs[p] = str(val or "")
+        
     rendered = str(template_str).format(**kwargs)
     rendered = re.sub(r"\s+", " ", rendered).strip()
     return adjust_articles(rendered)
@@ -871,6 +901,11 @@ class PromptCompiler:
         return default
 
     def compile_scene(self, scene: dict, strict: bool = False) -> str:
+        # Resolve active tone globally for safe_format
+        render_profile = scene.get("render_profile", "character_sheet")
+        profile = self.render_system.profiles.get(render_profile, {})
+        PromptCompiler.active_tone = scene.get("tone") or profile.get("tone") or "default"
+
         # 1. Wrap raw dicts into SceneObjects
         scene_objects: dict = {
             obj_id: SceneObject(obj_id, obj_data.get("type"), obj_data)
