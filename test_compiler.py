@@ -1,196 +1,447 @@
+"""
+test_compiler.py — Full regression + edge-case test suite
+Covers Stages 1-6 + Architecture Polish
+"""
 import unittest
-from compiler import PromptCompiler
+from compiler import PromptCompiler, safe_format
 
-class TestPromptCompiler(unittest.TestCase):
+class TestSafeFormat(unittest.TestCase):
+    """Phase 1 — safe_format utility"""
+
+    def test_all_keys_present(self):
+        self.assertEqual(safe_format("{fit} {color} {material} hoodie",
+                                     {"fit": "oversized", "color": "black", "material": "cotton"}),
+                         "oversized black cotton hoodie")
+
+    def test_missing_keys_collapse(self):
+        self.assertEqual(safe_format("{fit} {color} {material} hoodie", {"color": "red"}),
+                         "red hoodie")
+
+    def test_no_double_spaces(self):
+        result = safe_format("{a} {b} word", {"b": "some"})
+        self.assertNotIn("  ", result)
+
+
+class TestVisibility(unittest.TestCase):
+    """Stage 1-2 — Camera + Pose visibility"""
+
     def setUp(self):
-        self.compiler = PromptCompiler()
+        self.c = PromptCompiler()
 
-    def test_visibility_evaluation_close_up(self):
+    def test_close_up_hides_feet(self):
         scene = {
-            "camera": {
-                "framing": "close_up"
-            },
+            "camera": {"framing": "close_up"},
             "objects": {
-                "human_1": {
-                    "type": "human",
-                    "gender": "woman",
-                    "Face": {
-                        "expression": "smiling"
-                    },
-                    "Hair": {
-                        "color": "brown",
-                        "length": "long"
-                    },
-                    "Feet": {
-                        "owned_item_id": "shoes_1"
-                    }
-                },
-                "shoes_1": {
-                    "type": "clothing",
-                    "template_key": "Shoes",
-                    "color": "black"
-                }
+                "h1": {"type": "human", "gender": "woman",
+                       "Face": {"expression": "smiling"},
+                       "Hair": {"color": "brown", "length": "long"},
+                       "Feet": {"owned_item_id": "s1"}},
+                "s1": {"type": "clothing", "template_key": "Shoes", "color": "black"},
             }
         }
-        compiled = self.compiler.compile_scene(scene)
-        self.assertIn("smiling", compiled)
-        self.assertIn("long", compiled)
-        self.assertNotIn("shoes", compiled)
-        self.assertNotIn("black", compiled)
+        out = self.c.compile_scene(scene)
+        self.assertIn("smiling", out)
+        self.assertIn("long", out)
+        self.assertNotIn("shoes", out)
+        self.assertNotIn("black", out)
 
-    def test_attribute_composition_clean_spacing(self):
-        template = "{fit} {color} {material} hoodie"
-        ctx_all = {"fit": "oversized", "color": "black", "material": "cotton"}
-        self.assertEqual(
-            self.compiler.safe_format(template, ctx_all),
-            "oversized black cotton hoodie"
-        )
-        
-        ctx_partial = {"color": "red"}
-        self.assertEqual(
-            self.compiler.safe_format(template, ctx_partial),
-            "red hoodie"
-        )
-
-    def test_persona_resolution_and_pose_visibility(self):
+    def test_full_body_shows_feet(self):
         scene = {
-            "camera": {
-                "framing": "medium"
-            },
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Feet": {"owned_item_id": "s1"}},
+                "s1": {"type": "clothing", "template_key": "Shoes", "color": "white"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("white", out)
+
+    def test_pose_hides_hands(self):
+        scene = {
+            "camera": {"framing": "medium"},
             "pose": "hands_behind_back",
             "objects": {
-                "human_1": {
-                    "type": "human",
-                    "persona": "urban_influencer",
-                    "Face": {
-                        "expression": "grinning"
-                    }
-                },
-                "hoodie_1": {
-                    "type": "clothing",
-                    "template_key": "Hoodie",
-                    "fit": "oversized",
-                    "color": "black",
-                    "material": "cotton"
-                },
-                "ring_1": {
-                    "type": "accessory",
-                    "template_key": "Ring",
-                    "material": "silver"
-                }
+                "h1": {"type": "human", "persona": "urban_influencer",
+                       "Face": {"expression": "grinning"}},
+                "ring_1": {"type": "accessory", "template_key": "Ring", "material": "silver"},
             }
         }
-        compiled = self.compiler.compile_scene(scene)
-        self.assertIn("grinning woman", compiled)
-        self.assertNotIn("smiling woman", compiled)
-        self.assertIn("long wavy brown hair", compiled)
-        self.assertNotIn("silver ring", compiled)
+        out = self.c.compile_scene(scene)
+        self.assertIn("grinning woman", out)
+        self.assertNotIn("smiling woman", out)
+        self.assertNotIn("silver ring", out)
 
-    def test_relationship_rendering_and_variants(self):
+    def test_pose_sitting_hides_feet(self):
         scene = {
-            "camera": {
-                "framing": "medium"
-            },
+            "camera": {"framing": "full_body"},
+            "pose": "sitting",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Feet": {"owned_item_id": "s1"}},
+                "s1": {"type": "clothing", "template_key": "Shoes", "color": "white"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("shoes", out)
+
+
+class TestPersonas(unittest.TestCase):
+    """Stage 2 — Persona resolution and overrides"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_persona_defaults_applied(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("smiling", out)
+        self.assertIn("long wavy brown hair", out)
+
+    def test_persona_face_override(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"h1": {"type": "human", "persona": "urban_influencer",
+                                "Face": {"expression": "laughing"}}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("laughing", out)
+        self.assertNotIn("smiling", out)
+
+
+class TestAttributeComposition(unittest.TestCase):
+    """Stage 2 — Render template attribute composition"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_hair_renders_in_order(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"h1": {"type": "human", "gender": "woman",
+                                "Hair": {"length": "long", "style": "wavy", "color": "brown"}}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy brown hair", out)
+
+    def test_clothing_aggregation_multiple(self):
+        """Multiple clothing items appear joined with 'wearing'."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "UpperBody": {"owned_item_id": "hoodie_1"},
+                       "LowerBody": {"owned_item_id": "pants_1"}},
+                "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
+                              "fit": "oversized", "color": "black", "material": "cotton"},
+                "pants_1": {"type": "clothing", "template_key": "CargoPants",
+                             "fit": "baggy", "color": "olive"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("wearing", out)
+        self.assertIn("hoodie", out)
+        self.assertIn("cargo pants", out)
+
+
+class TestRelationships(unittest.TestCase):
+    """Stage 4 — Actions, interactions, variants, visibility"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_holding_drink_variant(self):
+        scene = {
+            "camera": {"framing": "medium"},
             "pose": "standing",
             "render_profile": "character_sheet",
             "objects": {
-                "human_1": {
-                    "type": "human",
-                    "persona": "urban_influencer"
-                },
-                "coffee_cup_1": {
-                    "type": "drink",
-                    "template_key": "CoffeeCup",
-                    "material": "ceramic",
-                    "color": "white"
-                }
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "c1": {"type": "drink", "template_key": "CoffeeCup",
+                        "material": "ceramic", "color": "white"},
             },
-            "relationships": [
-                {
-                    "type": "holding",
-                    "actor": "human_1",
-                    "object": "coffee_cup_1"
-                }
-            ]
+            "relationships": [{"type": "holding", "actor": "h1", "object": "c1"}]
         }
-        compiled = self.compiler.compile_scene(scene)
-        self.assertIn("woman", compiled)
-        self.assertIn("holding a cup of ceramic coffee cup", compiled)
+        out = self.c.compile_scene(scene)
+        self.assertIn("holding a cup of ceramic coffee cup", out)
 
-    def test_relationship_visibility_occlusion(self):
+    def test_holding_occluded_by_pose(self):
         scene = {
-            "camera": {
-                "framing": "medium"
-            },
+            "camera": {"framing": "medium"},
             "pose": "hands_behind_back",
             "render_profile": "character_sheet",
             "objects": {
-                "human_1": {
-                    "type": "human",
-                    "persona": "urban_influencer"
-                },
-                "coffee_cup_1": {
-                    "type": "drink",
-                    "template_key": "CoffeeCup",
-                    "material": "ceramic",
-                    "color": "white"
-                }
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "c1": {"type": "drink", "template_key": "CoffeeCup",
+                        "material": "ceramic", "color": "white"},
             },
-            "relationships": [
-                {
-                    "type": "holding",
-                    "actor": "human_1",
-                    "object": "coffee_cup_1"
-                }
-            ]
+            "relationships": [{"type": "holding", "actor": "h1", "object": "c1"}]
         }
-        compiled = self.compiler.compile_scene(scene)
-        self.assertNotIn("holding", compiled)
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("holding", out)
 
-    def test_spatial_relationship_and_placements(self):
+    def test_invalid_relationship_type_skipped(self):
+        """Wrong type on relationship role — silently skipped."""
         scene = {
-            "camera": {
-                "framing": "full_body"
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "car1": {"type": "vehicle", "template_key": "Car", "color": "red"},
             },
+            "relationships": [{"type": "holding", "actor": "h1", "object": "car1"}]  # vehicle not allowed for holding
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("holding", out)
+
+
+class TestSpatialAndScene(unittest.TestCase):
+    """Stage 5 — Spatial relationships, placements, environment"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_spatial_relationship_rendered(self):
+        scene = {
+            "camera": {"framing": "full_body"},
             "pose": "standing",
             "render_profile": "cinematic",
-            "environment": {
-                "type": "alley",
-                "lighting": "neon",
-                "weather": "rainy"
-            },
-            "composition": {
-                "type": "cinematic"
-            },
-            "anchors": {
-                "primary": "human_1"
-            },
-            "placements": {
-                "car_1": "background"
-            },
+            "environment": {"type": "alley", "lighting": "neon", "weather": "rainy"},
+            "composition": {"type": "cinematic"},
+            "anchors": {"primary": "h1"},
+            "placements": {"car_1": "background"},
             "objects": {
-                "human_1": {
-                    "type": "human",
-                    "persona": "urban_influencer"
-                },
-                "car_1": {
-                    "type": "vehicle",
-                    "template_key": "Car",
-                    "color": "red"
-                }
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "car_1": {"type": "vehicle", "template_key": "Car", "color": "red"},
+            },
+            "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("in a rain-soaked neon-lit alley", out)
+        self.assertIn("standing next to red car in background", out)
+        self.assertIn("cinematic still photography", out)
+
+
+class TestRenderProfiles(unittest.TestCase):
+    """Stage 3 — Emit profiles, tag filtering, budgets"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_portrait_excludes_clothing(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "portrait",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
+                              "fit": "oversized", "color": "black", "material": "cotton"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("smiling", out)
+        self.assertNotIn("hoodie", out)
+
+    def test_fashion_excludes_emotion(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "fashion",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
+                              "fit": "oversized", "color": "black", "material": "cotton"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("smiling woman", out)
+        self.assertIn("hoodie", out)
+
+
+class TestValidationSystem(unittest.TestCase):
+    """Phase 3 — ValidationSystem"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_unknown_relationship_type_flagged(self):
+        from compiler import SceneObject
+        scene = {
+            "objects": {"h1": {"type": "human", "gender": "woman"}},
+            "relationships": [{"type": "teleporting", "actor": "h1"}]
+        }
+        scene_objects = {
+            "h1": SceneObject("h1", "human", {"type": "human", "gender": "woman"})
+        }
+        errors = self.c.validation_system.validate(scene, scene_objects)
+        error_msgs = [e.message for e in errors]
+        self.assertTrue(any("teleporting" in m for m in error_msgs))
+
+    def test_missing_anchor_object_flagged(self):
+        from compiler import SceneObject
+        scene = {
+            "objects": {"h1": {"type": "human", "gender": "woman"}},
+            "anchors": {"primary": "nonexistent_object"},
+        }
+        scene_objects = {
+            "h1": SceneObject("h1", "human", {"type": "human", "gender": "woman"})
+        }
+        errors = self.c.validation_system.validate(scene, scene_objects)
+        self.assertTrue(any("nonexistent_object" in e.message for e in errors))
+
+    def test_strict_mode_raises(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {"h1": {"type": "human", "gender": "woman"}},
+            "anchors": {"primary": "ghost_obj"},
+        }
+        with self.assertRaises(ValueError):
+            self.c.compile_scene(scene, strict=True)
+
+    def test_clean_scene_no_errors(self):
+        from compiler import SceneObject
+        scene = {
+            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}},
+        }
+        scene_objects = {
+            "h1": SceneObject("h1", "human", {"type": "human", "persona": "urban_influencer"})
+        }
+        errors = self.c.validation_system.validate(scene, scene_objects)
+        hard = [e for e in errors if e.severity == "error"]
+        self.assertEqual(hard, [])
+
+
+class TestEdgeCases(unittest.TestCase):
+    """Phase 3 — Edge cases that break naive compilers"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_empty_scene_returns_empty_string(self):
+        out = self.c.compile_scene({"objects": {}})
+        self.assertEqual(out, "")
+
+    def test_scene_with_no_human_returns_empty(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "c1": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic", "color": "white"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertEqual(out, "")
+
+    def test_unknown_persona_does_not_crash(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"h1": {"type": "human", "gender": "man", "persona": "nonexistent_persona"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("man", out)
+
+    def test_missing_template_key_does_not_crash(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "UpperBody": {"owned_item_id": "mystery_item"}},
+                "mystery_item": {"type": "clothing", "template_key": "NonExistentTemplate",
+                                  "color": "purple"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIsInstance(out, str)   # should not crash
+
+    def test_multiple_relationships_same_subject_chained(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "pose": "standing",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"},
+                "c1": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic", "color": "white"},
             },
             "relationships": [
-                {
-                    "type": "standing_next_to",
-                    "subject": "human_1",
-                    "target": "car_1"
-                }
+                {"type": "holding", "actor": "h1", "object": "c1"},
             ]
         }
-        compiled = self.compiler.compile_scene(scene)
-        self.assertIn("in a rain-soaked neon-lit alley", compiled)
-        self.assertIn("standing next to red car in background", compiled)
-        self.assertIn("cinematic still photography", compiled)
+        out = self.c.compile_scene(scene)
+        self.assertIn("holding", out)
+
+    def test_environment_without_weather_does_not_crash(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "alley", "lighting": "neon"},
+            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}},
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("neon", out)
+
+
+class TestMultiCharacter(unittest.TestCase):
+    """Phase 4 — Multi-character scenes"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_two_humans_both_described(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                        "Face": {"expression": "smiling"},
+                        "Hair": {"color": "brown", "length": "long", "style": "wavy"}},
+                "h2": {"type": "human", "gender": "man",
+                        "Face": {"expression": "serious"}},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("woman", out)
+        self.assertIn("man", out)
+
+
+class TestNarrativeMode(unittest.TestCase):
+    """Phase 5 — Scene description narrative mode"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_scene_description_mode_produces_sentence(self):
+        """The cinematic profile with scene_description mode should produce a sentence."""
+        # Temporarily patch the profile to use scene_description mode
+        original = self.c.render_system.profiles.get("cinematic", {}).copy()
+        self.c.render_system.profiles["cinematic"]["narrative_mode"] = "scene_description"
+
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "standing",
+            "render_profile": "cinematic",
+            "environment": {"type": "alley", "lighting": "neon", "weather": "rainy"},
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "car_1": {"type": "vehicle", "template_key": "Car", "color": "red"},
+            },
+            "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}]
+        }
+        out = self.c.compile_scene(scene)
+
+        # Should be a proper sentence ending with period
+        self.assertTrue(out.endswith("."), f"Expected sentence ending with '.', got: {out}")
+        # Should start with A/An
+        self.assertTrue(out.startswith("A ") or out.startswith("An "),
+                        f"Expected sentence starting with 'A/An', got: {out}")
+        # Finite verb instead of participle for subject
+        self.assertIn("stands next to", out)
+
+        # Restore
+        self.c.render_system.profiles["cinematic"] = original
+
 
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)
