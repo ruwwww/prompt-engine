@@ -692,6 +692,31 @@ class TestSlotDescriptors(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("on a stormy dark beach", out)
         self.assertNotIn("beach in", out)
+    def test_action_slot_descriptor_realization(self):
+        # Test that relationship slot descriptors from actions.json compile correctly
+        scene = {
+            "camera": {"framing": "medium"},
+            "pose": "standing",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "c1": {"type": "drink", "template_key": "CoffeeCup",
+                        "material": "ceramic", "color": "white"},
+            },
+            "relationships": [{"type": "holding", "actor": "h1", "object": "c1"}]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("holding a cup of a ceramic coffee cup", out)
+
+    def test_dynamic_article_adjustment(self):
+        # Directly test safe_format handles a/an adjustments
+        from compiler import safe_format
+        # a -> an before vowels
+        self.assertEqual(safe_format("a {color} hoodie", {"color": "orange"}), "an orange hoodie")
+        self.assertEqual(safe_format("A {color} apple", {"color": "emerald"}), "An emerald apple")
+        # an -> a before consonants
+        self.assertEqual(safe_format("an {color} car", {"color": "red"}), "a red car")
+        self.assertEqual(safe_format("An {color} cap", {"color": "blue"}), "A blue cap")
 
 
 if __name__ == "__main__":

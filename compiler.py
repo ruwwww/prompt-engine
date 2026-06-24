@@ -15,6 +15,13 @@ from typing import Optional
 def safe_format(template_str, context: dict) -> str:
     """Format a template string or slot descriptor, replacing missing keys with empty string
     and collapsing any resulting multi-spaces."""
+    def adjust_articles(text: str) -> str:
+        # Convert 'a' to 'an' before vowels
+        text = re.sub(r"\b([aA])\s+([aeiouAEIOU][a-zA-Z]*)", lambda m: m.group(1) + "n " + m.group(2), text)
+        # Convert 'an' to 'a' before consonants
+        text = re.sub(r"\b([aA])n\s+([^aeiouAEIOU\s][a-zA-Z]*)", lambda m: m.group(1) + " " + m.group(2), text)
+        return text
+
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
         slots = template_str.get("slots", {})
@@ -40,12 +47,14 @@ def safe_format(template_str, context: dict) -> str:
                     
         parts = pre_modifiers + [head] + post_modifiers
         rendered = " ".join(parts)
-        return re.sub(r"\s+", " ", rendered).strip()
+        rendered = re.sub(r"\s+", " ", rendered).strip()
+        return adjust_articles(rendered)
 
     placeholders = re.findall(r"\{([a-zA-Z0-9_]+)\}", str(template_str))
     kwargs = {p: str(context.get(p) or "") for p in placeholders}
     rendered = str(template_str).format(**kwargs)
-    return re.sub(r"\s+", " ", rendered).strip()
+    rendered = re.sub(r"\s+", " ", rendered).strip()
+    return adjust_articles(rendered)
 
 
 # ---------------------------------------------------------------------------
@@ -317,8 +326,8 @@ class RelationshipSystem:
                 frag_type="relationship",
                 tags=rel_def.get("tags", ["spatial" if is_spatial else "action"]),
                 priority=priority_fn(rel_def.get("priority", 50), related_ids),
-                text=template.format(**role_phrases),
-                clause_text=clause_template.format(**role_phrases),
+                text=safe_format(template, role_phrases),
+                clause_text=safe_format(clause_template, role_phrases),
                 actor_id=actor_id or "",
                 chain_order=rel_def.get("chain_order", 99),
             ))

@@ -14,22 +14,55 @@
         "allowed": ["drink", "clothing", "item"]
       }
     },
-    "template": "{actor} holding {object}",
-    "clause": "holding {object}",
+    "template": {
+      "head": "holding",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "object": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "holding",
+      "slots": {
+        "object": { "position": "post", "required": true }
+      }
+    },
     "variants": [
       {
         "when": {
           "object_type": "drink"
         },
-        "template": "{actor} holding a cup of {object}",
-        "clause": "holding a cup of {object}"
+        "template": {
+          "head": "holding a cup of",
+          "slots": {
+            "actor": { "position": "pre", "required": true },
+            "object": { "position": "post", "required": true }
+          }
+        },
+        "clause": {
+          "head": "holding a cup of",
+          "slots": {
+            "object": { "position": "post", "required": true }
+          }
+        }
       },
       {
         "when": {
           "object_type": "phone"
         },
-        "template": "{actor} using {object}",
-        "clause": "using {object}"
+        "template": {
+          "head": "using",
+          "slots": {
+            "actor": { "position": "pre", "required": true },
+            "object": { "position": "post", "required": true }
+          }
+        },
+        "clause": {
+          "head": "using",
+          "slots": {
+            "object": { "position": "post", "required": true }
+          }
+        }
       }
     ]
   },
@@ -45,7 +78,12 @@
         "allowed": ["human"]
       }
     },
-    "template": "{actor} sitting",
+    "template": {
+      "head": "sitting",
+      "slots": {
+        "actor": { "position": "pre", "required": true }
+      }
+    },
     "clause": "sitting"
   },
   "soaking_in": {
@@ -63,8 +101,19 @@
         "allowed": ["fixture", "furniture"]
       }
     },
-    "template": "{actor} soaking in {object}",
-    "clause": "soaking in {object}"
+    "template": {
+      "head": "soaking in",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "object": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "soaking in",
+      "slots": {
+        "object": { "position": "post", "required": true }
+      }
+    }
   },
   "hugging": {
     "tags": ["interaction"],
@@ -82,7 +131,18 @@
         "allowed": ["human"]
       }
     },
-    "template": "{subject1} hugging {subject2}",
-    "clause": "hugging {subject2}"
+    "template": {
+      "head": "hugging",
+      "slots": {
+        "subject1": { "position": "pre", "required": true },
+        "subject2": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "hugging",
+      "slots": {
+        "subject2": { "position": "post", "required": true }
+      }
+    }
   }
 }
