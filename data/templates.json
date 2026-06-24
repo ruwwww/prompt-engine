@@ -10,5 +10,7 @@
   "Ring": "{material} ring",
   "Shoes": "{color} shoes",
   "CoffeeCup": "{material} coffee cup",
-  "Car": "{color} car"
+  "Car": "{color} car",
+  "Bathtub": "{color} {material} {style} bathtub",
+  "Mirror": "{style} mirror"
 }

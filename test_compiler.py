@@ -532,6 +532,63 @@ class TestNewFeatures(unittest.TestCase):
         out_native = self.c.compile_scene(scene_native)
         self.assertIn("wearing black baseball cap", out_native)
 
+    def test_composable_bathroom_ecs(self):
+        # 1. Test ambient bathroom compilation (ECS Queries)
+        scene_ambient = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "bathroom", "lighting": "steamy"},
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "tub_1": {
+                    "type": "fixture",
+                    "template_key": "Bathtub",
+                    "color": "white",
+                    "material": "porcelain",
+                    "style": "clawfoot"
+                },
+                "mirror_1": {
+                    "type": "fixture",
+                    "template_key": "Mirror",
+                    "style": "vintage"
+                }
+            }
+        }
+        out_ambient = self.c.compile_scene(scene_ambient)
+        # Should include ambient fixtures in environment description
+        self.assertIn("inside a sunny steamy bathroom featuring a white porcelain clawfoot bathtub and a vintage mirror", out_ambient)
+
+        # 2. Test interactive bathroom: occupied fixture is excluded from ambient environment description
+        scene_interactive = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "bathroom", "lighting": "steamy"},
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "tub_1": {
+                    "type": "fixture",
+                    "template_key": "Bathtub",
+                    "color": "white",
+                    "material": "porcelain",
+                    "style": "clawfoot"
+                },
+                "mirror_1": {
+                    "type": "fixture",
+                    "template_key": "Mirror",
+                    "style": "vintage"
+                }
+            },
+            "relationships": [
+                {"type": "soaking_in", "actor": "h1", "object": "tub_1"}
+            ]
+        }
+        out_interactive = self.c.compile_scene(scene_interactive)
+        # The tub is occupied, so it should only feature the mirror in the environment description,
+        # while the tub is described in the relationship clause.
+        self.assertIn("soaks in a white porcelain clawfoot bathtub", out_interactive)
+        self.assertIn("inside a sunny steamy bathroom featuring a vintage mirror", out_interactive)
+        self.assertNotIn("bathtub and a vintage mirror", out_interactive)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

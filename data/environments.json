@@ -8,5 +8,10 @@
     "template": "{weather} {lighting} alley",
     "default_lighting": "neon",
     "default_weather": "rainy"
+  },
+  "bathroom": {
+    "template": "{weather} {lighting} bathroom",
+    "default_lighting": "soft",
+    "default_weather": "sunny"
   }
 }

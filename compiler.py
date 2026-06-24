@@ -306,13 +306,14 @@ class RelationshipSystem:
 class EnvironmentSystem:
     """Resolves environment, lighting, weather and composition into fragments."""
 
-    def __init__(self, environments_db: dict, lighting_db: dict, weather_db: dict, composition_db: dict):
+    def __init__(self, environments_db: dict, lighting_db: dict, weather_db: dict, composition_db: dict, templates_db: dict):
         self.environments = environments_db
         self.lighting = lighting_db
         self.weather = weather_db
         self.composition = composition_db
+        self.templates = templates_db
 
-    def process(self, scene: dict) -> list:
+    def process(self, scene: dict, scene_objects: dict, owned_item_ids: set, relationship_targets: set) -> list:
         candidates = []
 
         env_config = scene.get("environment", {})
@@ -328,6 +329,29 @@ class EnvironmentSystem:
 
             env_tpl = env_def.get("template", "{weather} {lighting} {type}")
             env_text = safe_format(env_tpl, {"weather": weather_str, "lighting": lighting_str, "type": env_type})
+
+            # ECS query: find ambient fixtures and furniture
+            ambient_fixtures = []
+            for obj in scene_objects.values():
+                if obj.type in ("fixture", "furniture") and obj.id not in owned_item_ids and obj.id not in relationship_targets:
+                    tkey = obj.get_component("template_key")
+                    template = self.templates.get(tkey)
+                    if template:
+                        phrase = safe_format(template, obj.components)
+                    else:
+                        parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
+                        phrase = " ".join(p for p in parts if p).strip()
+                    if phrase:
+                        ambient_fixtures.append(with_article(phrase))
+
+            if ambient_fixtures:
+                if len(ambient_fixtures) == 1:
+                    fixtures_str = ambient_fixtures[0]
+                elif len(ambient_fixtures) == 2:
+                    fixtures_str = f"{ambient_fixtures[0]} and {ambient_fixtures[1]}"
+                else:
+                    fixtures_str = ", ".join(ambient_fixtures[:-1]) + f", and {ambient_fixtures[-1]}"
+                env_text = f"{env_text} featuring {fixtures_str}"
 
             candidates.append(CandidateFragment(
                 zone="environment", frag_type="environment",
@@ -449,6 +473,7 @@ class RenderSystem:
         "hugging":           "hugs",
         "standing next to":  "stands next to",
         "sitting inside":    "sits inside",
+        "soaking in":        "soaks in",
     }
 
     def _to_finite(self, clause: str) -> str:
@@ -665,7 +690,7 @@ class PromptCompiler:
         self.visibility_system   = VisibilitySystem(poses)
         self.attribute_system    = AttributeCollectorSystem(metadata, templates)
         self.relationship_system = RelationshipSystem(actions, spatial, templates)
-        self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition)
+        self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition, templates)
         self.validation_system   = ValidationSystem(actions, spatial, templates)
         self.style_system        = StyleSystem(styles)
         self.render_system       = RenderSystem(profiles)
@@ -730,7 +755,22 @@ class PromptCompiler:
         candidates += self.relationship_system.process(
             scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn
         )
-        candidates += self.environment_system.process(scene)
+
+        # Identify occupied objects to exclude from ambient environment listing
+        owned_item_ids = set()
+        for human_obj in humans:
+            for zone in visible_zones:
+                zone_data = human_obj.get_component(zone)
+                if zone_data and zone_data.get("owned_item_id"):
+                    owned_item_ids.add(zone_data["owned_item_id"])
+
+        relationship_targets = set()
+        for rel in scene.get("relationships", []):
+            for role_name, val in rel.items():
+                if role_name not in ("type", "actor", "subject", "subject1"):
+                    relationship_targets.add(val)
+
+        candidates += self.environment_system.process(scene, scene_objects, owned_item_ids, relationship_targets)
         candidates += self.style_system.process(scene)
 
         # 7. Render
