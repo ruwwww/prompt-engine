@@ -605,7 +605,7 @@ class TestNewFeatures(unittest.TestCase):
             }
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("in a breezy golden-hour beach in Malibu", out)
+        self.assertIn("on a breezy golden-hour beach in Malibu", out)
 
     def test_forest_oop_ecs(self):
         scene = {
@@ -630,6 +630,68 @@ class TestNewFeatures(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         self.assertIn("in a foggy sunlight forest in the Pacific Northwest featuring a lush green pine tree", out)
+
+
+class TestSlotDescriptors(unittest.TestCase):
+    """Test the experimental slot descriptor format and realizer."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_slot_descriptor_all_slots(self):
+        # Beach with all slots filled
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "env_beach": {
+                    "type": "environment",
+                    "template_key": "Beach",
+                    "geolocation": "Hawaii",
+                    "weather": "sunny",
+                    "lighting": "bright"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("on a sunny bright beach in Hawaii", out)
+
+    def test_slot_descriptor_missing_optional_slots(self):
+        # Beach with weather and lighting missing
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "env_beach": {
+                    "type": "environment",
+                    "template_key": "Beach",
+                    "geolocation": "Hawaii"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("on a beach in Hawaii", out)
+
+    def test_slot_descriptor_missing_geolocation(self):
+        # Beach with missing geolocation (omits "in" preposition)
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "env_beach": {
+                    "type": "environment",
+                    "template_key": "Beach",
+                    "weather": "stormy",
+                    "lighting": "dark"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("on a stormy dark beach", out)
+        self.assertNotIn("beach in", out)
 
 
 if __name__ == "__main__":

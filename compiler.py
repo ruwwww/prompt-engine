@@ -12,12 +12,39 @@ from typing import Optional
 # Shared utility
 # ---------------------------------------------------------------------------
 
-def safe_format(template_str: str, context: dict) -> str:
-    """Format a template string, replacing missing keys with empty string
+def safe_format(template_str, context: dict) -> str:
+    """Format a template string or slot descriptor, replacing missing keys with empty string
     and collapsing any resulting multi-spaces."""
-    placeholders = re.findall(r"\{([a-zA-Z0-9_]+)\}", template_str)
+    if isinstance(template_str, dict):
+        head = template_str.get("head", "")
+        slots = template_str.get("slots", {})
+        
+        pre_modifiers = []
+        post_modifiers = []
+        
+        for slot_name, slot_cfg in slots.items():
+            val = context.get(slot_name)
+            val_str = str(val).strip() if val is not None else ""
+            if not val_str:
+                continue
+            
+            pos = slot_cfg.get("position", "pre")
+            if pos == "pre":
+                pre_modifiers.append(val_str)
+            elif pos == "post":
+                prep = slot_cfg.get("prep", "")
+                if prep:
+                    post_modifiers.append(f"{prep} {val_str}")
+                else:
+                    post_modifiers.append(val_str)
+                    
+        parts = pre_modifiers + [head] + post_modifiers
+        rendered = " ".join(parts)
+        return re.sub(r"\s+", " ", rendered).strip()
+
+    placeholders = re.findall(r"\{([a-zA-Z0-9_]+)\}", str(template_str))
     kwargs = {p: str(context.get(p) or "") for p in placeholders}
-    rendered = template_str.format(**kwargs)
+    rendered = str(template_str).format(**kwargs)
     return re.sub(r"\s+", " ", rendered).strip()
 
 
@@ -609,7 +636,12 @@ class RenderSystem:
                 if env_frag:
                     vowels = "aeiou"
                     env_art = "an" if env_frag.text[0].lower() in vowels else "a"
-                    prep = "inside" if any(k in env_frag.text for k in ("cafe", "office", "room")) else "in"
+                    if any(k in env_frag.text for k in ("cafe", "office", "room")):
+                        prep = "inside"
+                    elif "beach" in env_frag.text:
+                        prep = "on"
+                    else:
+                        prep = "in"
                     env_part = f"{prep} {env_art} {env_frag.text}"
 
                 parts = [f"{article} {subject}"]
@@ -627,7 +659,12 @@ class RenderSystem:
                     chain = " ".join(r.clause_text for r in my_rels)
                     parts.append(chain)
                 if env_frag:
-                    prep = "inside" if any(k in env_frag.text for k in ("cafe", "office", "room")) else "in"
+                    if any(k in env_frag.text for k in ("cafe", "office", "room")):
+                        prep = "inside"
+                    elif "beach" in env_frag.text:
+                        prep = "on"
+                    else:
+                        prep = "in"
                     vowels = "aeiou"
                     art = "an" if env_frag.text[0].lower() in vowels else "a"
                     parts.append(f"{prep} {art} {env_frag.text}")

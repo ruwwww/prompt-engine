@@ -13,7 +13,21 @@
   "Car": "{color} car",
   "Bathtub": "{color} {material} {style} bathtub",
   "Mirror": "{style} mirror",
-  "Beach": "{weather} {lighting} beach in {geolocation}",
-  "Forest": "{weather} {lighting} forest in {location}",
+  "Beach": {
+    "head": "beach",
+    "slots": {
+      "weather": { "position": "pre", "required": false },
+      "lighting": { "position": "pre", "required": false },
+      "geolocation": { "position": "post", "prep": "in", "required": false }
+    }
+  },
+  "Forest": {
+    "head": "forest",
+    "slots": {
+      "weather": { "position": "pre", "required": false },
+      "lighting": { "position": "pre", "required": false },
+      "location": { "position": "post", "prep": "in", "required": false }
+    }
+  },
   "Tree": "{color} {species} tree"
 }
