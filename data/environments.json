@@ -13,5 +13,10 @@
     "template": "{weather} {lighting} bathroom",
     "default_lighting": "soft",
     "default_weather": "sunny"
+  },
+  "beach": {
+    "template": "{weather} {lighting} beach in {geolocation}",
+    "default_lighting": "golden_hour",
+    "default_weather": "breezy"
   }
 }

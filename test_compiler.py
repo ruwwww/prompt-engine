@@ -589,6 +589,24 @@ class TestNewFeatures(unittest.TestCase):
         self.assertIn("inside a sunny steamy bathroom featuring a vintage mirror", out_interactive)
         self.assertNotIn("bathtub and a vintage mirror", out_interactive)
 
+    def test_beach_oop_ecs(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "env_beach": {
+                    "type": "environment",
+                    "template_key": "Beach",
+                    "geolocation": "Malibu",
+                    "weather": "breezy",
+                    "lighting": "golden_hour"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("in a breezy golden-hour beach in Malibu", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

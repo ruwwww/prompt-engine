@@ -313,22 +313,37 @@ class EnvironmentSystem:
         self.composition = composition_db
         self.templates = templates_db
 
-    def process(self, scene: dict, scene_objects: dict, owned_item_ids: set, relationship_targets: set) -> list:
+    def process(
+        self,
+        env_obj: Optional[SceneObject],
+        comp_obj: Optional[SceneObject],
+        scene_objects: dict,
+        owned_item_ids: set,
+        relationship_targets: set,
+    ) -> list:
         candidates = []
 
-        env_config = scene.get("environment", {})
-        env_type = env_config.get("type")
-        if env_type and env_type in self.environments:
-            env_def = self.environments[env_type]
+        if env_obj:
+            env_type = env_obj.get_component("template_key") or env_obj.get_component("type")
+            env_def = self.environments.get(env_type, {})
+            if not env_def and env_obj.get_component("type") in self.environments:
+                env_def = self.environments[env_obj.get_component("type")]
 
-            lighting_val = env_config.get("lighting", env_def.get("default_lighting", ""))
+            lighting_val = env_obj.get_component("lighting", env_def.get("default_lighting", ""))
             lighting_str = self.lighting.get(lighting_val, {}).get("template", lighting_val)
 
-            weather_val = env_config.get("weather", env_def.get("default_weather", ""))
+            weather_val = env_obj.get_component("weather", env_def.get("default_weather", ""))
             weather_str = self.weather.get(weather_val, {}).get("template", weather_val)
 
-            env_tpl = env_def.get("template", "{weather} {lighting} {type}")
-            env_text = safe_format(env_tpl, {"weather": weather_str, "lighting": lighting_str, "type": env_type})
+            env_tpl = self.templates.get(env_obj.get_component("template_key")) or env_def.get("template", "{weather} {lighting} {type}")
+
+            ctx = {
+                **env_obj.components,
+                "weather": weather_str,
+                "lighting": lighting_str,
+                "type": env_obj.get_component("type")
+            }
+            env_text = safe_format(env_tpl, ctx)
 
             # ECS query: find ambient fixtures and furniture
             ambient_fixtures = []
@@ -368,12 +383,18 @@ class EnvironmentSystem:
                     tags=["weather"], priority=50, text=weather_str,
                 ))
 
-        comp_type = scene.get("composition", {}).get("type")
-        if comp_type and comp_type in self.composition:
+        if comp_obj:
+            comp_type = comp_obj.get_component("template_key") or comp_obj.get_component("type")
+            comp_def = self.composition.get(comp_type, {})
+            text = comp_def.get("template", comp_type)
+            tpl = self.templates.get(comp_type)
+            if tpl:
+                text = safe_format(tpl, comp_obj.components)
+
             candidates.append(CandidateFragment(
                 zone="composition", frag_type="composition",
                 tags=["composition"], priority=88,
-                text=self.composition[comp_type].get("template", comp_type),
+                text=text,
             ))
 
         return candidates
@@ -770,7 +791,34 @@ class PromptCompiler:
                 if role_name not in ("type", "actor", "subject", "subject1"):
                     relationship_targets.add(val)
 
-        candidates += self.environment_system.process(scene, scene_objects, owned_item_ids, relationship_targets)
+        # Resolve environment and composition objects
+        env_obj = None
+        for obj in scene_objects.values():
+            if obj.type == "environment":
+                env_obj = obj
+                break
+        if not env_obj and "environment" in scene:
+            env_data = dict(scene["environment"])
+            env_data["template_key"] = env_data.get("type")
+            env_obj = SceneObject("env_legacy", "environment", env_data)
+            env_obj.components["type"] = env_data["template_key"]
+            scene_objects["env_legacy"] = env_obj
+
+        comp_obj = None
+        for obj in scene_objects.values():
+            if obj.type == "composition":
+                comp_obj = obj
+                break
+        if not comp_obj and "composition" in scene:
+            comp_data = dict(scene["composition"])
+            comp_data["template_key"] = comp_data.get("type")
+            comp_obj = SceneObject("comp_legacy", "composition", comp_data)
+            comp_obj.components["type"] = comp_data["template_key"]
+            scene_objects["comp_legacy"] = comp_obj
+
+        candidates += self.environment_system.process(
+            env_obj, comp_obj, scene_objects, owned_item_ids, relationship_targets
+        )
         candidates += self.style_system.process(scene)
 
         # 7. Render

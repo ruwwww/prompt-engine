@@ -12,5 +12,6 @@
   "CoffeeCup": "{material} coffee cup",
   "Car": "{color} car",
   "Bathtub": "{color} {material} {style} bathtub",
-  "Mirror": "{style} mirror"
+  "Mirror": "{style} mirror",
+  "Beach": "{weather} {lighting} beach in {geolocation}"
 }
