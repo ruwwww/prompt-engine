@@ -84,7 +84,7 @@ class TestPromptCompiler(unittest.TestCase):
         self.assertIn("grinning woman", compiled)
         self.assertNotIn("smiling woman", compiled)
         self.assertIn("long wavy brown hair", compiled)
-        self.assertNotIn("ring", compiled)
+        self.assertNotIn("silver ring", compiled)
 
     def test_relationship_rendering_and_variants(self):
         scene = {
@@ -114,7 +114,8 @@ class TestPromptCompiler(unittest.TestCase):
             ]
         }
         compiled = self.compiler.compile_scene(scene)
-        self.assertIn("woman holding a cup of ceramic coffee cup", compiled)
+        self.assertIn("woman", compiled)
+        self.assertIn("holding a cup of ceramic coffee cup", compiled)
 
     def test_relationship_visibility_occlusion(self):
         scene = {
@@ -187,8 +188,8 @@ class TestPromptCompiler(unittest.TestCase):
             ]
         }
         compiled = self.compiler.compile_scene(scene)
-        self.assertIn("rain-soaked neon-lit alley", compiled)
-        self.assertIn("woman standing next to red car in background", compiled)
+        self.assertIn("in a rain-soaked neon-lit alley", compiled)
+        self.assertIn("standing next to red car in background", compiled)
         self.assertIn("cinematic still photography", compiled)
 
 if __name__ == "__main__":

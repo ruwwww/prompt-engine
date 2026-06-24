@@ -6,7 +6,8 @@
       "subject": { "allowed": ["human"] },
       "container": { "allowed": ["vehicle", "building"] }
     },
-    "template": "{subject} inside {container}"
+    "template": "{subject} inside {container}",
+    "clause": "sitting inside {container}"
   },
   "standing_next_to": {
     "tags": ["spatial"],
@@ -15,6 +16,7 @@
       "subject": { "allowed": ["human"] },
       "target": { "allowed": ["human", "vehicle", "item", "environment_object"] }
     },
-    "template": "{subject} standing next to {target}"
+    "template": "{subject} standing next to {target}",
+    "clause": "standing next to {target}"
   }
 }

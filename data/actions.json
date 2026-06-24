@@ -14,18 +14,21 @@
       }
     },
     "template": "{actor} holding {object}",
+    "clause": "holding {object}",
     "variants": [
       {
         "when": {
           "object_type": "drink"
         },
-        "template": "{actor} holding a cup of {object}"
+        "template": "{actor} holding a cup of {object}",
+        "clause": "holding a cup of {object}"
       },
       {
         "when": {
           "object_type": "phone"
         },
-        "template": "{actor} using {object}"
+        "template": "{actor} using {object}",
+        "clause": "using {object}"
       }
     ]
   },
@@ -40,7 +43,8 @@
         "allowed": ["human"]
       }
     },
-    "template": "{actor} sitting"
+    "template": "{actor} sitting",
+    "clause": "sitting"
   },
   "hugging": {
     "tags": ["interaction"],
@@ -57,6 +61,7 @@
         "allowed": ["human"]
       }
     },
-    "template": "{subject1} hugging {subject2}"
+    "template": "{subject1} hugging {subject2}",
+    "clause": "hugging {subject2}"
   }
 }

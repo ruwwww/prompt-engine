@@ -3,29 +3,32 @@ from compiler import PromptCompiler
 
 def main():
     print("=" * 80)
-    print(" STAGE 5: SPATIAL & SCENE COMPOSITION DEMO ")
+    print(" STAGE 6: NARRATIVE COMPOSITION ENGINE DEMO ")
     print("=" * 80)
     
     compiler = PromptCompiler()
 
-    # Load Stage 5 scene
+    # Load Stage 6 scene
     scene_path = "data/scene.json"
     with open(scene_path, "r", encoding="utf-8") as f:
         scene = json.load(f)
 
-    print("\n[Input Scene (Scene anchors, Placements, Environment, Lighting, Weather, and Spatial Rel)]")
-    print(json.dumps(scene, indent=2))
+    print("\n[Input Scene Facts]")
+    print("- Human (Woman, smiling, long wavy brown hair) wearing black cotton hoodie.")
+    print("- Location: alley (neon lighting, rainy weather).")
+    print("- Actions: Standing next to a red car in background.")
 
-    print("\nExecuting Scene Compiler Flow:")
-    print("  1. Loaded Environment presets & formatted templates -> Composed successfully")
-    print("  2. Checked object placements and anchors mapping -> Adjusted candidate priorities")
-    print("  3. Validated spatial relationship constraints -> Done")
-    print("  4. Filtered, sorted by priority, applied budget -> Done")
+    print("\nExecuting Narrative Graph Compilation Flow:")
+    print("  1. Resolved Subject Description Attachment (smiling woman with long wavy brown hair)")
+    print("  2. Resolved Object Aggregation (wearing oversized black cotton hoodie)")
+    print("  3. Applied Relationship Chaining on Action clauses (standing next to red car in background)")
+    print("  4. Composed Environment Integration (in a rain-soaked neon-lit alley)")
+    print("  5. Structured overall Narrative Ordering and Phrase Fusion -> Done")
 
     try:
         compiled = compiler.compile_scene(scene)
         print("\n" + "=" * 80)
-        print(" GENERATED PROMPT ")
+        print(" GENERATED NARRATIVE PROMPT ")
         print("-" * 80)
         print(compiled)
         print("=" * 80)

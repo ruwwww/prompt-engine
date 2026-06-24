@@ -3,10 +3,6 @@ import json
 import re
 
 class SceneObject:
-    """
-    A generic entity container holding components instead of subclassing.
-    Components can represent body zones, item templates, parameters, etc.
-    """
     def __init__(self, obj_id, obj_type, data):
         self.id = obj_id
         self.type = obj_type
@@ -20,9 +16,6 @@ class SceneObject:
 
 
 class VisibilitySystem:
-    """
-    VisibilitySystem computes visible zones based on camera framing and pose occlusions.
-    """
     def __init__(self, camera_zones, poses):
         self.camera_zones = camera_zones
         self.poses = poses
@@ -38,10 +31,6 @@ class VisibilitySystem:
 
 
 class RelationshipSystem:
-    """
-    RelationshipSystem validates allowed roles, resolves targets, evaluates template variants,
-    verifies visibility requirements, and produces render-ready relationship fragments.
-    """
     def __init__(self, actions_db, spatial_db, templates_db):
         self.actions = actions_db
         self.spatial = spatial_db
@@ -54,13 +43,11 @@ class RelationshipSystem:
 
         phrase = ""
         if obj.type == "human":
-            # Baseline descriptor
             phrase = obj.get_component("gender", "person")
         else:
             template_key = obj.get_component("template_key")
             template = templates.get(template_key)
             if template:
-                # Safe format helper inlined/passed
                 phrase = self.safe_format(template, obj.components)
             else:
                 color = obj.get_component("color", "")
@@ -126,8 +113,10 @@ class RelationshipSystem:
             if not visible:
                 continue
 
-            # Determine variant templates
+            # Determine variant templates / clauses
             template = rel_def.get("template", "")
+            clause_template = rel_def.get("clause", template)
+            
             for variant in rel_def.get("variants", []):
                 when = variant.get("when", {})
                 match = True
@@ -141,6 +130,7 @@ class RelationshipSystem:
                             break
                 if match:
                     template = variant.get("template", template)
+                    clause_template = variant.get("clause", template)
                     break
 
             # Resolve phrases
@@ -150,8 +140,9 @@ class RelationshipSystem:
                 role_phrases[role_name] = self.get_noun_phrase(target_id, scene_objects, placements, self.templates)
 
             rendered_relationship = template.format(**role_phrases)
+            rendered_clause = clause_template.format(**role_phrases)
 
-            # Compute priority with anchor offsets
+            # Compute priority
             base_priority = rel_def.get("priority", 50)
             priority = base_priority
             for r_id in related_ids:
@@ -167,66 +158,109 @@ class RelationshipSystem:
                 "type": "relationship",
                 "tags": rel_def.get("tags", ["spatial" if is_spatial else "action"]),
                 "priority": priority,
-                "text": rendered_relationship
+                "text": rendered_relationship,
+                "clause_text": rendered_clause,
+                "actor_id": rel.get("actor") or rel.get("subject") or rel.get("subject1")
             })
 
         return candidates
 
 
 class RenderSystem:
-    """
-    RenderSystem manages filtering by tag, sorting by priority, budgeting,
-    and combining sections into the final natural language representation.
-    """
     def __init__(self, profiles_db, templates_db):
         self.profiles = profiles_db
         self.templates = templates_db
 
-    def compose_prompt(self, candidates, profile_name, human_obj):
+    def compose_prompt(self, candidates, profile_name, human_obj, scene_objects, placements):
         profile = self.profiles.get(profile_name, self.profiles.get("character_sheet", {}))
         include_tags = set(profile.get("include_tags", []))
         max_fragments = profile.get("max_fragments", 99)
 
-        # Filter and sort
+        # Filter and sort candidates
         filtered = [c for c in candidates if any(t in include_tags for t in c["tags"])]
         filtered.sort(key=lambda x: x["priority"], reverse=True)
         budgeted = filtered[:max_fragments]
 
-        # Extract segments
-        rendered_parts = {}
-        other_texts = []
+        # Partition components into native body parts, clothing items, relationships, and atmospheres
+        face_text = ""
+        hair_text = ""
+        clothing_texts = []
+        relationship_clauses = []
+        atmospheric_texts = []
+        env_text = ""
+
+        # Identify items attached to the subject
         for c in budgeted:
-            if c["type"] in ["relationship", "environment", "lighting", "weather", "composition"]:
-                other_texts.append(c["text"])
-            else:
-                rendered_parts[c["zone"]] = c["text"]
+            if c["type"] == "native":
+                if c["zone"] == "Face":
+                    # Extract expression, e.g. "smiling"
+                    face_text = c["text"]
+                elif c["zone"] == "Hair":
+                    hair_text = c["text"]
+            elif c["type"] == "owned_item":
+                clothing_texts.append(c["text"])
+            elif c["type"] == "relationship":
+                relationship_clauses.append(c["clause_text"])
+            elif c["type"] == "environment":
+                env_text = c["text"]
+            elif c["type"] in ["lighting", "weather", "composition"]:
+                atmospheric_texts.append(c["text"])
 
-        prompt_segments = []
-        face_str = rendered_parts.get("Face")
-        hair_str = rendered_parts.get("Hair")
+        # 1. Subject description attachment
+        gender = human_obj.get_component("gender", "person") if human_obj else "person"
         
-        if face_str and hair_str:
-            base_prompt = f"{face_str} with {hair_str}"
-        elif face_str:
-            base_prompt = face_str
-        elif hair_str:
-            gender = human_obj.get_component("gender", "person") if human_obj else "person"
-            base_prompt = f"{gender} with {hair_str}"
+        # Format Face + Subject Identity
+        if face_text:
+            # Drop the trailing gender if template already has it to avoid duplicates
+            face_clean = face_text.replace(f" {gender}", "").strip()
+            subject_phrase = f"{face_clean} {gender}"
         else:
-            base_prompt = human_obj.get_component("gender", "person") if human_obj else ""
+            subject_phrase = gender
 
-        if base_prompt:
-            prompt_segments.append(base_prompt)
+        # Format Hair Attachment
+        if hair_text:
+            subject_phrase = f"{subject_phrase} with {hair_text}"
 
-        for ot in other_texts:
-            prompt_segments.append(ot)
+        # Format Clothing Aggregation
+        if clothing_texts:
+            # Aggregation: "wearing oversized black cotton hoodie, baggy olive cargo pants"
+            aggregated_clothing = ", ".join(clothing_texts)
+            # Add "a" or "an" where applicable or join naturally
+            subject_phrase = f"{subject_phrase} wearing {aggregated_clothing}"
 
-        order = ["UpperBody", "LowerBody", "Feet"]
-        for zone in order:
-            if zone in rendered_parts:
-                prompt_segments.append(rendered_parts[zone])
+        # 2. Relationship Chaining (Actions + Spatial layout)
+        narrative_segments = [subject_phrase]
+        
+        # Chain action clauses with "while" or "and"
+        if relationship_clauses:
+            if len(relationship_clauses) > 1:
+                action_chain = " while ".join(relationship_clauses)
+            else:
+                action_chain = relationship_clauses[0]
+            narrative_segments.append(action_chain)
 
-        return ", ".join([ps for ps in prompt_segments if ps])
+        # 3. Environment Integration
+        if env_text:
+            # Format: "in a rain-soaked neon-lit alley" or "inside a warm soft-lit cafe"
+            prep = "inside" if "inside" in env_text or "cafe" in env_text or "office" in env_text else "in"
+            # simple helper to add article
+            vowels = "aeiou"
+            article = "an" if env_text[0].lower() in vowels else "a"
+            narrative_segments.append(f"{prep} {article} {env_text}")
+
+        # Combine main narrative chain
+        # E.g. "smiling woman with long wavy brown hair wearing oversized black cotton hoodie, standing next to red car in background while holding a cup of white coffee cup, in a rain-soaked neon-lit alley"
+        final_narrative = ", ".join([ns for ns in narrative_segments if ns])
+
+        # Append overall atmosphere (lighting, composition, weather standalone modifiers)
+        all_segments = [final_narrative]
+        for atm in atmospheric_texts:
+            # Skip if lighting or weather is already fused into environment
+            if env_text and atm in env_text:
+                continue
+            all_segments.append(atm)
+
+        return ", ".join([s for s in all_segments if s])
 
 
 class PromptCompiler:
@@ -429,4 +463,4 @@ class PromptCompiler:
 
         # 5. Run RenderSystem
         profile_name = scene.get("render_profile", "character_sheet")
-        return self.render_system.compose_prompt(candidates, profile_name, human_obj)
+        return self.render_system.compose_prompt(candidates, profile_name, human_obj, scene_objects, placements)
