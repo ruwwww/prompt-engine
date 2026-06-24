@@ -752,6 +752,83 @@ class TestSlotDescriptors(unittest.TestCase):
             "cotton oversized black hoodie"
         )
 
+    def test_noun_pluralization_and_agreement(self):
+        from compiler import safe_format
+        
+        # 1. Test noun pluralization rule (plural suffix)
+        cup_descriptor = {
+            "head": "cup",
+            "plural": { "suffix": "s" },
+            "slots": {
+                "color": { "position": "pre" }
+            }
+        }
+        self.assertEqual(
+            safe_format(cup_descriptor, {"color": "white", "_plural_self": True}),
+            "white cups"
+        )
+
+        # 2. Test irregular noun pluralization
+        man_descriptor = {
+            "head": "man",
+            "plural": { "irregular": "men" },
+            "slots": {
+                "style": { "position": "pre" }
+            }
+        }
+        self.assertEqual(
+            safe_format(man_descriptor, {"style": "handsome", "_plural_self": True}),
+            "handsome men"
+        )
+
+        # 3. Test verb agreement (singular/plural heads)
+        holding_descriptor = {
+            "head": {
+                "singular": "is holding",
+                "plural": "are holding",
+                "agreement_with": "actor"
+            },
+            "slots": {
+                "actor": { "position": "pre" },
+                "object": { "position": "post" }
+            }
+        }
+        self.assertEqual(
+            safe_format(holding_descriptor, {"actor": "she", "object": "a cup", "_plural_actor": False}),
+            "she is holding a cup"
+        )
+        self.assertEqual(
+            safe_format(holding_descriptor, {"actor": "they", "object": "cups", "_plural_actor": True}),
+            "they are holding cups"
+        )
+
+    def test_contextual_pronouns_and_anaphora(self):
+        # Test pronoun resolution in compile_scene
+        scene = {
+            "camera": {"framing": "medium"},
+            "pose": "standing",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman", "Face": {"expression": "smiling"}},
+                "h2": {"type": "human", "gender": "man", "Face": {"expression": "serious"}},
+                "c1": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic"}
+            },
+            "relationships": [
+                # h1 holding c1
+                {"type": "holding", "actor": "h1", "object": "c1"},
+                # h2 hugging h1
+                {"type": "hugging", "subject1": "h2", "subject2": "h1"},
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        
+        # In fact_chain, h1 (woman) and h2 (man) are introduced first.
+        # h1 holding c1: c1 is first mentioned -> "holding a cup of a ceramic coffee cup"
+        # h2 hugging h1: hugging clause -> "hugging her" (since h1 is target and already mentioned)
+        self.assertIn("holding a cup of a ceramic coffee cup", out)
+        self.assertIn("hugging her", out)
+        self.assertNotIn("hugging smiling woman", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -40,6 +40,24 @@ def safe_format(template_str, context: dict) -> str:
 
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
+        # Resolve head if it's a dict containing singular/plural
+        if isinstance(head, dict):
+            agreement_role = head.get("agreement_with", "actor")
+            is_plural = False
+            if agreement_role == "self":
+                is_plural = context.get("_plural_self", False)
+            else:
+                is_plural = context.get(f"_plural_{agreement_role}", False)
+            head = head.get("plural" if is_plural else "singular", "")
+        else:
+            # Apply noun pluralization rules if _plural_self is true
+            if context.get("_plural_self", False) and "plural" in template_str:
+                plural_cfg = template_str["plural"]
+                if "irregular" in plural_cfg:
+                    head = plural_cfg["irregular"]
+                elif "suffix" in plural_cfg:
+                    head = head + plural_cfg["suffix"]
+
         slots = template_str.get("slots", {})
         
         pre_modifiers = []
@@ -256,21 +274,54 @@ class RelationshipSystem:
         self.spatial = spatial_db
         self.templates = templates_db
 
-    def get_noun_phrase(self, obj_id: str, scene_objects: dict, placements: dict) -> str:
+    def get_noun_phrase(self, obj_id, scene_objects: dict, placements: dict, mentioned_ids: set, role: str = None) -> str:
+        if isinstance(obj_id, list):
+            phrases = [self.get_noun_phrase(oid, scene_objects, placements, mentioned_ids, role) for oid in obj_id]
+            if len(phrases) == 1:
+                return phrases[0]
+            elif len(phrases) == 2:
+                return f"{phrases[0]} and {phrases[1]}"
+            else:
+                return ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
+
         obj = scene_objects.get(obj_id)
         if not obj:
-            return obj_id
+            return str(obj_id)
+
+        is_plural = False
+        if obj.get_component("count", 1) > 1 or obj.get_component("plural", False):
+            is_plural = True
+
+        if obj_id in mentioned_ids:
+            if obj.type == "human":
+                gender = obj.get_component("gender", "person")
+                if role in ("actor", "subject", "subject1"):
+                    return "they" if is_plural else "she" if gender == "woman" else "he" if gender == "man" else "they"
+                else:
+                    return "them" if is_plural else "her" if gender == "woman" else "him" if gender == "man" else "them"
+            else:
+                return "them" if is_plural else "the " + obj.type
+        else:
+            mentioned_ids.add(obj_id)
 
         if obj.type == "human":
             phrase = obj.get_component("gender", "person")
         else:
             template = self.templates.get(obj.get_component("template_key"))
+            ctx = {**obj.components}
+            if is_plural:
+                ctx["_plural_self"] = True
             if template:
-                phrase = safe_format(template, obj.components)
+                phrase = safe_format(template, ctx)
             else:
                 parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
                 phrase = " ".join(p for p in parts if p).strip()
-            phrase = with_article(phrase)
+            
+            if not is_plural:
+                phrase = with_article(phrase)
+            else:
+                if not template:
+                    phrase = phrase + "s"
 
         placement = placements.get(obj_id)
         if placement:
@@ -284,6 +335,7 @@ class RelationshipSystem:
         placements: dict,
         visible_zones: list,
         priority_fn,
+        mentioned_ids: set,
     ) -> list:
         candidates = []
 
@@ -297,26 +349,34 @@ class RelationshipSystem:
             if not rel_def:
                 continue
 
-            # Role type validation
+            # Role type validation (handles lists of participants)
             valid = True
             related_ids = []
             for role_name, constraint in rel_def.get("roles", {}).items():
-                target_id = rel.get(role_name)
-                target_obj = scene_objects.get(target_id)
-                if not target_obj or target_obj.type not in constraint.get("allowed", []):
-                    valid = False
+                target_val = rel.get(role_name)
+                target_ids = target_val if isinstance(target_val, list) else [target_val] if target_val else []
+                for tid in target_ids:
+                    target_obj = scene_objects.get(tid)
+                    if not target_obj or target_obj.type not in constraint.get("allowed", []):
+                        valid = False
+                        break
+                    related_ids.append(tid)
+                if not valid:
                     break
-                related_ids.append(target_id)
             if not valid:
                 continue
 
-            # Visibility check on required zones
+            # Visibility check on required zones (handles lists)
             visible = True
             for role_name, req_zone in rel_def.get("required_zones", {}).items():
                 pid = rel.get(role_name)
-                pobj = scene_objects.get(pid)
-                if pobj and pobj.type == "human" and req_zone not in visible_zones:
-                    visible = False
+                pids = pid if isinstance(pid, list) else [pid] if pid else []
+                for p in pids:
+                    pobj = scene_objects.get(p)
+                    if pobj and pobj.type == "human" and req_zone not in visible_zones:
+                        visible = False
+                        break
+                if not visible:
                     break
             if not visible:
                 continue
@@ -337,12 +397,28 @@ class RelationshipSystem:
                     break
 
             # Resolve role noun phrases
-            role_phrases = {
-                role: self.get_noun_phrase(rel.get(role), scene_objects, placements)
-                for role in rel_def.get("roles", {})
-            }
+            role_phrases = {}
+            for role in rel_def.get("roles", {}):
+                val = rel.get(role)
+                role_phrases[role] = self.get_noun_phrase(val, scene_objects, placements, mentioned_ids, role)
+                # If plural, set the _plural_role helper in context for safe_format agreement
+                is_role_plural = False
+                if isinstance(val, list) and len(val) > 1:
+                    is_role_plural = True
+                elif isinstance(val, str):
+                    tobj = scene_objects.get(val)
+                    if tobj and (tobj.get_component("count", 1) > 1 or tobj.get_component("plural", False)):
+                        is_role_plural = True
+                if is_role_plural:
+                    role_phrases[f"_plural_{role}"] = True
 
             actor_id = rel.get("actor") or rel.get("subject") or rel.get("subject1")
+            # If actor_id is a list, take the first one for native fragment tracking
+            if isinstance(actor_id, list) and actor_id:
+                track_actor_id = actor_id[0]
+            else:
+                track_actor_id = actor_id or ""
+
             candidates.append(CandidateFragment(
                 zone="relationship",
                 frag_type="relationship",
@@ -350,7 +426,7 @@ class RelationshipSystem:
                 priority=priority_fn(rel_def.get("priority", 50), related_ids),
                 text=safe_format(template, role_phrases),
                 clause_text=safe_format(clause_template, role_phrases),
-                actor_id=actor_id or "",
+                actor_id=track_actor_id,
                 chain_order=rel_def.get("chain_order", 99),
             ))
 
@@ -837,12 +913,13 @@ class PromptCompiler:
         # 6. Collect candidates from each system
         # For multi-character we use the primary human for attribute collection
         # (each human's attributes are collected separately and tagged by actor_id)
+        mentioned_ids = {h.id for h in humans}
         candidates = []
         for human_obj in humans:
             candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn)
 
         candidates += self.relationship_system.process(
-            scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn
+            scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn, mentioned_ids
         )
 
         # Identify occupied objects to exclude from ambient environment listing
