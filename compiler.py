@@ -775,7 +775,7 @@ class RenderSystem:
                     env_art = "an" if env_frag.text[0].lower() in vowels else "a"
                     if any(k in env_frag.text for k in ("cafe", "office", "room")):
                         prep = "inside"
-                    elif "beach" in env_frag.text:
+                    elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
                     else:
                         prep = "in"
@@ -798,7 +798,7 @@ class RenderSystem:
                 if env_frag:
                     if any(k in env_frag.text for k in ("cafe", "office", "room")):
                         prep = "inside"
-                    elif "beach" in env_frag.text:
+                    elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
                     else:
                         prep = "in"

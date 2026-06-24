@@ -10,5 +10,8 @@
   },
   "fashion": {
     "template": "high fashion runway photography"
+  },
+  "photorealistic": {
+    "template": "photorealistic style, high definition, smooth textures, and a warm color palette"
   }
 }

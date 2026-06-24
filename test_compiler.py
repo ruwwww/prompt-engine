@@ -893,6 +893,73 @@ class TestSlotDescriptors(unittest.TestCase):
         out_concise = self.c.compile_scene(scene_concise)
         self.assertIn("calm woman", out_concise)
 
+    def test_tennis_court_scene_recreation(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "tone": "default",
+            "render_profile": "cinematic",
+            "style": "photorealistic",
+            "anchors": {
+                "primary": "h1"
+            },
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {
+                        "expression": "smiling gently",
+                        "makeup": "soft"
+                    },
+                    "Hair": {
+                        "color": "dark",
+                        "style": "pulled back into a high ponytail"
+                    },
+                    "Hands": {
+                        "owned_item_id": "racket_1"
+                    },
+                    "UpperBody": {
+                        "owned_item_id": "dress_1"
+                    },
+                    "Headwear": {
+                        "owned_item_id": "earrings_1"
+                    }
+                },
+                "earrings_1": {
+                    "type": "clothing",
+                    "template_key": "Earrings",
+                    "style": "hoop"
+                },
+                "dress_1": {
+                    "type": "clothing",
+                    "template_key": "Dress",
+                    "style": "one-shoulder pale yellow athletic dress with a fitted bodice and a pleated skirt that has a sheer mesh hem"
+                },
+                "racket_1": {
+                    "type": "item",
+                    "template_key": "Racket",
+                    "color": "white and yellow",
+                    "style": "tennis"
+                },
+                "env_court": {
+                    "type": "environment",
+                    "template_key": "TennisCourt",
+                    "material": "clay",
+                    "lighting": "natural daylight",
+                    "location": "white boundary lines visible on the reddish-brown ground"
+                }
+            },
+            "relationships": [
+                {"type": "holding", "actor": "h1", "object": "racket_1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        
+        self.assertIn("smiling gently woman", out)
+        self.assertIn("wearing hoop earrings and one-shoulder pale yellow athletic dress", out)
+        self.assertIn("holds a white and yellow tennis racket", out)
+        self.assertIn("on a clay tennis court outdoors with white boundary lines", out)
+        self.assertIn("photorealistic", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -72,5 +72,32 @@
       "location": { "position": "post", "prep": "in", "required": false }
     }
   },
-  "Tree": "{color} {species} tree"
+  "Tree": "{color} {species} tree",
+  "Earrings": {
+    "head": "earrings",
+    "plural": { "irregular": "earrings" },
+    "slots": {
+      "style": { "position": "pre" }
+    }
+  },
+  "Dress": {
+    "head": "dress",
+    "slots": {
+      "style": { "position": "pre" }
+    }
+  },
+  "Racket": {
+    "head": "racket",
+    "slots": {
+      "color": { "position": "pre", "rank": 1 },
+      "style": { "position": "pre", "rank": 2 }
+    }
+  },
+  "TennisCourt": {
+    "head": "tennis court",
+    "slots": {
+      "material": { "position": "pre", "required": false },
+      "location": { "position": "post", "prep": "outdoors with", "required": false }
+    }
+  }
 }
