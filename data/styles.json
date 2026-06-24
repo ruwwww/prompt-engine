@@ -1,0 +1,14 @@
+{
+  "editorial": {
+    "template": "editorial fashion photography, high-end commercial style"
+  },
+  "cinematic": {
+    "template": "cinematic film still, 35mm photograph"
+  },
+  "street": {
+    "template": "candid street photography, documentary style"
+  },
+  "fashion": {
+    "template": "high fashion runway photography"
+  }
+}

@@ -34,6 +34,7 @@ class CandidateFragment:
     text: str
     clause_text: str = ""
     actor_id: str = ""
+    chain_order: int = 99
 
 
 @dataclass
@@ -177,6 +178,18 @@ class AttributeCollectorSystem:
 # System: RelationshipSystem
 # ---------------------------------------------------------------------------
 
+def with_article(phrase: str) -> str:
+    """Prepends 'a' or 'an' to a noun phrase if it doesn't already start with an article."""
+    if not phrase:
+        return phrase
+    words = phrase.split()
+    if words and words[0].lower() in ("a", "an", "the"):
+        return phrase
+    first_char = phrase[0].lower()
+    art = "an" if first_char in "aeiou" else "a"
+    return f"{art} {phrase}"
+
+
 class RelationshipSystem:
     """Validates, resolves, and renders action/interaction/spatial relationships."""
 
@@ -199,6 +212,7 @@ class RelationshipSystem:
             else:
                 parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
                 phrase = " ".join(p for p in parts if p).strip()
+            phrase = with_article(phrase)
 
         placement = placements.get(obj_id)
         if placement:
@@ -279,6 +293,7 @@ class RelationshipSystem:
                 text=template.format(**role_phrases),
                 clause_text=clause_template.format(**role_phrases),
                 actor_id=actor_id or "",
+                chain_order=rel_def.get("chain_order", 99),
             ))
 
         return candidates
@@ -459,22 +474,25 @@ class RenderSystem:
         budgeted = filtered[:max_fragments]
 
         # Partition
-        natives: dict = {}          # zone -> CandidateFragment
+        natives: dict = {}          # (actor_id, zone) -> CandidateFragment
         clothing: list = []
         relationships: list = []
         env_frag: Optional[CandidateFragment] = None
         atmospheric: list = []
+        composition_frags: list = []
 
         for c in budgeted:
             if c.frag_type == "native":
-                natives[c.zone] = c
+                natives[(c.actor_id, c.zone)] = c
             elif c.frag_type == "owned_item":
                 clothing.append(c)
             elif c.frag_type == "relationship":
                 relationships.append(c)
             elif c.frag_type == "environment":
                 env_frag = c
-            elif c.frag_type in ("lighting", "weather", "composition"):
+            elif c.frag_type == "composition":
+                composition_frags.append(c)
+            elif c.frag_type in ("lighting", "weather", "style"):
                 atmospheric.append(c)
 
         # Build per-subject narrative
@@ -485,7 +503,7 @@ class RenderSystem:
             gender = human_obj.get_component("gender", "person")
 
             # Partition natives and clothing that belong to this human
-            my_natives = {c.zone: c for c in natives.values() if c.actor_id == human_id}
+            my_natives = {zone: c for (aid, zone), c in natives.items() if aid == human_id}
             my_clothing = [c for c in clothing if c.actor_id == human_id]
 
             face_frag = my_natives.get("Face")
@@ -517,11 +535,12 @@ class RenderSystem:
             if narrative_mode == "scene_description":
                 # Produce a grammatically unified sentence
                 if my_rels:
+                    my_rels.sort(key=lambda r: r.chain_order)
                     main_verb = self._to_finite(my_rels[0].clause_text)
                     extra_clauses = [r.clause_text for r in my_rels[1:]]
                     rel_part = main_verb
                     if extra_clauses:
-                        rel_part += " while " + " and ".join(extra_clauses)
+                        rel_part += " " + " ".join(extra_clauses)
                 else:
                     rel_part = ""
 
@@ -544,8 +563,8 @@ class RenderSystem:
                 # fact_chain mode (original behaviour)
                 parts = [subject]
                 if my_rels:
-                    chain = " while ".join(r.clause_text for r in my_rels) if len(my_rels) > 1 \
-                        else my_rels[0].clause_text
+                    my_rels.sort(key=lambda r: r.chain_order)
+                    chain = " ".join(r.clause_text for r in my_rels)
                     parts.append(chain)
                 if env_frag:
                     prep = "inside" if any(k in env_frag.text for k in ("cafe", "office", "room")) else "in"
@@ -553,6 +572,27 @@ class RenderSystem:
                     art = "an" if env_frag.text[0].lower() in vowels else "a"
                     parts.append(f"{prep} {art} {env_frag.text}")
                 subject_phrases.append(", ".join(p for p in parts if p))
+
+        # Integrated composition for scene_description
+        if narrative_mode == "scene_description":
+            if composition_frags and subject_phrases:
+                comp_text = composition_frags[0].text
+                if "cinematic" in comp_text:
+                    suffix = ", shot in cinematic style"
+                elif "over-the-shoulder" in comp_text:
+                    suffix = ", shot in an over-the-shoulder style"
+                else:
+                    suffix = f", shot in {comp_text} style"
+                
+                # strip period from the last subject phrase
+                if subject_phrases[-1].endswith("."):
+                    subject_phrases[-1] = subject_phrases[-1][:-1] + suffix + "."
+                else:
+                    subject_phrases[-1] = subject_phrases[-1] + suffix + "."
+        else:
+            # In fact_chain mode, composition acts as normal atmospheric suffix
+            for c in composition_frags:
+                atmospheric.append(c)
 
         # Atmospheric suffixes (composition, standalone lighting, etc.)
         atm_parts = []
@@ -564,6 +604,26 @@ class RenderSystem:
         all_parts = subject_phrases + atm_parts
         separator = " " if narrative_mode == "scene_description" else ", "
         return separator.join(p for p in all_parts if p)
+
+
+class StyleSystem:
+    """Resolves photographic style directives into fragments."""
+
+    def __init__(self, styles_db: dict):
+        self.styles = styles_db
+
+    def process(self, scene: dict) -> list:
+        candidates = []
+        style_config = scene.get("style", {})
+        style_type = style_config.get("type") if isinstance(style_config, dict) else style_config
+        if style_type and style_type in self.styles:
+            style_def = self.styles[style_type]
+            candidates.append(CandidateFragment(
+                zone="style", frag_type="style",
+                tags=["style"], priority=90,
+                text=style_def.get("template", style_type),
+            ))
+        return candidates
 
 
 # ---------------------------------------------------------------------------
@@ -585,6 +645,7 @@ class PromptCompiler:
         lighting   = self._load("lighting.json", {})
         weather    = self._load("weather.json", {})
         composition = self._load("composition.json", {})
+        styles     = self._load("styles.json", {})
 
         self.persona_system      = PersonaSystem(personas)
         self.visibility_system   = VisibilitySystem(poses)
@@ -592,6 +653,7 @@ class PromptCompiler:
         self.relationship_system = RelationshipSystem(actions, spatial, templates)
         self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition)
         self.validation_system   = ValidationSystem(actions, spatial, templates)
+        self.style_system        = StyleSystem(styles)
         self.render_system       = RenderSystem(profiles)
 
         # Expose safe_format as instance method for backwards-compat with tests
@@ -655,6 +717,7 @@ class PromptCompiler:
             scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn
         )
         candidates += self.environment_system.process(scene)
+        candidates += self.style_system.process(scene)
 
         # 7. Render
         profile_name = scene.get("render_profile", "character_sheet")

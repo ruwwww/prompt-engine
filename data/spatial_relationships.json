@@ -2,6 +2,7 @@
   "inside": {
     "tags": ["spatial"],
     "priority": 94,
+    "chain_order": 1,
     "roles": {
       "subject": { "allowed": ["human"] },
       "container": { "allowed": ["vehicle", "building"] }
@@ -12,6 +13,7 @@
   "standing_next_to": {
     "tags": ["spatial"],
     "priority": 93,
+    "chain_order": 1,
     "roles": {
       "subject": { "allowed": ["human"] },
       "target": { "allowed": ["human", "vehicle", "item", "environment_object"] }

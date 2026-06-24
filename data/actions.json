@@ -2,6 +2,7 @@
   "holding": {
     "tags": ["action"],
     "priority": 95,
+    "chain_order": 2,
     "required_zones": {
       "actor": "Hands"
     },
@@ -35,6 +36,7 @@
   "sitting": {
     "tags": ["action"],
     "priority": 80,
+    "chain_order": 1,
     "required_zones": {
       "actor": "LowerBody"
     },
@@ -49,6 +51,7 @@
   "hugging": {
     "tags": ["interaction"],
     "priority": 96,
+    "chain_order": 1,
     "required_zones": {
       "subject1": "UpperBody",
       "subject2": "UpperBody"

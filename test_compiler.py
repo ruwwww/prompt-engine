@@ -167,7 +167,7 @@ class TestRelationships(unittest.TestCase):
             "relationships": [{"type": "holding", "actor": "h1", "object": "c1"}]
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("holding a cup of ceramic coffee cup", out)
+        self.assertIn("holding a cup of a ceramic coffee cup", out)
 
     def test_holding_occluded_by_pose(self):
         scene = {
@@ -222,8 +222,8 @@ class TestSpatialAndScene(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         self.assertIn("in a rain-soaked neon-lit alley", out)
-        self.assertIn("standing next to red car in background", out)
-        self.assertIn("cinematic still photography", out)
+        self.assertIn("stands next to a red car in background", out)
+        self.assertIn("shot in cinematic style", out)
 
 
 class TestRenderProfiles(unittest.TestCase):
@@ -441,6 +441,58 @@ class TestNarrativeMode(unittest.TestCase):
 
         # Restore
         self.c.render_system.profiles["cinematic"] = original
+
+
+class TestNewFeatures(unittest.TestCase):
+    """Stage 7 & 8 — Chaining, Style System, and Bug Fixes"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_style_system(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "portrait",
+            "style": "editorial",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("editorial fashion photography", out)
+
+    def test_relationship_chaining(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"},
+                "car_1": {"type": "vehicle", "template_key": "Car", "color": "blue"},
+                "c1": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic", "color": "white"},
+            },
+            "relationships": [
+                {"type": "holding", "actor": "h1", "object": "c1"},
+                {"type": "inside", "subject": "h1", "container": "car_1"},
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        # Should chain them with space: "sits inside a blue car holding a cup of a ceramic coffee cup"
+        self.assertIn("sits inside a blue car holding a cup of a ceramic coffee cup", out)
+
+    def test_multi_character_expression_preservation(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                        "Face": {"expression": "smiling"}},
+                "h2": {"type": "human", "gender": "man",
+                        "Face": {"expression": "serious"}},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("smiling woman", out)
+        self.assertIn("serious man", out)
 
 
 if __name__ == "__main__":
