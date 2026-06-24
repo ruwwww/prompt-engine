@@ -1,0 +1,8 @@
+{
+  "hands_behind_back": {
+    "hidden_zones": ["Hands"]
+  },
+  "sitting": {
+    "hidden_zones": ["Feet"]
+  }
+}

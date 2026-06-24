@@ -1,0 +1,11 @@
+{
+  "warm": {
+    "template": "warm soft-lit"
+  },
+  "neon": {
+    "template": "neon-lit"
+  },
+  "golden_hour": {
+    "template": "golden-hour"
+  }
+}

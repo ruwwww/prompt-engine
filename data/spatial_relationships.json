@@ -1,0 +1,20 @@
+{
+  "inside": {
+    "tags": ["spatial"],
+    "priority": 94,
+    "roles": {
+      "subject": { "allowed": ["human"] },
+      "container": { "allowed": ["vehicle", "building"] }
+    },
+    "template": "{subject} inside {container}"
+  },
+  "standing_next_to": {
+    "tags": ["spatial"],
+    "priority": 93,
+    "roles": {
+      "subject": { "allowed": ["human"] },
+      "target": { "allowed": ["human", "vehicle", "item", "environment_object"] }
+    },
+    "template": "{subject} standing next to {target}"
+  }
+}

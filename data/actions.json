@@ -1,0 +1,62 @@
+{
+  "holding": {
+    "tags": ["action"],
+    "priority": 95,
+    "required_zones": {
+      "actor": "Hands"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "object": {
+        "allowed": ["drink", "clothing", "item"]
+      }
+    },
+    "template": "{actor} holding {object}",
+    "variants": [
+      {
+        "when": {
+          "object_type": "drink"
+        },
+        "template": "{actor} holding a cup of {object}"
+      },
+      {
+        "when": {
+          "object_type": "phone"
+        },
+        "template": "{actor} using {object}"
+      }
+    ]
+  },
+  "sitting": {
+    "tags": ["action"],
+    "priority": 80,
+    "required_zones": {
+      "actor": "LowerBody"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      }
+    },
+    "template": "{actor} sitting"
+  },
+  "hugging": {
+    "tags": ["interaction"],
+    "priority": 96,
+    "required_zones": {
+      "subject1": "UpperBody",
+      "subject2": "UpperBody"
+    },
+    "roles": {
+      "subject1": {
+        "allowed": ["human"]
+      },
+      "subject2": {
+        "allowed": ["human"]
+      }
+    },
+    "template": "{subject1} hugging {subject2}"
+  }
+}

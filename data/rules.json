@@ -1,0 +1,18 @@
+{
+  "allowed_types": {
+    "riding": {
+      "subject": ["human"],
+      "object": ["mount", "vehicle"]
+    }
+  },
+  "custom_rules": [
+    {
+      "id": "require_eyes_visible_for_looking",
+      "type": "requires",
+      "target_action": "looking_at",
+      "conditions": {
+        "subject_zone_visible": "Face"
+      }
+    }
+  ]
+}

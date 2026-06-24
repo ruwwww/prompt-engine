@@ -1,0 +1,12 @@
+{
+  "cafe": {
+    "template": "{weather} {lighting} cafe",
+    "default_lighting": "warm",
+    "default_weather": "sunny"
+  },
+  "alley": {
+    "template": "{weather} {lighting} alley",
+    "default_lighting": "neon",
+    "default_weather": "rainy"
+  }
+}

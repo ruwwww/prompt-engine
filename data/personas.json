@@ -1,0 +1,22 @@
+{
+  "urban_influencer": {
+    "gender": "woman",
+    "Face": {
+      "expression": "smiling"
+    },
+    "Hair": {
+      "color": "brown",
+      "length": "long",
+      "style": "wavy"
+    },
+    "UpperBody": {
+      "owned_item_id": "hoodie_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "cargo_pants_1"
+    },
+    "Hands": {
+      "owned_item_id": "ring_1"
+    }
+  }
+}

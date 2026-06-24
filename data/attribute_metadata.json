@@ -1,0 +1,18 @@
+{
+  "expression": {
+    "tags": ["emotion"],
+    "priority": 90
+  },
+  "hair": {
+    "tags": ["identity"],
+    "priority": 85
+  },
+  "clothing": {
+    "tags": ["clothing"],
+    "priority": 70
+  },
+  "accessory": {
+    "tags": ["accessory"],
+    "priority": 20
+  }
+}

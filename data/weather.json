@@ -1,0 +1,8 @@
+{
+  "sunny": {
+    "template": "sunny"
+  },
+  "rainy": {
+    "template": "rain-soaked"
+  }
+}
