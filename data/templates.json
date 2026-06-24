@@ -13,5 +13,7 @@
   "Car": "{color} car",
   "Bathtub": "{color} {material} {style} bathtub",
   "Mirror": "{style} mirror",
-  "Beach": "{weather} {lighting} beach in {geolocation}"
+  "Beach": "{weather} {lighting} beach in {geolocation}",
+  "Forest": "{weather} {lighting} forest in {location}",
+  "Tree": "{color} {species} tree"
 }

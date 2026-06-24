@@ -607,6 +607,30 @@ class TestNewFeatures(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("in a breezy golden-hour beach in Malibu", out)
 
+    def test_forest_oop_ecs(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"},
+                "env_forest": {
+                    "type": "environment",
+                    "template_key": "Forest",
+                    "location": "the Pacific Northwest",
+                    "weather": "foggy",
+                    "lighting": "sunlight"
+                },
+                "tree_1": {
+                    "type": "fixture",
+                    "template_key": "Tree",
+                    "color": "lush green",
+                    "species": "pine"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("in a foggy sunlight forest in the Pacific Northwest featuring a lush green pine tree", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
