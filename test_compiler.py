@@ -718,6 +718,40 @@ class TestSlotDescriptors(unittest.TestCase):
         self.assertEqual(safe_format("an {color} car", {"color": "red"}), "a red car")
         self.assertEqual(safe_format("An {color} cap", {"color": "blue"}), "A blue cap")
 
+    def test_adjective_ordering(self):
+        from compiler import safe_format
+        
+        # Define a slot descriptor for a hoodie
+        hoodie_desc = {
+            "head": "hoodie",
+            "slots": {
+                "color": { "position": "pre" },     # Rank 6 (color)
+                "material": { "position": "pre" },  # Rank 8 (material)
+                "fit": { "position": "pre" }         # Rank 3 (fit)
+            }
+        }
+        
+        # Test default sorting: fit (3) -> color (6) -> material (8)
+        ctx = {"color": "black", "material": "cotton", "fit": "oversized"}
+        self.assertEqual(
+            safe_format(hoodie_desc, ctx),
+            "oversized black cotton hoodie"
+        )
+        
+        # Test explicit rank overrides: making material rank 1
+        hoodie_override_desc = {
+            "head": "hoodie",
+            "slots": {
+                "color": { "position": "pre" },
+                "material": { "position": "pre", "rank": 1 },
+                "fit": { "position": "pre" }
+            }
+        }
+        self.assertEqual(
+            safe_format(hoodie_override_desc, ctx),
+            "cotton oversized black hoodie"
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

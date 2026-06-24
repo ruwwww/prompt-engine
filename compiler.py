@@ -22,6 +22,22 @@ def safe_format(template_str, context: dict) -> str:
         text = re.sub(r"\b([aA])n\s+([^aeiouAEIOU\s][a-zA-Z]*)", lambda m: m.group(1) + " " + m.group(2), text)
         return text
 
+    STANDARD_RANKS = {
+        "quantity": 1,
+        "opinion": 2,
+        "expression": 2,
+        "fit": 3,
+        "length": 3,
+        "size": 3,
+        "shape": 4,
+        "style": 4,
+        "species": 4,
+        "age": 5,
+        "color": 6,
+        "origin": 7,
+        "material": 8
+    }
+
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
         slots = template_str.get("slots", {})
@@ -37,7 +53,11 @@ def safe_format(template_str, context: dict) -> str:
             
             pos = slot_cfg.get("position", "pre")
             if pos == "pre":
-                pre_modifiers.append(val_str)
+                rank = slot_cfg.get("rank")
+                if rank is None:
+                    cat = slot_cfg.get("category")
+                    rank = STANDARD_RANKS.get(cat) if cat else STANDARD_RANKS.get(slot_name, 50)
+                pre_modifiers.append((rank, val_str))
             elif pos == "post":
                 prep = slot_cfg.get("prep", "")
                 if prep:
@@ -45,7 +65,9 @@ def safe_format(template_str, context: dict) -> str:
                 else:
                     post_modifiers.append(val_str)
                     
-        parts = pre_modifiers + [head] + post_modifiers
+        pre_modifiers.sort(key=lambda x: x[0])
+        pre_modifier_strings = [x[1] for x in pre_modifiers]
+        parts = pre_modifier_strings + [head] + post_modifiers
         rendered = " ".join(parts)
         rendered = re.sub(r"\s+", " ", rendered).strip()
         return adjust_articles(rendered)
