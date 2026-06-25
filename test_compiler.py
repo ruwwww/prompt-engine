@@ -2335,3 +2335,197 @@ class TestCozyCreative(unittest.TestCase):
         self.assertIn("knit sweater", out)
         self.assertIn("high-waist jeans", out)
         self.assertIn("ankle boots", out)
+
+
+class TestNonHumanSubjects(unittest.TestCase):
+    """Phase 9 — Non-human subject tests (Orc, Elf)"""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_orc_warrior_basic(self):
+        """Orc warrior with tusks renders correctly."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "orc1": {
+                    "type": "creature",
+                    "subject": "orc_warrior",
+                    "Face": {"expression": "snarling"},
+                    "Tusks": {"size": "large", "material": "ivory"},
+                },
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("snarling", out)
+        self.assertIn("tusks", out.lower())
+
+    def test_orc_warrior_with_clothing(self):
+        """Orc warrior with clothing renders correctly."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "orc1": {
+                    "type": "creature",
+                    "subject": "orc_warrior",
+                    "Face": {"expression": "snarling"},
+                    "Tusks": {"size": "large", "material": "ivory"},
+                    "UpperBody": {"owned_item_id": "chainmail_1"},
+                },
+                "chainmail_1": {"type": "clothing", "template_key": "Chainmail", "color": "iron"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("snarling", out)
+        self.assertIn("tusks", out.lower())
+        self.assertIn("chainmail", out.lower())
+
+    def test_orc_warrior_visibility_tags(self):
+        """Orc warrior tusks visibility controlled by visibility_tags."""
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {
+                "orc1": {
+                    "type": "creature",
+                    "subject": "orc_warrior",
+                    "Face": {"expression": "snarling"},
+                    "Tusks": {"size": "large", "material": "ivory"},
+                    "UpperBody": {"owned_item_id": "chainmail_1"},
+                },
+                "chainmail_1": {"type": "clothing", "template_key": "Chainmail", "color": "iron"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        # Tusks should be visible in close_up
+        self.assertIn("tusks", out.lower())
+        # UpperBody should NOT be visible in close_up
+        self.assertNotIn("chainmail", out.lower())
+
+    def test_elf_archer_basic(self):
+        """Elf archer with pointed ears renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "elf1": {
+                    "type": "creature",
+                    "subject": "elf_archer",
+                    "Face": {"expression": "focused"},
+                    "Ears": {"shape": "pointed", "length": "long"},
+                },
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("focused", out)
+        self.assertIn("pointed", out.lower())
+        self.assertIn("ears", out.lower())
+
+    def test_elf_archer_with_clothing(self):
+        """Elf archer with clothing renders correctly."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "elf1": {
+                    "type": "creature",
+                    "subject": "elf_archer",
+                    "Face": {"expression": "focused"},
+                    "UpperBody": {"owned_item_id": "leather_vest_1"},
+                },
+                "leather_vest_1": {"type": "clothing", "template_key": "LeatherVest", "color": "brown"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("focused", out)
+        self.assertIn("leather", out.lower())
+
+    def test_elf_archer_visibility_tags(self):
+        """Elf archer ears visibility controlled by visibility_tags."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "elf1": {
+                    "type": "creature",
+                    "subject": "elf_archer",
+                    "Face": {"expression": "focused"},
+                    "Ears": {"shape": "pointed", "length": "long", "visibility_tags": ["close_up", "medium"]},
+                    "UpperBody": {"owned_item_id": "leather_vest_1"},
+                },
+                "leather_vest_1": {"type": "clothing", "template_key": "LeatherVest", "color": "brown"},
+            }
+        }
+        out = self.c.compile_scene(scene)
+        # Ears should NOT be visible in full_body (only close_up and medium)
+        self.assertNotIn("ears", out.lower())
+        # UpperBody should be visible
+        self.assertIn("leather", out.lower())
+
+    def test_orc_elf_multi_character(self):
+        """Orc and elf in same scene both rendered."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "orc1": {
+                    "type": "creature",
+                    "subject": "orc_warrior",
+                    "Face": {"expression": "snarling"},
+                    "Tusks": {"size": "large", "material": "ivory"},
+                },
+                "elf1": {
+                    "type": "creature",
+                    "subject": "elf_archer",
+                    "Face": {"expression": "focused"},
+                    "Hair": {"color": "silver", "length": "long", "style": "braided"},
+                },
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("snarling", out)
+        self.assertIn("tusks", out.lower())
+        self.assertIn("focused", out)
+
+    def test_orc_warrior_generic_fallback(self):
+        """Orc warrior with zone without template uses generic fallback."""
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {
+                "orc1": {
+                    "type": "creature",
+                    "subject": "orc_warrior",
+                    "Face": {"expression": "snarling"},
+                    "Tusks": {"size": "large", "material": "ivory"},
+                    "Jaw": {"shape": "oversized"},
+                },
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("snarling", out)
+        self.assertIn("tusks", out.lower())
+        # Jaw should use generic fallback: "oversized jaw"
+        self.assertIn("oversized", out.lower())
+
+    def test_non_human_empty_scene_returns_empty(self):
+        """Scene with no physical entities returns empty string."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "env1": {"type": "environment", "template_key": "Forest"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertEqual(out, "")
+
+    def test_non_human_morphology_component(self):
+        """Non-human with morphology component is recognized as physical."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "creature1": {
+                    "type": "creature",
+                    "morphology": {"type": "dragon", "frame": "quadruped"},
+                    "Face": {"expression": "roaring"},
+                },
+            }
+        }
+        out = self.c.compile_scene(scene)
+        # Should not return empty string
+        self.assertNotEqual(out, "")
+        self.assertIn("roaring", out)

@@ -6,6 +6,46 @@
   "Ears": "{shape} {length} ears",
   "Jaw": "{shape} jaw",
   "Morphology": "{frame} {type} frame",
+  "Chainmail": {
+    "head": "chainmail",
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "LeatherVest": {
+    "head": "leather vest",
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "LeatherPants": {
+    "head": "leather pants",
+    "plural": { "irregular": "leather pants" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "IronBoots": {
+    "head": "iron boots",
+    "plural": { "irregular": "iron boots" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "Leggings": {
+    "head": "leggings",
+    "plural": { "irregular": "leggings" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "ElvenBoots": {
+    "head": "elven boots",
+    "plural": { "irregular": "elven boots" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
   "Headwear": {
     "head": "",
     "slots": {
