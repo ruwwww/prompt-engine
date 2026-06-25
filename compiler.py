@@ -936,7 +936,17 @@ class RenderSystem:
                     subject = f"{subject} {' and '.join(bsf_texts)}"
 
             # Pose (body configuration) — appended to subject phrase
-            if pose_frag:
+            # Skip if a relationship already describes body configuration
+            # (e.g. sitting, leaning_on, kneeling would clash with pose text)
+            _rel_implies_pose = False
+            if pose_frag and relationships:
+                for r in relationships:
+                    if r.actor_id == human_id and r.clause_text:
+                        _clause_start = r.clause_text.split()[0] if r.clause_text.split() else ""
+                        if _clause_start in ("sitting", "standing", "leaning", "kneeling", "seated", "lies", "lying"):
+                            _rel_implies_pose = True
+                            break
+            if pose_frag and not _rel_implies_pose:
                 subject = f"{subject} {pose_frag.text}"
 
             # Relationships whose actor is this human
