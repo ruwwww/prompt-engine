@@ -1924,7 +1924,7 @@ class TestPoseRendering(unittest.TestCase):
             "objects": {"h1": {"type": "human", "gender": "man"}}
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("seated", out)
+        self.assertIn("legs bent", out)
 
     def test_kneeling_pose_renders_text(self):
         scene = {

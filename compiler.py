@@ -1143,6 +1143,31 @@ class BodyConfigSystem:
             return _deep_merge(config, REL_TO_BODYCONFIG[rel_type])
         return config
 
+    def apply_fixture_affordance(
+        self, config: dict, rel_type: str, target_obj, environments_db: dict, env_type: str
+    ) -> dict:
+        """If a looking_* relationship targets a fixture, infer gaze direction from its affordance."""
+        if not target_obj or target_obj.type != "fixture":
+            return config
+        if not rel_type.startswith("looking_"):
+            return config
+        anchor = target_obj.get_component("anchor", "")
+        if not anchor:
+            return config
+        env_def = environments_db.get(env_type, {})
+        affordances = env_def.get("affordances", {})
+        anchor_affordances = affordances.get(anchor, [])
+        affordance_to_gaze = {
+            "look_into": "toward_target",
+            "look_out_of": "away",
+            "look_over": "away",
+            "look_at": "toward_target",
+        }
+        for aff in anchor_affordances:
+            if aff in affordance_to_gaze:
+                return _deep_merge(config, {"gaze": {"direction": affordance_to_gaze[aff]}})
+        return config
+
     def render_fragments(self, config: dict, human_id: str, priority_fn) -> list:
         """Generate CandidateFragments for each body config sub-component."""
         fragments = []
@@ -1769,17 +1794,10 @@ class RenderSystem:
                 subject = f"{subject} {', '.join(bc_texts)}"
             elif pose_frag:
                 # Fallback: use legacy scene-level pose if no body config
-                # Skip if a relationship already describes body configuration
-                _rel_implies_pose = False
-                if relationships:
-                    for r in relationships:
-                        if r.actor_id == human_id and r.clause_text:
-                            _clause_start = r.clause_text.split()[0] if r.clause_text.split() else ""
-                            if _clause_start in ("sitting", "standing", "leaning", "kneeling", "seated", "lies", "lying"):
-                                _rel_implies_pose = True
-                                break
-                if not _rel_implies_pose:
-                    subject = f"{subject} {pose_frag.text}"
+                # Skip if a relationship already implies body configuration
+                # (relationship implications now always produce body_config fragments,
+                #  so presence of any fragments means the relationship covered it)
+                subject = f"{subject} {pose_frag.text}"
 
             # Relationships whose actor is this human
             my_rels = [r for r in relationships if r.actor_id == human_id or not r.actor_id]
@@ -2028,30 +2046,45 @@ class PromptCompiler:
         has_explicit_body_config = bool(scene_body_config)
 
         for human_obj in humans:
-            # Get per-human body config, with scene-level fallback
-            human_body_config = scene_body_config.get(human_obj.id, scene_body_config)
+            # Get per-human body config: scene-level > subject preset > defaults
+            human_body_config = scene_body_config.get(human_obj.id, scene_body_config) if has_explicit_body_config else {}
+            # Subject preset body_config as fallback
+            if not human_body_config:
+                human_body_config = human_obj.get_component("body_config") or {}
 
-            if has_explicit_body_config:
-                # Explicit body_config: normalize and generate fragments
-                config = self.body_config_system.normalize(human_body_config, pose_name)
-                # Apply relationship implications (sitting_on -> legs bent, etc.)
-                for rel in relationships:
-                    if rel.get("actor") == human_obj.id or rel.get("subject") == human_obj.id:
-                        rel_type = rel.get("type", "")
-                        config = self.body_config_system.apply_relationship_implications(config, rel_type)
-                # Generate fragments
+            # Always normalize body config (explicit + pose fallback + defaults)
+            config = self.body_config_system.normalize(human_body_config, pose_name)
+
+            # Always apply relationship implications (kills the hardcoded verb list)
+            for rel in relationships:
+                if rel.get("actor") == human_obj.id or rel.get("subject") == human_obj.id:
+                    rel_type = rel.get("type", "")
+                    config = self.body_config_system.apply_relationship_implications(config, rel_type)
+                    # Fixture affordance gaze override (look_out_of -> gaze away, etc.)
+                    target_id = rel.get("target")
+                    if target_id and env_type:
+                        target_obj = scene_objects.get(target_id)
+                        config = self.body_config_system.apply_fixture_affordance(
+                            config, rel_type, target_obj, self.relationship_system.environments, env_type
+                        )
+
+            # Generate fragments if body config has any non-default values
+            has_body_values = any(
+                config.get(part, {}).get(k)
+                for part in ("head", "gaze", "arms", "legs", "torso")
+                for k in config.get(part, {})
+            )
+            if has_body_values:
                 body_config_frags += self.body_config_system.render_fragments(config, human_obj.id, priority_fn)
-                # Update visibility based on body config
-                bc_hidden = self.body_config_system.get_hidden_zones(config)
-                for hz in bc_hidden:
-                    if hz in visible_zones:
-                        visible_zones.remove(hz)
-                # Store config on human for RenderSystem access
-                human_obj.components["_body_config"] = config
-            else:
-                # No explicit body_config: use legacy pose text (backward compat)
-                # Still store default config for potential use
-                human_obj.components["_body_config"] = self.body_config_system.normalize({}, pose_name)
+
+            # Update visibility based on body config
+            bc_hidden = self.body_config_system.get_hidden_zones(config)
+            for hz in bc_hidden:
+                if hz in visible_zones:
+                    visible_zones.remove(hz)
+
+            # Store config on human for RenderSystem access
+            human_obj.components["_body_config"] = config
 
         candidates += body_config_frags
 

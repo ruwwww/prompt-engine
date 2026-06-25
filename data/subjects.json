@@ -17,6 +17,10 @@
     },
     "Hands": {
       "owned_item_id": "ring_1"
+    },
+    "body_config": {
+      "gaze": {"direction": "toward_camera"},
+      "arms": {"left": "at_side", "right": "at_side"}
     }
   },
   "professional_man": {
@@ -37,6 +41,11 @@
     },
     "Feet": {
       "owned_item_id": "oxford_shoes_1"
+    },
+    "body_config": {
+      "torso": {"lean": "upright"},
+      "arms": {"left": "at_side", "right": "at_side"},
+      "legs": {"position": "standing"}
     }
   },
   "athletic_woman": {
@@ -57,6 +66,10 @@
     },
     "Feet": {
       "owned_item_id": "sneakers_1"
+    },
+    "body_config": {
+      "legs": {"position": "standing", "weight": "even"},
+      "arms": {"left": "at_side", "right": "at_side"}
     }
   },
   "artistic_teens": {
@@ -74,6 +87,10 @@
     },
     "LowerBody": {
       "owned_item_id": "cargo_pants_2"
+    },
+    "body_config": {
+      "gaze": {"direction": "down"},
+      "head": {"tilt": "forward"}
     }
   }
 }
