@@ -960,6 +960,69 @@ class TestSlotDescriptors(unittest.TestCase):
         self.assertIn("on a clay tennis court outdoors with white boundary lines", out)
         self.assertIn("photorealistic", out)
 
+    def test_sushi_scene_recreation(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "tone": "default",
+            "render_profile": "cinematic",
+            "style": "cinematic",
+            "anchors": {
+                "primary": "h1"
+            },
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {
+                        "expression": "puckering her lips in a playful expression with her eyes closed or squinting slightly"
+                    },
+                    "Hair": {
+                        "color": "dark brown",
+                        "style": "pulled back into a loose, textured bun and long side-swept bangs framing her face"
+                    },
+                    "Hands": {
+                        "owned_item_id": "chopsticks_1"
+                    },
+                    "UpperBody": {
+                        "owned_item_id": "top_1"
+                    }
+                },
+                "top_1": {
+                    "type": "clothing",
+                    "template_key": "HalterTop",
+                    "color": "vibrant red",
+                    "style": "halter-neck",
+                    "material": "featuring delicate pink floral embroidery on the chest and green leaves"
+                },
+                "chopsticks_1": {
+                    "type": "clothing",
+                    "template_key": "Chopsticks",
+                    "material": "wooden",
+                    "plural": True,
+                    "holding_item_id": "sushi_1"
+                },
+                "sushi_1": {
+                    "type": "item",
+                    "template_key": "SushiRoll",
+                    "style": "rice, nori, avocado, and crab or fish filling"
+                },
+                "env_restaurant": {
+                    "type": "environment",
+                    "template_key": "RestaurantInterior",
+                    "location": "warm ambient lighting, featuring a blurred wall art background depicting a large red sun and dark mountain silhouettes"
+                }
+            },
+            "relationships": [
+                {"type": "holding_near_eye", "actor": "h1", "object": "chopsticks_1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        
+        self.assertIn("halter-neck vibrant red top featuring delicate pink floral embroidery", out)
+        self.assertIn("wooden chopsticks holding a sushi roll containing rice, nori, avocado, and crab or fish filling", out)
+        self.assertIn("inside a restaurant interior with warm ambient lighting", out)
+        self.assertIn("holds wooden chopsticks holding a sushi roll containing rice, nori, avocado, and crab or fish filling near her eye", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -111,6 +111,10 @@ def safe_format(template_str, context: dict) -> str:
         pre_modifiers.sort(key=lambda x: x[0])
         pre_modifier_strings = [x[1] for x in pre_modifiers]
         parts = pre_modifier_strings + [head] + post_modifiers
+        if "suffix" in template_str:
+            suffix_val = resolve_tone_value(template_str["suffix"])
+            if suffix_val:
+                parts.append(suffix_val)
         rendered = " ".join(parts)
         rendered = re.sub(r"\s+", " ", rendered).strip()
         return adjust_articles(rendered)
@@ -339,6 +343,9 @@ class RelationshipSystem:
         else:
             template = self.templates.get(obj.get_component("template_key"))
             ctx = {**obj.components}
+            holding_item_id = obj.get_component("holding_item_id")
+            if holding_item_id:
+                ctx["held_item"] = self.get_noun_phrase(holding_item_id, scene_objects, placements, mentioned_ids, "object")
             if is_plural:
                 ctx["_plural_self"] = True
             if template:
@@ -773,7 +780,7 @@ class RenderSystem:
                 if env_frag:
                     vowels = "aeiou"
                     env_art = "an" if env_frag.text[0].lower() in vowels else "a"
-                    if any(k in env_frag.text for k in ("cafe", "office", "room")):
+                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant")):
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
@@ -796,7 +803,7 @@ class RenderSystem:
                     chain = " ".join(r.clause_text for r in my_rels)
                     parts.append(chain)
                 if env_frag:
-                    if any(k in env_frag.text for k in ("cafe", "office", "room")):
+                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant")):
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"

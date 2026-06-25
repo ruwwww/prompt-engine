@@ -144,5 +144,44 @@
         "subject2": { "position": "post", "required": true }
       }
     }
+  },
+  "holding_near_eye": {
+    "tags": ["action"],
+    "priority": 95,
+    "chain_order": 2,
+    "required_zones": {
+      "actor": "Hands"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "object": {
+        "allowed": ["item", "clothing"]
+      }
+    },
+    "template": {
+      "head": {
+        "singular": "holds",
+        "plural": "hold",
+        "agreement_with": "actor"
+      },
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "object": { "position": "post", "required": true, "prep": "" }
+      },
+      "suffix": "near her eye"
+    },
+    "clause": {
+      "head": {
+        "singular": "holds",
+        "plural": "hold",
+        "agreement_with": "actor"
+      },
+      "slots": {
+        "object": { "position": "post", "required": true, "prep": "" }
+      },
+      "suffix": "near her eye"
+    }
   }
 }

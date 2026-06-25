@@ -99,5 +99,33 @@
       "material": { "position": "pre", "required": false },
       "location": { "position": "post", "prep": "outdoors with", "required": false }
     }
+  },
+  "HalterTop": {
+    "head": "top",
+    "slots": {
+      "style": { "position": "pre" },
+      "color": { "position": "pre" },
+      "material": { "position": "post", "prep": "" }
+    }
+  },
+  "Chopsticks": {
+    "head": "chopsticks",
+    "plural": { "irregular": "chopsticks" },
+    "slots": {
+      "material": { "position": "pre" },
+      "held_item": { "position": "post", "prep": "holding" }
+    }
+  },
+  "SushiRoll": {
+    "head": "sushi roll",
+    "slots": {
+      "style": { "position": "post", "prep": "containing" }
+    }
+  },
+  "RestaurantInterior": {
+    "head": "restaurant interior",
+    "slots": {
+      "location": { "position": "post", "prep": "with", "required": false }
+    }
   }
 }
