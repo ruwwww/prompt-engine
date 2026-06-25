@@ -183,5 +183,63 @@
       },
       "suffix": "near {_possessive} eye"
     }
+  },
+  "leaning_on": {
+    "tags": ["action", "interaction"],
+    "priority": 88,
+    "chain_order": 1,
+    "required_zones": {
+      "actor": "UpperBody"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "target": {
+        "allowed": ["fixture", "furniture"]
+      }
+    },
+    "template": {
+      "head": "leaning on",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "target": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "leaning on",
+      "slots": {
+        "target": { "position": "post", "required": true }
+      }
+    }
+  },
+  "rest_arms_on": {
+    "tags": ["action", "interaction"],
+    "priority": 85,
+    "chain_order": 2,
+    "required_zones": {
+      "actor": "Hands"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "target": {
+        "allowed": ["fixture", "furniture"]
+      }
+    },
+    "template": {
+      "head": "resting {possessive} arms on",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "target": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "resting arms on",
+      "slots": {
+        "target": { "position": "post", "required": true }
+      }
+    }
   }
 }

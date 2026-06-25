@@ -177,5 +177,7 @@
       "color": { "position": "pre" }
     }
   },
-  "BodySurface": "with {design}"
+  "BodySurface": "with {design}",
+  "Pose": "{pose_text}",
+  "Fixture": "{anchor}"
 }

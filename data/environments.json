@@ -2,26 +2,125 @@
   "cafe": {
     "template": "{weather} {lighting} cafe",
     "default_lighting": "warm",
-    "default_weather": "sunny"
+    "default_weather": "sunny",
+    "affordances": {
+      "counter": ["lean_on", "sit_at"],
+      "chair": ["sit_on"],
+      "table": ["rest_arms_on", "sit_at"],
+      "booth": ["sit_in"],
+      "patio": ["sit_on", "stand_on"]
+    }
   },
   "alley": {
     "template": "{weather} {lighting} alley",
     "default_lighting": "neon",
-    "default_weather": "rainy"
+    "default_weather": "rainy",
+    "affordances": {
+      "wall": ["lean_on", "rest_arms_on"],
+      "fire_escape": ["climb", "lean_on"],
+      "dumpster": ["sit_on"],
+      "ground": ["stand_on", "sit_on"]
+    }
   },
   "bathroom": {
     "template": "{weather} {lighting} bathroom",
     "default_lighting": "soft",
-    "default_weather": "sunny"
+    "default_weather": "sunny",
+    "affordances": {
+      "counter": ["lean_on", "rest_arms_on"],
+      "bathtub": ["sit_in", "lie_in"],
+      "mirror": ["look_into"],
+      "floor": ["stand_on", "sit_on"]
+    }
   },
   "beach": {
     "template": "{weather} {lighting} beach in {geolocation}",
     "default_lighting": "golden_hour",
-    "default_weather": "breezy"
+    "default_weather": "breezy",
+    "affordances": {
+      "sand": ["sit_on", "lie_on", "stand_on"],
+      "water": ["stand_in", "wade_in"],
+      "rock": ["sit_on", "stand_on"],
+      "towel": ["lie_on", "sit_on"],
+      "shore": ["walk_on", "stand_on"]
+    }
   },
   "forest": {
     "template": "{weather} {lighting} forest in {location}",
     "default_lighting": "sunlight",
-    "default_weather": "foggy"
+    "default_weather": "foggy",
+    "affordances": {
+      "ground": ["stand_on", "sit_on"],
+      "log": ["sit_on", "rest_arms_on"],
+      "rock": ["sit_on", "stand_on", "lean_on"],
+      "branch": ["rest_arms_on"],
+      "trail": ["walk_on", "stand_on"]
+    }
+  },
+  "balcony": {
+    "template": "{weather} {lighting} balcony",
+    "default_lighting": "golden_hour",
+    "default_weather": "breezy",
+    "affordances": {
+      "railing": ["lean_on", "rest_arms_on", "look_over"],
+      "floor": ["stand_on"],
+      "chair": ["sit_on"],
+      "table": ["rest_arms_on"]
+    }
+  },
+  "bedroom": {
+    "template": "{weather} {lighting} bedroom",
+    "default_lighting": "warm",
+    "default_weather": "sunny",
+    "affordances": {
+      "bed": ["sit_on", "lie_on", "kneel_on"],
+      "chair": ["sit_on"],
+      "floor": ["stand_on", "sit_on"],
+      "mirror": ["look_into"]
+    }
+  },
+  "office": {
+    "template": "{weather} {lighting} office",
+    "default_lighting": "fluorescent",
+    "default_weather": "sunny",
+    "affordances": {
+      "desk": ["rest_arms_on", "sit_at"],
+      "chair": ["sit_on"],
+      "whiteboard": ["write_on", "look_at"],
+      "window": ["look_out_of", "lean_on"]
+    }
+  },
+  "rooftop": {
+    "template": "{weather} {lighting} rooftop",
+    "default_lighting": "golden_hour",
+    "default_weather": "breezy",
+    "affordances": {
+      "ledge": ["sit_on", "lean_on", "rest_arms_on"],
+      "railing": ["lean_on", "rest_arms_on", "look_over"],
+      "floor": ["stand_on"],
+      "chair": ["sit_on"]
+    }
+  },
+  "poolside": {
+    "template": "{weather} {lighting} poolside",
+    "default_lighting": "bright",
+    "default_weather": "sunny",
+    "affordances": {
+      "edge": ["sit_on", "dangle_feet_over"],
+      "lounge_chair": ["lie_on", "sit_on"],
+      "water": ["stand_in", "wade_in"],
+      "deck": ["stand_on", "sit_on"]
+    }
+  },
+  "car_interior": {
+    "template": "{weather} {lighting} car interior",
+    "default_lighting": "dim",
+    "default_weather": "rainy",
+    "affordances": {
+      "seat": ["sit_in"],
+      "dashboard": ["rest_arms_on"],
+      "steering_wheel": ["hold", "rest_arms_on"],
+      "window": ["look_out_of", "lean_on"]
+    }
   }
 }

@@ -367,6 +367,33 @@ class AttributeCollectorSystem:
 
 
 # ---------------------------------------------------------------------------
+# System: PoseSystem
+# ---------------------------------------------------------------------------
+
+class PoseSystem:
+    """Generates a CandidateFragment for the scene pose (body configuration)."""
+
+    def __init__(self, poses_db: dict, templates_db: dict):
+        self.poses = poses_db
+        self.templates = templates_db
+
+    def process(self, pose_name: Optional[str]) -> Optional[CandidateFragment]:
+        if not pose_name or pose_name not in self.poses:
+            return None
+        pose_def = self.poses[pose_name]
+        pose_text = pose_def.get("pose_text", "")
+        if not pose_text:
+            return None
+        return CandidateFragment(
+            zone="pose",
+            frag_type="pose",
+            tags=["pose"],
+            priority=70,
+            text=pose_text,
+        )
+
+
+# ---------------------------------------------------------------------------
 # System: RelationshipSystem
 # ---------------------------------------------------------------------------
 
@@ -385,10 +412,50 @@ def with_article(phrase: str) -> str:
 class RelationshipSystem:
     """Validates, resolves, and renders action/interaction/spatial relationships."""
 
-    def __init__(self, actions_db: dict, spatial_db: dict, templates_db: dict):
+    def __init__(self, actions_db: dict, spatial_db: dict, templates_db: dict, environments_db: dict = None):
         self.actions = actions_db
         self.spatial = spatial_db
         self.templates = templates_db
+        self.environments = environments_db or {}
+
+    def resolve_anchor(self, dotref: str, env_type: str, scene_objects: dict) -> Optional[str]:
+        """Resolve 'env.anchor' dot-notation to a SceneObject ID.
+
+        Creates a fixture SceneObject for the anchor if it doesn't exist yet.
+        Returns the object ID or None if resolution fails.
+        """
+        if "." not in dotref:
+            return None
+        env_id, anchor_name = dotref.split(".", 1)
+        env_def = self.environments.get(env_type, {})
+        affordances = env_def.get("affordances", {})
+        if anchor_name not in affordances:
+            return None
+        anchor_obj_id = f"anchor_{env_type}_{anchor_name}"
+        if anchor_obj_id not in scene_objects:
+            scene_objects[anchor_obj_id] = SceneObject(
+                anchor_obj_id, "fixture",
+                {"template_key": "Fixture", "anchor": anchor_name, "env_type": env_type}
+            )
+        return anchor_obj_id
+
+    def resolve_anchor_targets(
+        self, relationships_data: list, scene_objects: dict, env_type: str
+    ) -> list:
+        """Resolve dot-notation targets/actors in relationships to SceneObject IDs."""
+        resolved = []
+        for rel in relationships_data:
+            rel = dict(rel)
+            for field in ("target", "actor", "subject", "container"):
+                val = rel.get(field)
+                if isinstance(val, str) and "." in val:
+                    resolved_id = self.resolve_anchor(val, env_type, scene_objects)
+                    if resolved_id:
+                        rel[field] = resolved_id
+                    else:
+                        rel[field] = None
+            resolved.append(rel)
+        return resolved
 
     def get_noun_phrase(self, obj_id, scene_objects: dict, placements: dict, mentioned_ids: set, role: str = None) -> str:
         if isinstance(obj_id, list):
@@ -791,6 +858,7 @@ class RenderSystem:
         atmospheric: list = []
         composition_frags: list = []
         body_surface_frags: list = []
+        pose_frag: Optional[CandidateFragment] = None
 
         for c in budgeted:
             if c.frag_type == "native":
@@ -805,6 +873,8 @@ class RenderSystem:
                 composition_frags.append(c)
             elif c.frag_type == "body_surface":
                 body_surface_frags.append(c)
+            elif c.frag_type == "pose":
+                pose_frag = c
             elif c.frag_type in ("lighting", "weather", "style"):
                 atmospheric.append(c)
 
@@ -864,6 +934,10 @@ class RenderSystem:
                     subject = f"{subject} {bsf_texts[0]}"
                 else:
                     subject = f"{subject} {' and '.join(bsf_texts)}"
+
+            # Pose (body configuration) — appended to subject phrase
+            if pose_frag:
+                subject = f"{subject} {pose_frag.text}"
 
             # Relationships whose actor is this human
             my_rels = [r for r in relationships if r.actor_id == human_id or not r.actor_id]
@@ -998,7 +1072,8 @@ class PromptCompiler:
         self.visibility_system   = VisibilitySystem(poses)
         self.wardrobe_system     = WardrobeSystem(attires)
         self.attribute_system    = AttributeCollectorSystem(metadata, templates)
-        self.relationship_system = RelationshipSystem(actions, spatial, templates)
+        self.pose_system         = PoseSystem(poses, templates)
+        self.relationship_system = RelationshipSystem(actions, spatial, templates, envs)
         self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition, templates)
         self.validation_system   = ValidationSystem(actions, spatial, templates)
         self.style_system        = StyleSystem(styles)
@@ -1069,11 +1144,34 @@ class PromptCompiler:
         mentioned_ids = {h.id for h in humans}
         active_tone = PromptCompiler.active_tone
         candidates = []
+
+        # 6a. Pose (body configuration)
+        pose_frag = self.pose_system.process(scene.get("pose"))
+        if pose_frag:
+            candidates.append(pose_frag)
+
         for human_obj in humans:
             candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn, active_tone)
 
+        # 6b. Resolve environment anchor targets (e.g. "balcony.railing" -> SceneObject)
+        env_type = None
+        if "environment" in scene:
+            env_type = scene["environment"].get("type")
+        # Also check scene_objects for environment type
+        if not env_type:
+            for obj in scene_objects.values():
+                if obj.type == "environment":
+                    env_type = obj.get_component("template_key") or obj.get_component("type")
+                    break
+
+        relationships = scene.get("relationships", [])
+        if env_type:
+            relationships = self.relationship_system.resolve_anchor_targets(
+                relationships, scene_objects, env_type
+            )
+
         candidates += self.relationship_system.process(
-            scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn, mentioned_ids, active_tone
+            relationships, scene_objects, placements, visible_zones, priority_fn, mentioned_ids, active_tone
         )
 
         # Identify occupied objects to exclude from ambient environment listing
@@ -1085,10 +1183,11 @@ class PromptCompiler:
                     owned_item_ids.add(zone_data["owned_item_id"])
 
         relationship_targets = set()
-        for rel in scene.get("relationships", []):
+        for rel in relationships:
             for role_name, val in rel.items():
                 if role_name not in ("type", "actor", "subject", "subject1"):
-                    relationship_targets.add(val)
+                    if val is not None:
+                        relationship_targets.add(val)
 
         # Resolve environment and composition objects
         env_obj = None

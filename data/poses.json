@@ -1,20 +1,34 @@
 {
   "hands_behind_back": {
-    "hidden_zones": ["Hands"]
+    "hidden_zones": ["Hands"],
+    "pose_text": "with hands clasped behind their back"
   },
   "sitting": {
-    "hidden_zones": ["Feet"]
+    "hidden_zones": ["Feet"],
+    "pose_text": "seated"
   },
   "arms_crossed": {
-    "hidden_zones": ["Hands"]
+    "hidden_zones": ["Hands"],
+    "pose_text": "with arms crossed"
   },
   "reaching": {
-    "hidden_zones": []
+    "hidden_zones": [],
+    "pose_text": "reaching upward"
   },
   "leaning": {
-    "hidden_zones": ["Feet"]
+    "hidden_zones": ["Feet"],
+    "pose_text": "leaning"
   },
   "kneeling": {
-    "hidden_zones": ["Feet"]
+    "hidden_zones": ["Feet"],
+    "pose_text": "kneeling"
+  },
+  "standing": {
+    "hidden_zones": [],
+    "pose_text": "standing"
+  },
+  "lying_down": {
+    "hidden_zones": ["Feet", "LowerBody"],
+    "pose_text": "lying down"
   }
 }

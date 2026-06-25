@@ -1612,3 +1612,198 @@ class TestBodySurfaceFeatures(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         self.assertNotIn("with", out.split("on her")[0] if "on her" in out else "")
+
+
+class TestPoseRendering(unittest.TestCase):
+    """Pose is now rendered as text in the output."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_standing_pose_renders_text(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "standing",
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("standing", out)
+
+    def test_sitting_pose_renders_text(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "sitting",
+            "objects": {"h1": {"type": "human", "gender": "man"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("seated", out)
+
+    def test_kneeling_pose_renders_text(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "kneeling",
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("kneeling", out)
+
+    def test_arms_crossed_pose_renders_text(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "arms_crossed",
+            "objects": {"h1": {"type": "human", "gender": "man"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("arms crossed", out)
+
+    def test_leaning_pose_renders_text(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "leaning",
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("leaning", out)
+
+    def test_no_pose_renders_nothing(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("standing", out)
+        self.assertNotIn("seated", out)
+        self.assertNotIn("kneeling", out)
+
+    def test_pose_with_relationship(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "standing",
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"},
+                "cup": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic"}
+            },
+            "relationships": [
+                {"type": "holding", "actor": "h1", "object": "cup"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("standing", out)
+        self.assertIn("holds", out)
+
+
+class TestEnvironmentAnchors(unittest.TestCase):
+    """Environment anchors allow relationships to target objects within environments."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_anchor_dot_notation_resolves(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "balcony"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"}
+            },
+            "relationships": [
+                {"type": "leaning_on", "actor": "h1", "target": "balcony.railing"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("leaning", out)
+        self.assertIn("railing", out)
+
+    def test_anchor_fixture_created(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "balcony"},
+            "objects": {
+                "h1": {"type": "human", "gender": "man"}
+            },
+            "relationships": [
+                {"type": "leaning_on", "actor": "h1", "target": "balcony.railing"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("railing", out)
+
+    def test_anchor_invalid_target_ignored(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "balcony"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"}
+            },
+            "relationships": [
+                {"type": "leaning_on", "actor": "h1", "target": "balcony.nonexistent"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("nonexistent", out)
+
+    def test_beach_anchor_sit_on_sand(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "beach"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"}
+            },
+            "relationships": [
+                {"type": "sitting", "actor": "h1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("sits", out)
+
+    def test_anchor_and_relationship_chained(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "cafe"},
+            "objects": {
+                "h1": {"type": "human", "gender": "man"},
+                "cup": {"type": "drink", "template_key": "CoffeeCup", "material": "ceramic"}
+            },
+            "relationships": [
+                {"type": "sitting", "actor": "h1"},
+                {"type": "holding", "actor": "h1", "object": "cup"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("sits", out)
+        self.assertIn("holding", out)
+
+    def test_anchor_without_environment_ignored(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"}
+            },
+            "relationships": [
+                {"type": "leaning_on", "actor": "h1", "target": "balcony.railing"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("railing", out)
+
+    def test_anchor_actor_resolves(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "environment": {"type": "office"},
+            "objects": {
+                "h1": {"type": "human", "gender": "man"}
+            },
+            "relationships": [
+                {"type": "leaning_on", "actor": "h1", "target": "office.window"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("leaning", out)
+        self.assertIn("window", out)
