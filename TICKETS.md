@@ -9,8 +9,8 @@ This document tracks features that have been deferred during the transition to t
 
 ## 2. Narrative Modes v2
 - **Goal:** Implement robust scene description narrative modes via grammar composition (sentence syntax planning, paragraph structures, etc.).
-- **Status:** Deferred (2 tests skipped).
-- **Target Implementation:** Replace the hardcoded `scene_description` participle-to-finite logic with dynamic sentence-building grammar templates.
+- **Status:** Completed (unskipped and fully passing).
+- **Target Implementation:** Added helper wrappers for subject capitalization, article insertion, period termination, and space-separated layout assembly.
 
 ## 3. Environment Anchors v2
 - **Goal:** Support dot-notation environment anchors (e.g., `balcony.railing`) for physical fixture relationship targeting.

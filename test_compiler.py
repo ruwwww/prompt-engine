@@ -695,7 +695,6 @@ class TestMultiCharacter(unittest.TestCase):
         self.assertIn("man", out)
 
 
-@pytest.mark.skip(reason="Assembler v2: Narrative Modes v2 TBD")
 class TestNarrativeMode(unittest.TestCase):
     """Phase 5 — Scene description narrative mode"""
 

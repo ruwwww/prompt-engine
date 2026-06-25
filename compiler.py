@@ -1322,12 +1322,22 @@ def _assemble_output(
         frags_for_actor = actor_frags[aid] + rel_by_actor[aid]
         rendered = _render_actor(aid, frags_for_actor)
         if rendered:
+            if render_profile.get("narrative_mode") == "scene_description":
+                if rendered.lower().startswith(("a ", "an ", "the ")):
+                    rendered = rendered[0].upper() + rendered[1:]
+                else:
+                    first_char = rendered[0].lower()
+                    article = "An" if first_char in "aeiou" else "A"
+                    rendered = f"{article} {rendered}"
             actor_parts.append(rendered)
 
     if not actor_parts:
         return ""
 
-    result = ", ".join(actor_parts)
+    if render_profile.get("narrative_mode") == "scene_description":
+        result = ". ".join(actor_parts)
+    else:
+        result = ", ".join(actor_parts)
 
     # Append ungrouped relationships
     if ungrouped_rels:
@@ -1378,9 +1388,17 @@ def _assemble_output(
     for f in style_frags_shared + other_shared:
         text = f["text"]
         if text:
-            if not result.endswith(","):
-                result = result.rstrip() + ","
-            result += f" {text}" if not text.startswith(" ") else text
+            if render_profile.get("narrative_mode") == "scene_description":
+                result = result.rstrip(".")
+                result += f" {text}" if not text.startswith(" ") else text
+            else:
+                if not result.endswith(","):
+                    result = result.rstrip() + ","
+                result += f" {text}" if not text.startswith(" ") else text
+
+    if render_profile.get("narrative_mode") == "scene_description":
+        if not result.endswith("."):
+            result += "."
 
     result = re.sub(r"\s+", " ", result).strip()
     result = re.sub(r",\s*looking toward", " looking toward", result)
@@ -1388,7 +1406,16 @@ def _assemble_output(
     return result
 
 
+class RenderSystemWrapper:
+    def __init__(self, profiles):
+        self.profiles = profiles
+
+
 class PromptCompiler(Assembler):
+    def __init__(self, data_dir: str = None):
+        super().__init__(data_dir=data_dir)
+        self.render_system = RenderSystemWrapper(self.render_profiles_db)
+
     def compile_scene(self, scene_data: dict, strict: bool = False) -> str:
         return self.assemble(scene_data, strict=strict)
 
