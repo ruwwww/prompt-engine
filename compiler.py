@@ -397,12 +397,16 @@ class PoseSystem:
 # System: RelationshipSystem
 # ---------------------------------------------------------------------------
 
+_UNCOUNTABLE = {"water", "sand", "music", "light", "darkness", "rain", "snow", "fog", "air", "love", "anger", "joy"}
+
 def with_article(phrase: str) -> str:
     """Prepends 'a' or 'an' to a noun phrase if it doesn't already start with an article."""
     if not phrase:
         return phrase
     words = phrase.split()
     if words and words[0].lower() in ("a", "an", "the"):
+        return phrase
+    if phrase.lower() in _UNCOUNTABLE:
         return phrase
     first_char = phrase[0].lower()
     art = "an" if first_char in "aeiou" else "a"
@@ -893,9 +897,19 @@ class RenderSystem:
             hair_frag = my_natives.get("Hair")
             eyes_frag = my_natives.get("Eyes")
 
+            _has_multiword_expr = False
             if face_frag:
                 face_clean = face_frag.text.replace(f" {gender}", "").strip()
-                subject = f"{face_clean} {gender}"
+                if " " in face_clean:
+                    _has_multiword_expr = True
+                    _first_word = face_clean.split()[0].lower()
+                    if _first_word.endswith("ing"):
+                        subject = f"{gender} with {face_clean}"
+                    else:
+                        _expr_article = with_article(face_clean)
+                        subject = f"{gender} with {_expr_article}"
+                else:
+                    subject = f"{face_clean} {gender}"
             else:
                 subject = gender
 
@@ -906,7 +920,10 @@ class RenderSystem:
                 with_parts.append(eyes_frag.text)
 
             if with_parts:
-                if len(with_parts) == 1:
+                if _has_multiword_expr:
+                    with_parts_str = ", ".join(with_parts[:-1]) + f" and {with_parts[-1]}" if len(with_parts) > 1 else with_parts[0]
+                    subject = f"{subject} and {with_parts_str}"
+                elif len(with_parts) == 1:
                     subject = f"{subject} with {with_parts[0]}"
                 else:
                     subject = f"{subject} with {with_parts[0]} and {with_parts[1]}"
@@ -917,7 +934,7 @@ class RenderSystem:
                 my_clothing.append(headwear_frag)
 
             if my_clothing:
-                items = [c.text for c in my_clothing]
+                items = [with_article(c.text) if len(my_clothing) == 1 else c.text for c in my_clothing]
                 if len(items) == 1:
                     aggregated = items[0]
                 elif len(items) == 2:
@@ -973,6 +990,8 @@ class RenderSystem:
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
+                    elif "poolside" in env_frag.text:
+                        prep = "at"
                     else:
                         prep = "in"
                     env_part = f"{prep} {env_art} {env_frag.text}"
@@ -996,6 +1015,8 @@ class RenderSystem:
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
+                    elif "poolside" in env_frag.text:
+                        prep = "at"
                     else:
                         prep = "in"
                     vowels = "aeiou"

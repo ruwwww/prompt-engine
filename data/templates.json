@@ -179,5 +179,20 @@
   },
   "BodySurface": "with {design}",
   "Pose": "{pose_text}",
-  "Fixture": "{anchor}"
+  "Fixture": "{anchor}",
+  "BikiniTop": {
+    "head": "bikini top",
+    "slots": {
+      "color": { "position": "pre", "rank": 1 },
+      "style": { "position": "pre", "rank": 2 }
+    }
+  },
+  "BikiniBottom": {
+    "head": "bikini bottoms",
+    "plural": { "irregular": "bikini bottoms" },
+    "slots": {
+      "color": { "position": "pre", "rank": 1 },
+      "style": { "position": "post", "prep": "with", "rank": 2 }
+    }
+  }
 }

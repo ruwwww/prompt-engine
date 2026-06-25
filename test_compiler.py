@@ -530,7 +530,7 @@ class TestNewFeatures(unittest.TestCase):
             }
         }
         out_native = self.c.compile_scene(scene_native)
-        self.assertIn("wearing black baseball cap", out_native)
+        self.assertIn("wearing a black baseball cap", out_native)
 
     def test_composable_bathroom_ecs(self):
         # 1. Test ambient bathroom compilation (ECS Queries)
@@ -954,7 +954,8 @@ class TestSlotDescriptors(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         
-        self.assertIn("smiling gently woman", out)
+        self.assertIn("woman with smiling gently", out)
+        self.assertIn("dark hair", out)
         self.assertIn("wearing hoop earrings and one-shoulder pale yellow athletic dress", out)
         self.assertIn("holds a white and yellow tennis racket", out)
         self.assertIn("on a clay tennis court outdoors with white boundary lines", out)
@@ -1064,7 +1065,7 @@ class TestSlotDescriptors(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         
-        self.assertIn("wearing sleeveless green dress with white polka dots", out)
+        self.assertIn("wearing a sleeveless green dress with white polka dots", out)
         self.assertIn("inside a subway tunnel with metallic walls and doors on both sides", out)
         self.assertIn("cinematic lighting, high contrast between teal and orange tones", out)
 

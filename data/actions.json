@@ -241,5 +241,57 @@
         "target": { "position": "post", "required": true }
       }
     }
+  },
+  "dangling_feet": {
+    "tags": ["action", "interaction"],
+    "priority": 82,
+    "chain_order": 3,
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "target": {
+        "allowed": ["fixture", "furniture"]
+      }
+    },
+    "template": {
+      "head": "with {_possessive} legs dangling into",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "target": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "with legs dangling into",
+      "slots": {
+        "target": { "position": "post", "required": true }
+      }
+    }
+  },
+  "looking_at": {
+    "tags": ["action", "interaction"],
+    "priority": 80,
+    "chain_order": 4,
+    "roles": {
+      "actor": {
+        "allowed": ["human"]
+      },
+      "target": {
+        "allowed": ["human", "fixture", "furniture"]
+      }
+    },
+    "template": {
+      "head": "looking at",
+      "slots": {
+        "actor": { "position": "pre", "required": true },
+        "target": { "position": "post", "required": true }
+      }
+    },
+    "clause": {
+      "head": "looking at",
+      "slots": {
+        "target": { "position": "post", "required": true }
+      }
+    }
   }
 }
