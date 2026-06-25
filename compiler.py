@@ -1,26 +1,24 @@
 """
-prompt-engine/compiler.py
-Object-Oriented Prompt Composition System — Stages 1-6 + Architecture Polish
+prompt-engine/assembler.py
+Clean Slate Assembler — Pure functions, prototypal inheritance, grammar catalog.
 """
 import os
 import json
 import re
-from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
+
 
 # ---------------------------------------------------------------------------
-# Shared utility
+# Shared utility (ported from compiler.py)
 # ---------------------------------------------------------------------------
 
 def safe_format(template_str, context: dict) -> str:
     """Format a template string or slot descriptor, replacing missing keys with empty string
     and collapsing any resulting multi-spaces."""
-    # Resolve tone from context only (no global state)
     tone = context.get("_tone", "default")
 
     def resolve_tone_value(val):
         if isinstance(val, dict):
-            # Check if this is a tone map or singular/plural verb map
             if "singular" in val or "plural" in val:
                 return val
             if any(k in val for k in ("default", "poetic", "vivid", "concise", "technical")):
@@ -28,37 +26,22 @@ def safe_format(template_str, context: dict) -> str:
         return val
 
     def adjust_articles(text: str) -> str:
-        # Convert 'a' to 'an' before vowels
         text = re.sub(r"\b([aA])\s+([aeiouAEIOU][a-zA-Z]*)", lambda m: m.group(1) + "n " + m.group(2), text)
-        # Convert 'an' to 'a' before consonants
         text = re.sub(r"\b([aA])n\s+([^aeiouAEIOU\s][a-zA-Z]*)", lambda m: m.group(1) + " " + m.group(2), text)
         return text
 
     STANDARD_RANKS = {
-        "quantity": 1,
-        "opinion": 2,
-        "expression": 2,
-        "fit": 3,
-        "length": 3,
-        "size": 3,
-        "shape": 4,
-        "style": 4,
-        "species": 4,
-        "age": 5,
-        "color": 6,
-        "origin": 7,
-        "pattern": 8,
-        "material": 8
+        "quantity": 1, "opinion": 2, "expression": 2, "fit": 3, "length": 3,
+        "size": 3, "shape": 4, "style": 4, "species": 4, "age": 5, "color": 6,
+        "origin": 7, "pattern": 8, "material": 8
     }
 
-    # Resolve tone on the template itself if it's a tone map string
     template_str = resolve_tone_value(template_str)
 
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
         head = resolve_tone_value(head)
-        
-        # Resolve head if it's a dict containing singular/plural
+
         if isinstance(head, dict):
             agreement_role = head.get("agreement_with", "actor")
             is_plural = False
@@ -69,7 +52,6 @@ def safe_format(template_str, context: dict) -> str:
             head_val = head.get("plural" if is_plural else "singular", "")
             head = resolve_tone_value(head_val)
         else:
-            # Apply noun pluralization rules if _plural_self is true
             if context.get("_plural_self", False) and "plural" in template_str:
                 plural_cfg = template_str["plural"]
                 if "irregular" in plural_cfg:
@@ -78,17 +60,15 @@ def safe_format(template_str, context: dict) -> str:
                     head = head + plural_cfg["suffix"]
 
         slots = template_str.get("slots", {})
-        
         pre_modifiers = []
         post_modifiers = []
-        
+
         for slot_name, slot_cfg in slots.items():
             val = context.get(slot_name)
             val = resolve_tone_value(val)
             val_str = str(val).strip() if val is not None else ""
             if not val_str:
                 continue
-            
             pos = slot_cfg.get("position", "pre")
             if pos == "pre":
                 rank = slot_cfg.get("rank")
@@ -102,14 +82,13 @@ def safe_format(template_str, context: dict) -> str:
                     post_modifiers.append(f"{prep} {val_str}")
                 else:
                     post_modifiers.append(val_str)
-                    
+
         pre_modifiers.sort(key=lambda x: x[0])
         pre_modifier_strings = [x[1] for x in pre_modifiers]
         parts = pre_modifier_strings + [head] + post_modifiers
         if "suffix" in template_str:
             suffix_val = resolve_tone_value(template_str["suffix"])
             if suffix_val:
-                # Resolve context placeholders in suffix (e.g. {_possessive})
                 for k, v in context.items():
                     if k.startswith("_") and isinstance(v, str):
                         suffix_val = suffix_val.replace("{" + k + "}", v)
@@ -124,1559 +103,468 @@ def safe_format(template_str, context: dict) -> str:
         val = context.get(p)
         val = resolve_tone_value(val)
         kwargs[p] = str(val or "")
-        
+
     rendered = str(template_str).format(**kwargs)
     rendered = re.sub(r"\s+", " ", rendered).strip()
     return adjust_articles(rendered)
 
 
 # ---------------------------------------------------------------------------
-# Core data structures
+# Data loading
 # ---------------------------------------------------------------------------
 
-@dataclass
-class CandidateFragment:
-    zone: str
-    frag_type: str          # "native" | "owned_item" | "relationship" | "environment" | "lighting" | "weather" | "composition" | "body_surface"
-    tags: list
-    priority: int
-    text: str
-    clause_text: str = ""
-    actor_id: str = ""
-    chain_order: int = 99
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
-@dataclass
-class ValidationError:
-    severity: str           # "error" | "warning"
-    message: str
-
-
-class SceneObject:
-    def __init__(self, obj_id: str, obj_type: str, data: dict):
-        self.id = obj_id
-        self.type = obj_type
-        self.components: dict = {k: v for k, v in data.items() if k not in ("type", "id")}
-
-    def get_component(self, name: str, default=None):
-        return self.components.get(name, default)
+def _load_json(filename: str) -> dict:
+    path = os.path.join(DATA_DIR, filename)
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 # ---------------------------------------------------------------------------
-# System: WardrobeSystem
+# Deep merge utility
 # ---------------------------------------------------------------------------
 
-class WardrobeSystem:
-    """Resolves attire bundles on human SceneObjects."""
-
-    def __init__(self, attires_db: dict):
-        self.attires = attires_db
-
-    def resolve(self, human_obj: SceneObject, scene_objects: dict) -> None:
-        attire_name = human_obj.get_component("attire")
-        if not attire_name or attire_name not in self.attires:
-            return
-
-        attire_data = self.attires[attire_name]
-        for slot, slot_data in attire_data.items():
-            existing_slot = human_obj.get_component(slot)
-            if existing_slot is None:
-                existing_slot = {}
-                human_obj.components[slot] = existing_slot
-            elif not isinstance(existing_slot, dict):
-                continue
-
-            # Explicit attire always overrides existing clothing references
-            existing_slot["owned_item_id"] = slot_data.get("owned_item_id")
-
-            owned_item_id = existing_slot.get("owned_item_id")
-            if owned_item_id:
-                base = owned_item_id
-                if "_" in base:
-                    parts = base.split("_")
-                    if parts[-1].isdigit():
-                        parts = parts[:-1]
-                    base = "_".join(parts)
-                template_key = "".join(word.capitalize() for word in base.split("_"))
-
-                if owned_item_id not in scene_objects:
-                    default_data = {
-                        "type": "clothing",
-                        "template_key": template_key
-                    }
-                    scene_objects[owned_item_id] = SceneObject(owned_item_id, "clothing", default_data)
-                else:
-                    existing_obj = scene_objects[owned_item_id]
-                    if not existing_obj.type:
-                        existing_obj.type = "clothing"
-                    if "template_key" not in existing_obj.components:
-                        existing_obj.components["template_key"] = template_key
-
-
-# ---------------------------------------------------------------------------
-# System: SubjectSystem
-# ---------------------------------------------------------------------------
-
-class SubjectSystem:
-    """Merges subject defaults into a human SceneObject."""
-
-    def __init__(self, subjects_db: dict):
-        self.subjects = subjects_db
-
-    def resolve(self, human_obj: SceneObject) -> SceneObject:
-        subject_name = human_obj.get_component("subject")
-        if not subject_name or subject_name not in self.subjects:
-            return human_obj
-
-        subject_data = self.subjects[subject_name]
-        for comp_key, comp_val in subject_data.items():
-            if comp_key in ("type",):
-                continue
-            existing = human_obj.get_component(comp_key)
-            if isinstance(existing, dict) and isinstance(comp_val, dict):
-                merged = dict(comp_val)       # subject defaults first
-                merged.update(existing)       # scene overrides win
-                human_obj.components[comp_key] = merged
-            elif existing is None:
-                human_obj.components[comp_key] = comp_val
-
-        if "gender" not in human_obj.components and "gender" in subject_data:
-            human_obj.components["gender"] = subject_data["gender"]
-
-        return human_obj
-
-
-# ---------------------------------------------------------------------------
-# System: VisibilitySystem
-# ---------------------------------------------------------------------------
-
-class VisibilitySystem:
-    """Resolves active body zones from camera framing + pose occlusion.
-    
-    Supports two modes:
-    1. Legacy: hardcoded CAMERA_ZONES dict (backward compatible)
-    2. Data-driven: components declare visibility_tags (new morphology support)
-    """
-
-    # Default tags when component doesn't specify visibility_tags
-    DEFAULT_VISIBILITY_TAGS = ["close_up", "medium", "full_body"]
-
-    # Legacy CAMERA_ZONES kept as fallback for backward compatibility
-    CAMERA_ZONES = {
-        "close_up":  ["Face", "Hair", "Eyes", "Headwear"],
-        "medium":    ["Face", "Hair", "Eyes", "Headwear", "UpperBody", "Hands"],
-        "full_body": ["Face", "Hair", "Eyes", "Headwear", "UpperBody", "Hands", "LowerBody", "Feet"],
-    }
-
-    def __init__(self, poses_db: dict):
-        self.poses = poses_db
-
-    def compute_visible_zones(self, camera_framing: str, pose_name: Optional[str],
-                               scene_objects: dict = None) -> list:
-        """Compute visible zones from camera framing + component visibility_tags.
-        
-        Args:
-            camera_framing: Camera framing string (close_up, medium, full_body)
-            pose_name: Optional pose name for occlusion
-            scene_objects: Optional dict of scene objects for data-driven visibility
-        """
-        if scene_objects:
-            # Data-driven visibility from components
-            zones = self._compute_zones_from_components(camera_framing, scene_objects)
-        else:
-            # Legacy: use hardcoded CAMERA_ZONES
-            zones = list(self.CAMERA_ZONES.get(camera_framing, self.CAMERA_ZONES["full_body"]))
-
-        # Apply pose occlusion
-        if pose_name and pose_name in self.poses:
-            for hz in self.poses[pose_name].get("hidden_zones", []):
-                if hz in zones:
-                    zones.remove(hz)
-        return zones
-
-    def _compute_zones_from_components(self, camera_framing: str,
-                                        scene_objects: dict) -> list:
-        """Compute zones from component visibility_tags."""
-        # Start with legacy CAMERA_ZONES for backward compatibility
-        legacy_zones = set(self.CAMERA_ZONES.get(camera_framing, self.CAMERA_ZONES["full_body"]))
-        
-        # Add any new zones from components with explicit visibility_tags
-        for obj in scene_objects.values():
-            if not self._is_physical(obj):
-                continue
-            for zone_name, zone_data in obj.components.items():
-                if not isinstance(zone_data, dict):
-                    continue
-                # Only process components with explicit visibility_tags
-                if "visibility_tags" in zone_data:
-                    tags = zone_data["visibility_tags"]
-                    if camera_framing in tags:
-                        legacy_zones.add(zone_name)
-        
-        return list(legacy_zones)
-
-    def _is_physical(self, obj: 'SceneObject') -> bool:
-        """Check if object has physical form (subject, morphology, or human type)."""
-        return bool(
-            obj.get_component("subject") or 
-            obj.get_component("morphology") or
-            obj.type == "human"
-        )
-
-
-# ---------------------------------------------------------------------------
-# System: AttributeCollectorSystem
-# ---------------------------------------------------------------------------
-
-class AttributeCollectorSystem:
-    """Walks visible zones of a physical object and emits CandidateFragments."""
-
-    def __init__(self, metadata_db: dict, templates_db: dict):
-        self.metadata = metadata_db
-        self.templates = templates_db
-        self.hair_ontology = HairOntologySystem()
-
-    def collect(
-        self,
-        human_obj: SceneObject,
-        scene_objects: dict,
-        visible_zones: list,
-        priority_fn,
-        active_tone: str = "default",
-    ) -> list:
-        candidates = []
-        human_id = human_obj.id
-        gender = human_obj.get_component("gender", "person")
-
-        for zone in visible_zones:
-            zone_data = human_obj.get_component(zone)
-            if not zone_data:
-                continue
-
-            owned_item_id = zone_data.get("owned_item_id") if isinstance(zone_data, dict) else None
-            if owned_item_id:
-                owned_item = scene_objects.get(owned_item_id)
-                if not owned_item:
-                    continue
-                meta = self.metadata.get(owned_item.type, {"tags": [], "priority": 50})
-                template = self.templates.get(owned_item.get_component("template_key"))
-                if template:
-                    candidates.append(CandidateFragment(
-                        zone=zone,
-                        frag_type="owned_item",
-                        tags=meta.get("tags", []),
-                        priority=priority_fn(meta.get("priority", 50), [human_id, owned_item_id]),
-                        text=safe_format(template, {**owned_item.components, "_tone": active_tone}),
-                        actor_id=human_id,
-                    ))
-            else:
-                # Get metadata key from zone_data or derive from zone name
-                meta_key = self._get_metadata_key(zone, zone_data)
-                meta = self.metadata.get(meta_key, {"tags": [], "priority": 50})
-
-                # Get render priority from zone_data or use default
-                render_priority = self._get_render_priority(zone, zone_data)
-
-                # Hair zone uses ontology renderer instead of flat template
-                if zone == "Hair":
-                    ontology = self.hair_ontology.normalize(zone_data)
-                    text = self.hair_ontology.render(ontology)
-                    if text:
-                        candidates.append(CandidateFragment(
-                            zone=zone,
-                            frag_type="native",
-                            tags=meta.get("tags", []),
-                            priority=priority_fn(render_priority, [human_id]),
-                            text=text,
-                            actor_id=human_id,
-                        ))
-                else:
-                    # Try template first, then generic fallback
-                    template = self.templates.get(zone)
-                    if template:
-                        ctx = {**zone_data, "gender": gender, "_tone": active_tone}
-                        text = safe_format(template, ctx)
-                    else:
-                        # Generic fallback rendering
-                        text = self._render_generic_zone(zone, zone_data)
-                    
-                    if text:
-                        candidates.append(CandidateFragment(
-                            zone=zone,
-                            frag_type="native",
-                            tags=meta.get("tags", []),
-                            priority=priority_fn(render_priority, [human_id]),
-                            text=text,
-                            actor_id=human_id,
-                        ))
-
-        # Body surface features (tattoos, scars, freckles, etc.)
-        # Determine which zones are covered by clothing that suppresses body surface
-        covered_zones = set()
-        for zone in visible_zones:
-            zone_data = human_obj.get_component(zone)
-            if zone_data and isinstance(zone_data, dict) and zone_data.get("owned_item_id"):
-                # Check zone metadata for coverage flag
-                zone_meta = self.metadata.get(zone.lower(), {})
-                if zone_meta.get("covers_body_surface"):
-                    covered_zones.add(zone)
-
-        bsf = human_obj.get_component("body_surface_features") or []
-        for feature in bsf:
-            loc = feature.get("location", "")
-            if loc not in visible_zones:
-                continue
-            if loc in covered_zones:
-                continue
-            bs_meta = self.metadata.get("body_surface", {"tags": [], "priority": 50})
-            template = self.templates.get("BodySurface")
-            if template:
-                text = safe_format(template, {**feature, "_tone": active_tone})
-                candidates.append(CandidateFragment(
-                    zone=loc,
-                    frag_type="body_surface",
-                    tags=bs_meta.get("tags", []),
-                    priority=priority_fn(bs_meta.get("priority", 50), [human_id]),
-                    text=text,
-                    actor_id=human_id,
-                ))
-
-        return candidates
-
-    def _get_metadata_key(self, zone: str, zone_data) -> str:
-        """Derive metadata key from zone name and data."""
-        # Check if zone_data specifies a metadata_key
-        if isinstance(zone_data, dict) and "metadata_key" in zone_data:
-            return zone_data["metadata_key"]
-        
-        # Legacy mapping for backward compatibility
-        LEGACY_META_KEYS = {
-            "Face": "expression",
-            "Hair": "hair",
-        }
-        if zone in LEGACY_META_KEYS:
-            return LEGACY_META_KEYS[zone]
-        
-        # Fallback: use zone name lowercased
-        return zone.lower()
-
-    def _get_render_priority(self, zone: str, zone_data) -> int:
-        """Get render priority from zone data or default."""
-        if isinstance(zone_data, dict) and "render_priority" in zone_data:
-            return zone_data["render_priority"]
-        
-        # Default priorities
-        DEFAULT_PRIORITIES = {
-            "Face": 100, "Hair": 90, "Eyes": 85, "Headwear": 80,
-            "UpperBody": 70, "LowerBody": 65, "Feet": 60, "Hands": 55,
-        }
-        return DEFAULT_PRIORITIES.get(zone, 50)
-
-    def _render_generic_zone(self, zone: str, zone_data) -> str:
-        """Generic fallback: render zone as key-value pairs."""
-        if not isinstance(zone_data, dict):
-            return ""
-        
-        # Skip meta keys
-        META_KEYS = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer"}
-        
-        parts = []
-        for key, value in zone_data.items():
-            if key in META_KEYS:
-                continue
-            if isinstance(value, dict):
-                # Nested dict: render each key-value
-                for k, v in value.items():
-                    parts.append(f"{v} {k}")
-            else:
-                # Simple value: render as "value zone" or just "value"
-                if zone.lower() in key.lower():
-                    parts.append(str(value))
-                else:
-                    parts.append(f"{value} {key.lower()}")
-        
-        return " ".join(parts) if parts else ""
-
-
-# ---------------------------------------------------------------------------
-# System: HairOntologySystem
-# ---------------------------------------------------------------------------
-
-# --- Texture: physical hair properties ---
-CURL_PATTERNS = {"straight", "wavy", "curly", "coily", "kinky"}
-DENSITY_VALUES = {"thin", "medium", "thick"}
-STRAND_VALUES = {"fine", "medium", "coarse"}
-POROSITY_VALUES = {"low", "normal", "high"}
-
-# --- Color: technique-aware structure ---
-COLOR_TECHNIQUES = {
-    "none", "balayage", "ombre", "sombre", "highlights", "lowlights",
-    "money_piece", "babylights", "color_melt", "peekaboo",
-    "root_smudge", "frosting", "dip_dye",
-}
-COLOR_VIBRANCY = {"natural", "fashion", "pastel", "neon"}
-COLOR_PLACEMENT = {
-    "all_over", "lengths_and_ends", "roots", "money_piece",
-    "peekaboo", "underneath", "face_framing",
-}
-
-# --- Arrangement: typed hierarchy ---
-ARRANGEMENT_TYPES = {
-    # Loose / simple
-    "loose", "down", "tousled",
-    # Tied
-    "ponytail", "half_up_half_down",
-    # Buns
-    "bun", "top_knot", "chignon", "ballerina_bun", "messy_bun", "donut_bun",
-    "space_buns", "double_buns",
-    # Braids
-    "braid", "three_strand_braid", "french_braid", "dutch_braid",
-    "fishtail_braid", "boxer_braids", "crown_braid",
-    "double_dutch_braids", "triple_braid",
-    # Cultural / textured
-    "locs", "starter_locs", "traditional_locs", "freeform_locs", "sisterlocks",
-    "twists", "two_strand_twists", "flat_twists", "senegalese_twists", "marley_twists",
-    "box_braids", "knotless_braids", "cornrows", "faux_locs",
-    "protective_style",
-}
-
-ARRANGEMENT_POSITIONS = {"high", "mid", "low", "side", "nape", "top", "crown"}
-
-# --- Appearance: visual qualities ---
-SHEEN_VALUES = {"matte", "natural", "silky", "glossy"}
-CONDITION_VALUES = {"healthy", "dry", "damaged", "chemically_treated", "freshly_cut"}
-
-# --- State: temporary conditions ---
-HAIR_STATES = {
-    "wet", "dry", "frizzy", "flat", "static", "humidity_affected",
-    "freshly_washed", "second_day", "heat_styled", "air_dried",
-    "windblown", "tousled", "messy", "freshly_done", "bed_head",
-}
-
-# --- Cultural specificity ---
-CULTURAL_STYLE_TYPES = {"locs", "twists", "protective_style", "natural", "treated"}
-CULTURAL_SUBTYPES = {
-    # Locs
-    "starter", "traditional", "freeform", "sisterlocks", "comb_coils",
-    # Twists
-    "two_strand", "flat", "senegalese", "marley",
-    # Protective
-    "box_braids", "knotless_braids", "cornrows", "faux_locs", "goddess_locs",
-    # Natural
-    "wash_and_go", "twist_out", "braid_out", "bantu_knots", "puff",
-}
-CULTURAL_STAGES = {"new", "mature", "growing"}
-CULTURAL_TREATMENTS = {"rebonded", "permed", "straightened", "relaxed", "texturized"}
-
-# Hair regions scaffold
-HAIR_REGIONS = {"front", "back", "sides", "bangs"}
-
-
-def _is_arrangement_type(val: str) -> bool:
-    """Check if a value is a known arrangement type."""
-    return val.lower().replace(" ", "_").replace("-", "_") in ARRANGEMENT_TYPES
-
-
-def normalize_hair(raw: dict) -> dict:
-    """Normalize old flat format or new structured format to ontology schema.
-
-    Old format: {"color": "brown", "length": "long", "style": "wavy"}
-    Previous new format: {"structure": {...}, "appearance": {...}}
-    Current new format: {"texture": {...}, "color": {...}, "arrangement": {...}, ...}
-    """
-    # Check if already in new format (any new key present)
-    has_new_keys = any(k in raw for k in ("texture", "arrangement", "appearance", "cultural"))
-    has_prev_new_keys = any(k in raw for k in ("structure",))
-
-    if has_new_keys or has_prev_new_keys:
-        ontology = _normalize_new_format(raw)
-    else:
-        ontology = _normalize_old_format(raw)
-
-    # Ensure regions scaffold
-    if "regions" not in ontology:
-        ontology["regions"] = {r: True for r in HAIR_REGIONS}
-
-    return ontology
-
-
-def _normalize_new_format(raw: dict) -> dict:
-    """Handle partial new-format input, merging with old keys for compatibility.
-
-    Supports both:
-    - Previous new format: {"structure": {length, shape}, "appearance": {color, texture}}
-    - Current new format: {"texture": {curl_pattern, ...}, "color": {base, ...}, ...}
-    """
-    ontology = {}
-
-    # Texture (physical properties)
-    # Support old "structure" format as well
-    texture = raw.get("texture", {})
-    structure = raw.get("structure", {})
-    if isinstance(texture, dict):
-        ontology["texture"] = {
-            "curl_pattern": texture.get("curl_pattern", "") or structure.get("shape", ""),
-            "density": texture.get("density", ""),
-            "strand": texture.get("strand", ""),
-            "porosity": texture.get("porosity", ""),
-        }
-    else:
-        ontology["texture"] = {
-            "curl_pattern": structure.get("shape", ""),
-            "density": "",
-            "strand": "",
-            "porosity": "",
-        }
-
-    # Color (technique-aware structure)
-    # Support old "appearance.color" format
-    color = raw.get("color", {})
-    appearance = raw.get("appearance", {})
-    if isinstance(color, str):
-        ontology["color"] = {"base": color, "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
-    elif isinstance(color, dict) and color.get("base"):
-        # New format with structured color
-        ontology["color"] = {
-            "base": color.get("base", ""),
-            "technique": color.get("technique", "none"),
-            "secondary": color.get("secondary", ""),
-            "placement": color.get("placement", "all_over"),
-            "vibrancy": color.get("vibrancy", "natural"),
-        }
-    elif isinstance(appearance, dict) and appearance.get("color"):
-        # Old format: appearance.color
-        ontology["color"] = {"base": appearance["color"], "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
-    else:
-        ontology["color"] = {"base": "", "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
-
-    # Arrangement (typed hierarchy)
-    # Support old "structure.length" for length
-    arrangement = raw.get("arrangement", {})
-    if isinstance(arrangement, str):
-        ontology["arrangement"] = {
-            "primary": {"type": arrangement, "position": "", "subtype": "", "length": structure.get("length", ""), "thickness": ""},
-            "secondary": "",
-            "accessories": [],
-        }
-    elif isinstance(arrangement, dict):
-        primary = arrangement.get("primary", arrangement)
-        if isinstance(primary, str):
-            primary = {"type": primary, "position": "", "subtype": "", "length": "", "thickness": ""}
-        ontology["arrangement"] = {
-            "primary": {
-                "type": primary.get("type", "loose"),
-                "position": primary.get("position", ""),
-                "subtype": primary.get("subtype", ""),
-                "length": primary.get("length", "") or structure.get("length", ""),
-                "thickness": primary.get("thickness", ""),
-            },
-            "secondary": arrangement.get("secondary", ""),
-            "accessories": arrangement.get("accessories", []),
-        }
-    else:
-        ontology["arrangement"] = {
-            "primary": {"type": "loose", "position": "", "subtype": "", "length": structure.get("length", ""), "thickness": ""},
-            "secondary": "",
-            "accessories": [],
-        }
-
-    # Appearance (visual qualities)
-    # Support old "appearance.texture" -> sheen
-    if isinstance(appearance, dict):
-        ontology["appearance"] = {
-            "sheen": appearance.get("sheen", "") or appearance.get("texture", ""),
-            "condition": appearance.get("condition", ""),
-        }
-    else:
-        ontology["appearance"] = {"sheen": "", "condition": ""}
-
-    # State (temporary conditions)
-    state = raw.get("state", [])
-    if isinstance(state, str):
-        state = [state]
-    ontology["state"] = state
-
-    # Cultural specificity
-    cultural = raw.get("cultural", {})
-    if isinstance(cultural, dict):
-        ontology["cultural"] = {
-            "style_type": cultural.get("style_type", ""),
-            "subtype": cultural.get("subtype", ""),
-            "stage": cultural.get("stage", ""),
-            "treatment": cultural.get("treatment", ""),
-        }
-    else:
-        ontology["cultural"] = {"style_type": "", "subtype": "", "stage": "", "treatment": ""}
-
-    # Fill in from old-format keys for backward compat
-    _backfill_from_legacy(ontology, raw)
-
-    return ontology
-
-
-def _normalize_old_format(raw: dict) -> dict:
-    """Convert old flat {color, length, style, texture} to new ontology."""
-    style = raw.get("style", "")
-
-    # Classify style: is it an arrangement or a curl pattern?
-    if _is_arrangement_type(style):
-        arr_type = style
-        curl_pattern = ""
-    elif style.lower() in CURL_PATTERNS:
-        arr_type = "loose"
-        curl_pattern = style
-    else:
-        arr_type = "loose"
-        curl_pattern = style  # preserve unknown values
-
-    ontology = {
-        "texture": {
-            "curl_pattern": curl_pattern,
-            "density": raw.get("density", ""),
-            "strand": raw.get("strand", raw.get("strand_thickness", "")),
-            "porosity": raw.get("porosity", ""),
-        },
-        "color": {
-            "base": raw.get("color", ""),
-            "technique": raw.get("technique", "none"),
-            "secondary": raw.get("secondary_color", ""),
-            "placement": raw.get("placement", "all_over"),
-            "vibrancy": raw.get("vibrancy", "natural"),
-        },
-        "arrangement": {
-            "primary": {
-                "type": arr_type,
-                "position": raw.get("position", ""),
-                "subtype": raw.get("subtype", ""),
-                "length": raw.get("length", ""),
-                "thickness": raw.get("thickness", ""),
-            },
-            "secondary": raw.get("half_up", ""),
-            "accessories": raw.get("accessories", []),
-        },
-        "appearance": {
-            "sheen": raw.get("sheen", raw.get("texture", "")),  # old "texture" -> sheen
-            "condition": raw.get("condition", ""),
-        },
-        "state": raw.get("state", []),
-        "cultural": {
-            "style_type": raw.get("style_type", ""),
-            "subtype": raw.get("cultural_subtype", ""),
-            "stage": raw.get("stage", ""),
-            "treatment": raw.get("treatment", ""),
-        },
-        "regions": {r: True for r in HAIR_REGIONS},
-    }
-
-    return ontology
-
-
-def _backfill_from_legacy(ontology: dict, raw: dict) -> None:
-    """Fill in new-format fields from old-format keys for partial new input."""
-    # If texture is empty but old keys exist
-    tex = ontology["texture"]
-    if not tex["curl_pattern"] and "style" in raw:
-        if raw["style"].lower() in CURL_PATTERNS:
-            tex["curl_pattern"] = raw["style"]
-    if not tex["density"] and "density" in raw:
-        tex["density"] = raw["density"]
-    if not tex["strand"] and "strand" in raw:
-        tex["strand"] = raw["strand"]
-    if not tex["strand"] and "strand_thickness" in raw:
-        tex["strand"] = raw["strand_thickness"]
-
-    # Color backfill
-    col = ontology["color"]
-    if not col["base"] and "color" in raw:
-        col["base"] = raw["color"] if isinstance(raw["color"], str) else ""
-    if col["technique"] == "none" and "technique" in raw:
-        col["technique"] = raw["technique"]
-    if not col["secondary"] and "secondary_color" in raw:
-        col["secondary"] = raw["secondary_color"]
-
-    # Arrangement backfill
-    arr = ontology["arrangement"]["primary"]
-    if arr["type"] == "loose" and "style" in raw:
-        if _is_arrangement_type(raw["style"]):
-            arr["type"] = raw["style"]
-    if not arr["length"] and "length" in raw:
-        arr["length"] = raw["length"]
-    if not arr["position"] and "position" in raw:
-        arr["position"] = raw["position"]
-
-    # Appearance backfill
-    app = ontology["appearance"]
-    if not app["sheen"]:
-        if "texture" in raw and isinstance(raw["texture"], str):
-            app["sheen"] = raw["texture"]
-        elif "sheen" in raw:
-            app["sheen"] = raw["sheen"]
-
-
-def render_hair(ontology: dict) -> str:
-    """Render structured hair ontology to a natural language phrase.
-
-    Rendering order: state + length + curl_pattern + color + sheen + hair
-    Arrangement modifies: "ponytail of ... hair"
-    """
-    parts = []
-
-    # --- State words first (wet, windblown, frizzy, etc.) ---
-    state = ontology.get("state", [])
-    if isinstance(state, str):
-        state = [state]
-    parts.extend(state)
-
-    # --- Length (from arrangement.primary.length) ---
-    arrangement = ontology.get("arrangement", {})
-    if isinstance(arrangement, dict):
-        primary = arrangement.get("primary", {})
-        if isinstance(primary, dict):
-            length = primary.get("length", "")
-            if length:
-                parts.append(length)
-
-    # --- Texture (curl pattern only for rendering) ---
-    texture = ontology.get("texture", {})
-    if isinstance(texture, dict):
-        curl = texture.get("curl_pattern", "")
-        if curl and curl not in parts:
-            parts.append(curl)
-
-    # --- Color ---
-    color = ontology.get("color", {})
-    if isinstance(color, dict):
-        color_str = _render_color(color)
-        if color_str:
-            parts.append(color_str)
-
-    # --- Appearance (sheen only; condition is structural detail) ---
-    appearance = ontology.get("appearance", {})
-    if isinstance(appearance, dict):
-        sheen = appearance.get("sheen", "")
-        if sheen and sheen not in ("natural", ""):
-            parts.append(sheen)
-
-    # --- Build base phrase ---
-    base = " ".join(p for p in parts if p) + " hair" if parts else "hair"
-
-    # --- Arrangement modifies construction ---
-    if isinstance(arrangement, dict):
-        primary = arrangement.get("primary", {})
-        if isinstance(primary, dict):
-            arr_type = primary.get("type", "loose")
-            if arr_type and arr_type not in ("loose", "down"):
-                base = f"{arr_type} of {base}"
-
-            # Accessories append
-            accessories = arrangement.get("accessories", [])
-            if accessories:
-                acc_str = " with " + ", ".join(accessories)
-                base = base + acc_str
-
-    return base
-
-
-def _render_color(color: dict) -> str:
-    """Render color structure to a natural language phrase."""
-    base = color.get("base", "")
-    technique = color.get("technique", "none")
-    secondary = color.get("secondary", "")
-    vibrancy = color.get("vibrancy", "natural")
-
-    # Fashion/pastel/neon prefix
-    prefix = ""
-    if vibrancy in ("fashion", "pastel", "neon"):
-        prefix = f"{vibrancy} " if vibrancy != "fashion" else ""
-
-    if technique == "none" or not technique:
-        return f"{prefix}{base}".strip() if base else ""
-
-    # Technique-based rendering
-    if technique in ("balayage", "ombre", "sombre") and secondary:
-        return f"{prefix}{base} {technique} with {secondary}".strip()
-    elif technique in ("highlights", "lowlights", "babylights") and secondary:
-        return f"{prefix}{secondary} {technique} on {base}".strip()
-    elif technique == "money_piece" and secondary:
-        return f"{prefix}{base} with {secondary} money piece".strip()
-    elif technique == "peekaboo" and secondary:
-        return f"{prefix}{base} with {secondary} peekaboo".strip()
-    elif technique == "color_melt" and secondary:
-        return f"{prefix}{base} to {secondary} color melt".strip()
-    else:
-        return f"{prefix}{base}".strip() if base else ""
-
-
-class HairOntologySystem:
-    """Normalizes hair data from any format and renders structured hair description."""
-
-    CURL_PATTERNS = CURL_PATTERNS
-    DENSITY_VALUES = DENSITY_VALUES
-    STRAND_VALUES = STRAND_VALUES
-    POROSITY_VALUES = POROSITY_VALUES
-    COLOR_TECHNIQUES = COLOR_TECHNIQUES
-    COLOR_VIBRANCY = COLOR_VIBRANCY
-    COLOR_PLACEMENT = COLOR_PLACEMENT
-    ARRANGEMENT_TYPES = ARRANGEMENT_TYPES
-    ARRANGEMENT_POSITIONS = ARRANGEMENT_POSITIONS
-    SHEEN_VALUES = SHEEN_VALUES
-    CONDITION_VALUES = CONDITION_VALUES
-    HAIR_STATES = HAIR_STATES
-    CULTURAL_STYLE_TYPES = CULTURAL_STYLE_TYPES
-    CULTURAL_SUBTYPES = CULTURAL_SUBTYPES
-    CULTURAL_STAGES = CULTURAL_STAGES
-    CULTURAL_TREATMENTS = CULTURAL_TREATMENTS
-    HAIR_REGIONS = HAIR_REGIONS
-
-    def normalize(self, raw: dict) -> dict:
-        """Normalize hair data to ontology schema."""
-        return normalize_hair(raw)
-
-    def render(self, ontology: dict) -> str:
-        """Render normalized hair ontology to text."""
-        return render_hair(ontology)
-        """Normalize hair data to ontology schema."""
-        return normalize_hair(raw)
-
-    def render(self, ontology: dict) -> str:
-        """Render normalized hair ontology to text."""
-        return render_hair(ontology)
-
-
-# ---------------------------------------------------------------------------
-# System: PoseSystem
-# ---------------------------------------------------------------------------
-
-class PoseSystem:
-    """Generates a CandidateFragment for the scene pose (body configuration)."""
-
-    def __init__(self, poses_db: dict, templates_db: dict):
-        self.poses = poses_db
-        self.templates = templates_db
-
-    def process(self, pose_name: Optional[str]) -> Optional[CandidateFragment]:
-        if not pose_name or pose_name not in self.poses:
-            return None
-        pose_def = self.poses[pose_name]
-        pose_text = pose_def.get("pose_text", "")
-        if not pose_text:
-            return None
-        return CandidateFragment(
-            zone="pose",
-            frag_type="pose",
-            tags=["pose"],
-            priority=70,
-            text=pose_text,
-        )
-
-
-# ---------------------------------------------------------------------------
-# System: BodyConfigSystem
-# ---------------------------------------------------------------------------
-
-# --- BodyConfig Schema Constants ---
-HEAD_TILTS = {"forward", "back", "left", "right", "slightly_left", "slightly_right", "upright"}
-HEAD_TURNS = {"toward_camera", "away_from_camera", "profile_left", "profile_right"}
-GAZE_DIRECTIONS = {"up", "down", "left", "right", "away", "toward_camera", "toward_target"}
-GAZE_ENGAGEMENTS = {"direct", "averted", "fleeting", "side_glance"}
-ARM_POSITIONS = {"at_side", "crossed", "raised", "behind_back", "resting_on_object"}
-HAND_STATES = {"relaxed", "clenched", "in_pockets", "gripping", "pointing"}
-LEG_POSITIONS = {"standing", "bent", "crossed", "apart", "kneeling", "dangling"}
-LEG_WEIGHTS = {"left", "right", "even"}
-TORSO_LEANS = {"forward", "back", "left", "right", "upright"}
-TORSO_ANGLES = {"slight", "pronounced"}
-
-# --- Pose-to-BodyConfig Mapping (backward compat) ---
-POSE_TO_BODYCONFIG = {
-    "standing":    {"legs": {"position": "standing"}, "torso": {"lean": "upright"}},
-    "sitting":     {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
-    "leaning":     {"legs": {"position": "standing"}, "torso": {"lean": "forward"}},
-    "kneeling":    {"legs": {"position": "kneeling"}, "torso": {"lean": "upright"}},
-    "arms_crossed": {"arms": {"left": "crossed", "right": "crossed"}},
-    "hands_behind_back": {"arms": {"left": "behind_back", "right": "behind_back"}},
-    "reaching":    {"arms": {"left": "raised", "right": "raised"}},
-    "lying_down":  {"legs": {"position": "standing"}, "torso": {"lean": "back"}},  # approx
-}
-
-# --- Relationship-to-BodyConfig Mapping (physical implications) ---
-REL_TO_BODYCONFIG = {
-    "sitting":       {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
-    "sitting_on":    {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
-    "leaning_on":    {"torso": {"lean": "forward"}},
-    "rest_arms_on":  {"arms": {"left": "resting_on_object", "right": "resting_on_object"}},
-    "dangling_feet": {"legs": {"position": "dangling"}},
-    "kneeling":      {"legs": {"position": "kneeling"}, "torso": {"lean": "upright"}},
-    "hugging":       {"arms": {"left": "at_side", "right": "at_side"}},
-    "looking_at":    {"gaze": {"direction": "toward_target"}},
-    "looking_over":  {"gaze": {"direction": "away"}},
-    "looking_into":  {"gaze": {"direction": "toward_target"}},
-    "looking_out_of": {"gaze": {"direction": "away"}},
-}
-
-# --- Head turn hides face sub-zones ---
-HEAD_TURN_FACE_HIDDEN = {
-    "profile_left": ["Eyes"],   # eyes not visible in profile
-    "profile_right": ["Eyes"],
-    "away_from_camera": [],     # face still visible, just turned
-}
-
-# --- Arms positions that hide Hands zone ---
-ARMS_HANDS_HIDDEN = {"behind_back"}
-
-
-def _deep_merge(base: dict, override: dict) -> dict:
-    """Deep merge override into base. Override wins on conflicts."""
+def deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge override into base, returning a new dict.
+    Override values win. Non-dict values in override replace base entirely."""
     result = dict(base)
-    for k, v in override.items():
-        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
-            result[k] = _deep_merge(result[k], v)
+    for key, val in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(val, dict):
+            result[key] = deep_merge(result[key], val)
         else:
-            result[k] = v
+            result[key] = val
     return result
 
 
-def normalize_body_config(raw: dict, pose_fallback: Optional[str] = None) -> dict:
-    """Normalize body config from raw input + pose fallback.
+# ---------------------------------------------------------------------------
+# Pipeline Step 1: resolve_blueprint
+# ---------------------------------------------------------------------------
 
-    Priority: raw body_config > pose fallback > defaults.
+def resolve_blueprint(
+    obj: dict,
+    subjects_db: dict,
+    attires_db: dict,
+    scene_objects: dict
+) -> dict:
+    """Resolve a scene object's blueprint by merging subject preset + attire bundle.
+
+    Merge order: scene data > subject defaults > attire defaults.
+    Returns a flat component map (zone -> data).
     """
-    # Start with defaults
-    config = {
-        "head": {"tilt": "upright", "turn": ""},
-        "gaze": {"direction": "", "target": "", "engagement": ""},
-        "arms": {"left": "", "right": "", "hands": ""},
-        "legs": {"position": "", "weight": ""},
-        "torso": {"lean": "", "angle": ""},
-    }
+    components = {k: v for k, v in obj.items() if k not in ("type", "id")}
 
-    # Apply pose fallback if provided
-    if pose_fallback and pose_fallback in POSE_TO_BODYCONFIG:
-        config = _deep_merge(config, POSE_TO_BODYCONFIG[pose_fallback])
+    subject_name = components.get("subject")
+    if subject_name and subject_name in subjects_db:
+        preset = subjects_db[subject_name]
+        for comp_key, comp_val in preset.items():
+            if comp_key == "type":
+                continue
+            if comp_key in components:
+                if isinstance(components[comp_key], dict) and isinstance(comp_val, dict):
+                    merged = dict(comp_val)
+                    merged.update(components[comp_key])
+                    components[comp_key] = merged
+            else:
+                components[comp_key] = comp_val
 
-    # Apply raw body_config (highest priority)
-    if raw:
-        for section in ("head", "gaze", "arms", "legs", "torso"):
-            if section in raw and isinstance(raw[section], dict):
-                config[section] = _deep_merge(config[section], raw[section])
+        # Auto-create scene objects for subject preset owned_item_id references
+        for zone, zone_data in components.items():
+            if isinstance(zone_data, dict) and "owned_item_id" in zone_data:
+                item_id = zone_data["owned_item_id"]
+                if item_id not in scene_objects:
+                    base_name = re.sub(r"_\d+$", "", item_id)
+                    template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                    scene_objects[item_id] = {
+                        "id": item_id,
+                        "type": "clothing",
+                        "template_key": template_key,
+                    }
+                else:
+                    base_name = re.sub(r"_\d+$", "", item_id)
+                    template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                    if "template_key" not in scene_objects[item_id]:
+                        scene_objects[item_id]["template_key"] = template_key
+                    if "type" not in scene_objects[item_id]:
+                        scene_objects[item_id]["type"] = "clothing"
 
-    return config
+    attire_name = components.get("attire")
+    if attire_name and attire_name in attires_db:
+        attire = attires_db[attire_name]
+        for zone, slot_data in attire.items():
+            if not isinstance(slot_data, dict):
+                continue
+            existing = components.get(zone, {})
+            if not isinstance(existing, dict):
+                existing = {}
+            existing["owned_item_id"] = slot_data["owned_item_id"]
+            components[zone] = existing
+
+            item_id = slot_data["owned_item_id"]
+            if item_id not in scene_objects:
+                base_name = re.sub(r"_\d+$", "", item_id)
+                template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                scene_objects[item_id] = {
+                    "id": item_id,
+                    "type": "clothing",
+                    "template_key": template_key,
+                }
+            else:
+                base_name = re.sub(r"_\d+$", "", item_id)
+                template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                if "template_key" not in scene_objects[item_id]:
+                    scene_objects[item_id]["template_key"] = template_key
+                if "type" not in scene_objects[item_id]:
+                    scene_objects[item_id]["type"] = "clothing"
+
+    return components
 
 
-def render_body_config_part(part_name: str, part_data: dict) -> str:
-    """Render a body config sub-component to a natural language phrase."""
-    if part_name == "head":
-        return _render_head(part_data)
-    elif part_name == "gaze":
-        return _render_gaze(part_data)
-    elif part_name == "arms":
-        return _render_arms(part_data)
-    elif part_name == "legs":
-        return _render_legs(part_data)
-    elif part_name == "torso":
-        return _render_torso(part_data)
-    return ""
+# ---------------------------------------------------------------------------
+# Pipeline Step 2: apply_delta
+# ---------------------------------------------------------------------------
 
+def apply_delta(components: dict, user_overrides: dict) -> dict:
+    """Apply user overrides on top of resolved blueprint.
+    Returns a NEW dict (no mutation of input).
+    Dot-notation keys like "Face.expression" are supported.
+    Dict overrides are MERGED (not replaced) to preserve owned_item_id."""
+    result = json.loads(json.dumps(components))
 
-def _render_head(head: dict) -> str:
-    """Render head configuration."""
-    parts = []
-    tilt = head.get("tilt", "")
-    turn = head.get("turn", "")
-
-    if tilt and tilt != "upright":
-        tilt_words = {
-            "forward": "tilted forward",
-            "back": "tilted back",
-            "left": "tilted to the left",
-            "right": "tilted to the right",
-            "slightly_left": "tilted slightly to the left",
-            "slightly_right": "tilted slightly to the right",
-        }
-        parts.append(tilt_words.get(tilt, f"tilted {tilt}"))
-
-    if turn and turn != "toward_camera":
-        turn_words = {
-            "away_from_camera": "turned away from the camera",
-            "profile_left": "turned to the left",
-            "profile_right": "turned to the right",
-        }
-        parts.append(turn_words.get(turn, f"turned {turn}"))
-
-    return " ".join(parts) if parts else ""
-
-
-def _render_gaze(gaze: dict) -> str:
-    """Render gaze configuration."""
-    parts = []
-    direction = gaze.get("direction", "")
-    target = gaze.get("target", "")
-    engagement = gaze.get("engagement", "")
-
-    if not direction:
-        return ""
-
-    if direction == "toward_target" and target:
-        parts.append(f"looking at {target}")
-    elif direction == "toward_camera":
-        if engagement == "direct":
-            parts.append("looking directly at the camera")
-        elif engagement == "averted":
-            parts.append("gaze averted from the camera")
+    for key_path, value in user_overrides.items():
+        parts = key_path.split(".")
+        current = result
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        # Merge dicts instead of replacing to preserve owned_item_id
+        if isinstance(current.get(parts[-1]), dict) and isinstance(value, dict):
+            current[parts[-1]].update(value)
         else:
-            parts.append("looking toward the camera")
-    elif direction:
-        dir_words = {
-            "up": "looking upward",
-            "down": "looking downward",
-            "left": "looking to the left",
-            "right": "looking to the right",
-            "away": "looking away",
-        }
-        parts.append(dir_words.get(direction, f"looking {direction}"))
+            current[parts[-1]] = value
 
-    if engagement and engagement not in ("direct", "") and direction != "toward_target":
-        eng_words = {
-            "averted": "with averted gaze",
-            "fleeting": "with a fleeting glance",
-            "side_glance": "with a side glance",
-        }
-        eng_part = eng_words.get(engagement, f"with {engagement} gaze")
-        parts.append(eng_part)
-
-    return " ".join(parts) if parts else ""
+    return result
 
 
-def _render_arms(arms: dict) -> str:
-    """Render arm configuration."""
-    left = arms.get("left", "")
-    right = arms.get("right", "")
-    hands = arms.get("hands", "")
+# ---------------------------------------------------------------------------
+# Pipeline Step 3: resolve_references
+# ---------------------------------------------------------------------------
 
-    # Both empty
-    if not left and not right and not hands:
-        return ""
+def resolve_references(components: dict, scene_objects: dict) -> dict:
+    """Replace owned_item_id references with actual item data.
+    Returns a NEW dict (no mutation of input)."""
+    result = json.loads(json.dumps(components))
 
-    # Default to at_side if only one is set
-    if not left:
-        left = "at_side"
-    if not right:
-        right = "at_side"
+    for zone, zone_data in result.items():
+        if not isinstance(zone_data, dict):
+            continue
+        item_id = zone_data.get("owned_item_id")
+        if item_id:
+            if item_id in scene_objects:
+                item = scene_objects[item_id]
+                item_components = {k: v for k, v in item.items() if k not in ("type", "id")}
+                resolved = dict(item_components)
+                for k, v in zone_data.items():
+                    if k != "owned_item_id" and k != "template_key":
+                        resolved[k] = v
+                if "template_key" not in resolved:
+                    resolved["template_key"] = item.get("template_key", zone)
+                result[zone] = resolved
+            else:
+                base_name = re.sub(r"_\d+$", "", item_id)
+                template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                resolved = {k: v for k, v in zone_data.items() if k != "owned_item_id"}
+                resolved["template_key"] = template_key
+                result[zone] = resolved
 
-    # Symmetric positions
-    if left == right:
-        pos_words = {
-            "crossed": "arms crossed",
-            "raised": "arms raised",
-            "behind_back": "hands clasped behind their back",
-            "resting_on_object": "resting arms on",
-            "at_side": "",
-        }
-        phrase = pos_words.get(left, f"arms {left}")
-        if hands == "in_pockets" and left == "at_side":
-            phrase = "hands in pockets"
-        return phrase
-
-    # Asymmetric positions
-    parts = []
-    if left != "at_side":
-        parts.append(f"left arm {left}" if left != "resting_on_object" else "left arm resting on")
-    if right != "at_side":
-        parts.append(f"right arm {right}" if right != "resting_on_object" else "right arm resting on")
-    if hands == "in_pockets":
-        parts.append("hands in pockets")
-    return " and ".join(parts) if parts else ""
+    return result
 
 
-def _render_legs(legs: dict) -> str:
-    """Render leg configuration."""
-    position = legs.get("position", "")
-    weight = legs.get("weight", "")
+# ---------------------------------------------------------------------------
+# Pipeline Step 4: apply_relationships
+# ---------------------------------------------------------------------------
 
-    if not position:
-        return ""
+def apply_relationships(
+    relationships: list,
+    scene_objects: dict,
+    visible_zones: list,
+    actions_db: dict,
+    spatial_db: dict,
+    templates_db: dict,
+    environments_db: dict,
+    placements: dict = None,
+) -> list:
+    """Process relationships and emit text fragments.
+    Returns a list of fragment dicts."""
+    if not relationships:
+        return []
 
-    pos_words = {
-        "standing": "",
-        "bent": "legs bent",
-        "crossed": "legs crossed",
-        "apart": "legs apart",
-        "kneeling": "kneeling",
-        "dangling": "legs dangling",
-    }
-    phrase = pos_words.get(position, f"legs {position}")
+    fragments = []
+    mentioned_ids = set()
 
-    if weight and weight != "even" and position == "standing":
-        phrase = f"weight on {weight} foot" if not phrase else f"{phrase}, weight on {weight} foot"
+    for rel in relationships:
+        rel_type = rel.get("type")
+        if not rel_type:
+            continue
 
-    return phrase
+        definition = actions_db.get(rel_type) or spatial_db.get(rel_type)
+        if not definition:
+            continue
 
+        actor_id = rel.get("actor") or rel.get("subject") or rel.get("subject1")
+        object_id = rel.get("object") or rel.get("target") or rel.get("subject2") or rel.get("container")
 
-def _render_torso(torso: dict) -> str:
-    """Render torso configuration."""
-    lean = torso.get("lean", "")
-    angle = torso.get("angle", "")
+        if not actor_id or not object_id:
+            continue
 
-    if not lean or lean == "upright":
-        return ""
+        actor_obj = scene_objects.get(actor_id, {})
+        object_obj = scene_objects.get(object_id, {})
 
-    lean_words = {
-        "forward": "leaning forward",
-        "back": "leaning back",
-        "left": "leaning to the left",
-        "right": "leaning to the right",
-    }
-    phrase = lean_words.get(lean, f"leaning {lean}")
+        roles = definition.get("roles", {})
+        valid = True
+        for role_name, role_def in roles.items():
+            allowed = role_def.get("allowed", [])
+            role_id = rel.get(role_name)
+            if role_id and role_id in scene_objects:
+                role_obj = scene_objects[role_id]
+                role_type = role_obj.get("type", "")
+                if allowed and role_type not in allowed:
+                    valid = False
+                    break
+        if not valid:
+            continue
 
-    if angle == "pronounced":
-        phrase = phrase.replace("leaning", "leaning noticeably")
+        required_zones = definition.get("required_zones", {})
+        actor_zone = required_zones.get("actor")
+        if actor_zone and actor_zone not in visible_zones:
+            continue
 
-    return phrase
+        template = definition.get("template")
+        clause = definition.get("clause", "")
+        priority = definition.get("priority", 80)
+        chain_order = definition.get("chain_order", 99)
 
-
-class BodyConfigSystem:
-    """Normalizes body config and generates CandidateFragments for each sub-component."""
-
-    HEAD_TILTS = HEAD_TILTS
-    HEAD_TURNS = HEAD_TURNS
-    GAZE_DIRECTIONS = GAZE_DIRECTIONS
-    GAZE_ENGAGEMENTS = GAZE_ENGAGEMENTS
-    ARM_POSITIONS = ARM_POSITIONS
-    HAND_STATES = HAND_STATES
-    LEG_POSITIONS = LEG_POSITIONS
-    LEG_WEIGHTS = LEG_WEIGHTS
-    TORSO_LEANS = TORSO_LEANS
-    TORSO_ANGLES = TORSO_ANGLES
-    POSE_TO_BODYCONFIG = POSE_TO_BODYCONFIG
-    REL_TO_BODYCONFIG = REL_TO_BODYCONFIG
-
-    def normalize(self, raw: dict, pose_fallback: Optional[str] = None) -> dict:
-        """Normalize body config data."""
-        return normalize_body_config(raw, pose_fallback)
-
-    def apply_relationship_implications(self, config: dict, rel_type: str) -> dict:
-        """Apply relationship physical implications to body config."""
-        if rel_type in REL_TO_BODYCONFIG:
-            return _deep_merge(config, REL_TO_BODYCONFIG[rel_type])
-        return config
-
-    def apply_fixture_affordance(
-        self, config: dict, rel_type: str, target_obj, environments_db: dict, env_type: str
-    ) -> dict:
-        """If a looking_* relationship targets a fixture, infer gaze direction from its affordance."""
-        if not target_obj or target_obj.type != "fixture":
-            return config
-        if not rel_type.startswith("looking_"):
-            return config
-        anchor = target_obj.get_component("anchor", "")
-        if not anchor:
-            return config
-        env_def = environments_db.get(env_type, {})
-        affordances = env_def.get("affordances", {})
-        anchor_affordances = affordances.get(anchor, [])
-        affordance_to_gaze = {
-            "look_into": "toward_target",
-            "look_out_of": "away",
-            "look_over": "away",
-            "look_at": "toward_target",
-        }
-        for aff in anchor_affordances:
-            if aff in affordance_to_gaze:
-                return _deep_merge(config, {"gaze": {"direction": affordance_to_gaze[aff]}})
-        return config
-
-    def render_fragments(self, config: dict, human_id: str, priority_fn) -> list:
-        """Generate CandidateFragments for each body config sub-component."""
-        fragments = []
-        part_tags = {
-            "head": ["body_config", "pose"],
-            "gaze": ["body_config", "gaze"],
-            "arms": ["body_config", "pose"],
-            "legs": ["body_config", "pose"],
-            "torso": ["body_config", "pose"],
-        }
-        part_priorities = {
-            "head": 72,
-            "gaze": 71,
-            "arms": 70,
-            "legs": 69,
-            "torso": 68,
-        }
-
-        for part in ("head", "gaze", "arms", "legs", "torso"):
-            part_data = config.get(part, {})
-            text = render_body_config_part(part, part_data)
-            if text:
-                fragments.append(CandidateFragment(
-                    zone=part,
-                    frag_type="body_config",
-                    tags=part_tags.get(part, ["body_config"]),
-                    priority=priority_fn(part_priorities.get(part, 70), [human_id]),
-                    text=text,
-                    actor_id=human_id,
-                ))
-
-        return fragments
-
-    def get_hidden_zones(self, config: dict, body_config_def: dict = None) -> list:
-        """Determine which body zones are hidden by body config.
-        
-        Args:
-            config: Normalized body config dict
-            body_config_def: Optional body config definition with occlusion_rules
-        """
-        hidden = []
-        
-        # Check if body_config_def specifies custom occlusion rules
-        if body_config_def and "occlusion_rules" in body_config_def:
-            for rule in body_config_def["occlusion_rules"]:
-                condition = rule.get("condition", {})
-                zones = rule.get("hidden_zones", [])
-                if self._evaluate_occlusion_condition(condition, config):
-                    hidden.extend(zones)
-        else:
-            # Fallback: use hardcoded rules for backward compatibility
-            # Head turn hides eyes in profile
-            turn = config.get("head", {}).get("turn", "")
-            if turn in HEAD_TURN_FACE_HIDDEN:
-                hidden.extend(HEAD_TURN_FACE_HIDDEN[turn])
-
-            # Arms behind back hides hands
-            left_arm = config.get("arms", {}).get("left", "")
-            right_arm = config.get("arms", {}).get("right", "")
-            if left_arm in ARMS_HANDS_HIDDEN or right_arm in ARMS_HANDS_HIDDEN:
-                hidden.append("Hands")
-
-            # Legs position hides feet
-            leg_pos = config.get("legs", {}).get("position", "")
-            if leg_pos in ("bent", "kneeling", "dangling"):
-                hidden.append("Feet")
-
-        return hidden
-
-    def _evaluate_occlusion_condition(self, condition: dict, config: dict) -> bool:
-        """Evaluate an occlusion condition against the body config."""
-        for part, required_values in condition.items():
-            part_config = config.get(part, {})
-            if isinstance(required_values, str):
-                # Single value: check if any sub-key matches
-                for sub_key, sub_val in part_config.items():
-                    if sub_val == required_values:
-                        return True
-            elif isinstance(required_values, dict):
-                # Dict of sub-key -> required value
-                match = True
-                for sub_key, sub_val in required_values.items():
-                    if part_config.get(sub_key) != sub_val:
+        # Variant resolution — check object type for variant matching
+        object_obj_type = object_obj.get("type", "")
+        for variant in definition.get("variants", []):
+            when = variant.get("when", {})
+            match = True
+            for k, v in when.items():
+                if k == "object_type":
+                    if object_obj_type != v:
                         match = False
                         break
-                if match:
-                    return True
-        return False
-
-
-# ---------------------------------------------------------------------------
-# System: RelationshipSystem
-# ---------------------------------------------------------------------------
-
-_UNCOUNTABLE = {"water", "sand", "music", "light", "darkness", "rain", "snow", "fog", "air", "love", "anger", "joy"}
-
-def with_article(phrase: str) -> str:
-    """Prepends 'a' or 'an' to a noun phrase if it doesn't already start with an article."""
-    if not phrase:
-        return phrase
-    words = phrase.split()
-    if words and words[0].lower() in ("a", "an", "the"):
-        return phrase
-    if phrase.lower() in _UNCOUNTABLE:
-        return phrase
-    first_char = phrase[0].lower()
-    art = "an" if first_char in "aeiou" else "a"
-    return f"{art} {phrase}"
-
-
-class RelationshipSystem:
-    """Validates, resolves, and renders action/interaction/spatial relationships."""
-
-    def __init__(self, actions_db: dict, spatial_db: dict, templates_db: dict, environments_db: dict = None):
-        self.actions = actions_db
-        self.spatial = spatial_db
-        self.templates = templates_db
-        self.environments = environments_db or {}
-
-    def resolve_anchor(self, dotref: str, env_type: str, scene_objects: dict) -> Optional[str]:
-        """Resolve 'env.anchor' dot-notation to a SceneObject ID.
-
-        Creates a fixture SceneObject for the anchor if it doesn't exist yet.
-        Returns the object ID or None if resolution fails.
-        """
-        if "." not in dotref:
-            return None
-        env_id, anchor_name = dotref.split(".", 1)
-        env_def = self.environments.get(env_type, {})
-        affordances = env_def.get("affordances", {})
-        if anchor_name not in affordances:
-            return None
-        anchor_obj_id = f"anchor_{env_type}_{anchor_name}"
-        if anchor_obj_id not in scene_objects:
-            scene_objects[anchor_obj_id] = SceneObject(
-                anchor_obj_id, "fixture",
-                {"template_key": "Fixture", "anchor": anchor_name, "env_type": env_type}
-            )
-        return anchor_obj_id
-
-    def resolve_anchor_targets(
-        self, relationships_data: list, scene_objects: dict, env_type: str
-    ) -> list:
-        """Resolve dot-notation targets/actors in relationships to SceneObject IDs."""
-        resolved = []
-        for rel in relationships_data:
-            rel = dict(rel)
-            for field in ("target", "actor", "subject", "container"):
-                val = rel.get(field)
-                if isinstance(val, str) and "." in val:
-                    resolved_id = self.resolve_anchor(val, env_type, scene_objects)
-                    if resolved_id:
-                        rel[field] = resolved_id
-                    else:
-                        rel[field] = None
-            resolved.append(rel)
-        return resolved
-
-    def get_noun_phrase(self, obj_id, scene_objects: dict, placements: dict, mentioned_ids: set, role: str = None) -> str:
-        if isinstance(obj_id, list):
-            phrases = [self.get_noun_phrase(oid, scene_objects, placements, mentioned_ids, role) for oid in obj_id]
-            if len(phrases) == 1:
-                return phrases[0]
-            elif len(phrases) == 2:
-                return f"{phrases[0]} and {phrases[1]}"
-            else:
-                return ", ".join(phrases[:-1]) + f", and {phrases[-1]}"
-
-        obj = scene_objects.get(obj_id)
-        if not obj:
-            return str(obj_id)
-
-        is_plural = False
-        if obj.get_component("count", 1) > 1 or obj.get_component("plural", False):
-            is_plural = True
-
-        if obj_id in mentioned_ids:
-            # Check if object has gender component (works for humans and non-humans)
-            gender = obj.get_component("gender")
-            if gender:
-                if role in ("actor", "subject", "subject1"):
-                    return "they" if is_plural else "she" if gender == "woman" else "he" if gender == "man" else "they"
-                else:
-                    return "them" if is_plural else "her" if gender == "woman" else "him" if gender == "man" else "them"
-            else:
-                # Use type-based reference for non-gendered objects
-                obj_type = obj.get_component("morphology", {}).get("type", obj.type)
-                return "them" if is_plural else f"the {obj_type}"
-        else:
-            mentioned_ids.add(obj_id)
-
-        if obj.type == "human":
-            phrase = obj.get_component("gender", "person")
-        else:
-            template = self.templates.get(obj.get_component("template_key"))
-            ctx = {**obj.components}
-            holding_item_id = obj.get_component("holding_item_id")
-            if holding_item_id:
-                ctx["held_item"] = self.get_noun_phrase(holding_item_id, scene_objects, placements, mentioned_ids, "object")
-            if is_plural:
-                ctx["_plural_self"] = True
-            if template:
-                phrase = safe_format(template, ctx)
-            else:
-                parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
-                phrase = " ".join(p for p in parts if p).strip()
-            
-            if phrase:
-                if not is_plural:
-                    phrase = with_article(phrase)
-                else:
-                    if not template:
-                        phrase = phrase + "s"
-
-        placement = placements.get(obj_id)
-        if placement:
-            phrase = f"{phrase} in {placement}"
-        return phrase
-
-    def process(
-        self,
-        relationships_data: list,
-        scene_objects: dict,
-        placements: dict,
-        visible_zones: list,
-        priority_fn,
-        mentioned_ids: set,
-        active_tone: str = "default",
-    ) -> list:
-        candidates = []
-
-        for rel in relationships_data:
-            rel_type = rel.get("type")
-            rel_def = self.actions.get(rel_type)
-            is_spatial = False
-            if not rel_def:
-                rel_def = self.spatial.get(rel_type)
-                is_spatial = True
-            if not rel_def:
-                continue
-
-            # Role type validation (handles lists of participants)
-            valid = True
-            related_ids = []
-            for role_name, constraint in rel_def.get("roles", {}).items():
-                target_val = rel.get(role_name)
-                target_ids = target_val if isinstance(target_val, list) else [target_val] if target_val else []
-                for tid in target_ids:
-                    target_obj = scene_objects.get(tid)
-                    if not target_obj or target_obj.type not in constraint.get("allowed", []):
-                        valid = False
+                elif k.endswith("_type"):
+                    role_key = k[:-5]
+                    role_id = rel.get(role_key)
+                    role_obj = scene_objects.get(role_id, {})
+                    if role_obj.get("type") != v:
+                        match = False
                         break
-                    related_ids.append(tid)
-                if not valid:
-                    break
-            if not valid:
-                continue
+            if match:
+                template = variant.get("template", template)
+                clause = variant.get("clause", clause)
+                break
 
-            # Visibility check on required zones (handles lists)
-            visible = True
-            for role_name, req_zone in rel_def.get("required_zones", {}).items():
-                pid = rel.get(role_name)
-                pids = pid if isinstance(pid, list) else [pid] if pid else []
-                for p in pids:
-                    pobj = scene_objects.get(p)
-                    if pobj and pobj.type == "human" and req_zone not in visible_zones:
-                        visible = False
-                        break
-                if not visible:
-                    break
-            if not visible:
-                continue
+        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, templates_db, placements)
+        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, templates_db, placements)
 
-            # Variant resolution
-            template = rel_def.get("template", "")
-            clause_template = rel_def.get("clause", template)
-            for variant in rel_def.get("variants", []):
-                when = variant.get("when", {})
-                match = all(
-                    scene_objects.get(rel.get(k[:-5])) and
-                    scene_objects[rel[k[:-5]]].type == v
-                    for k, v in when.items() if k.endswith("_type")
-                )
-                if match:
-                    template = variant.get("template", template)
-                    clause_template = variant.get("clause", template)
-                    break
+        # Build gender-aware possessive pronoun for suffix templates
+        actor_gender = actor_obj.get("gender", "person")
+        if actor_gender == "man":
+            possessive = "his"
+        elif actor_gender == "woman":
+            possessive = "her"
+        else:
+            possessive = "their"
 
-            # Resolve role noun phrases
-            role_phrases = {}
-            for role in rel_def.get("roles", {}):
-                val = rel.get(role)
-                role_phrases[role] = self.get_noun_phrase(val, scene_objects, placements, mentioned_ids, role)
-                # If plural, set the _plural_role helper in context for safe_format agreement
-                is_role_plural = False
-                if isinstance(val, list) and len(val) > 1:
-                    is_role_plural = True
-                elif isinstance(val, str):
-                    tobj = scene_objects.get(val)
-                    if tobj and (tobj.get_component("count", 1) > 1 or tobj.get_component("plural", False)):
-                        is_role_plural = True
-                if is_role_plural:
-                    role_phrases[f"_plural_{role}"] = True
+        ctx = {
+            "actor": actor_phrase,
+            "object": object_phrase,
+            "subject": actor_phrase,
+            "target": object_phrase,
+            "container": object_phrase,
+            "_possessive": possessive,
+        }
 
-            actor_id = rel.get("actor") or rel.get("subject") or rel.get("subject1")
-            # If actor_id is a list, take the first one for native fragment tracking
-            if isinstance(actor_id, list) and actor_id:
-                track_actor_id = actor_id[0]
+        if isinstance(template, dict):
+            text = safe_format(template, ctx)
+        else:
+            text = safe_format(template, ctx) if template else ""
+
+        if isinstance(clause, dict):
+            clause_text = safe_format(clause, ctx)
+        else:
+            clause_text = safe_format(clause, ctx) if clause else ""
+
+        mentioned_ids.add(actor_id)
+        mentioned_ids.add(object_id)
+
+        fragments.append({
+            "zone": "relationship",
+            "frag_type": "relationship",
+            "tags": definition.get("tags", ["action"]),
+            "priority": priority,
+            "text": text,
+            "clause_text": clause_text,
+            "actor_id": actor_id,
+            "chain_order": chain_order,
+        })
+
+    return fragments
+
+
+def _get_noun_phrase(
+    entity_id: str,
+    rel: dict,
+    scene_objects: dict,
+    mentioned_ids: set,
+    templates_db: dict,
+    placements: dict = None,
+) -> str:
+    """Generate a noun phrase for an entity in a relationship."""
+    obj = scene_objects.get(entity_id, {})
+    obj_type = obj.get("type", "")
+
+    if obj_type in ("human", "creature"):
+        gender = obj.get("gender", "person")
+        if entity_id in mentioned_ids:
+            if gender == "woman":
+                return "she"
+            elif gender == "man":
+                return "he"
             else:
-                track_actor_id = actor_id or ""
+                return "they"
+        else:
+            if gender == "woman":
+                return "a woman"
+            elif gender == "man":
+                return "a man"
+            else:
+                return "a person"
 
-            # Resolve actor possessive pronoun for gender-aware suffixes
-            _possessive = "her"
-            if track_actor_id:
-                _actor_obj = scene_objects.get(track_actor_id)
-                if _actor_obj:
-                    _actor_gender = _actor_obj.get_component("gender", "person")
-                    _possessive = "their" if _actor_gender == "person" else "his" if _actor_gender == "man" else "her"
-            role_phrases["_possessive"] = _possessive
+    if entity_id in mentioned_ids:
+        # Reuse previously mentioned entity
+        template_key = obj.get("template_key")
+        if template_key and template_key in templates_db:
+            return safe_format(templates_db[template_key], obj)
+        parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
+        phrase = " ".join(p for p in parts if p).strip()
+        return phrase if phrase else entity_id
 
-            candidates.append(CandidateFragment(
-                zone="relationship",
-                frag_type="relationship",
-                tags=rel_def.get("tags", ["spatial" if is_spatial else "action"]),
-                priority=priority_fn(rel_def.get("priority", 50), related_ids),
-                text=safe_format(template, {**role_phrases, "_tone": active_tone}),
-                clause_text=safe_format(clause_template, {**role_phrases, "_tone": active_tone}),
-                actor_id=track_actor_id,
-                chain_order=rel_def.get("chain_order", 99),
-            ))
+    mentioned_ids.add(entity_id)
 
-        return candidates
+    template_key = obj.get("template_key")
+    if template_key and template_key in templates_db:
+        phrase = safe_format(templates_db[template_key], obj)
+    else:
+        # Fallback: material + color + type
+        parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
+        phrase = " ".join(p for p in parts if p).strip()
+        if not phrase:
+            phrase = entity_id
+
+    # Add article for non-plural
+    if phrase and not phrase.startswith(("a ", "an ", "the ")):
+        first_char = phrase[0].lower()
+        article = "an" if first_char in "aeiou" else "a"
+        phrase = f"{article} {phrase}"
+
+    if placements and entity_id in placements:
+        placement = placements[entity_id]
+        phrase = f"{phrase} in {placement}"
+
+    return phrase
 
 
 # ---------------------------------------------------------------------------
-# System: EnvironmentSystem
+# Pipeline Step 5: apply_environment
 # ---------------------------------------------------------------------------
 
-class EnvironmentSystem:
-    """Resolves environment, lighting, weather and composition into fragments."""
+def apply_environment(
+    scene_data: dict,
+    scene_objects: dict,
+    environments_db: dict,
+    lighting_db: dict,
+    weather_db: dict,
+    composition_db: dict,
+    templates_db: dict,
+) -> list:
+    """Process environment and emit text fragments.
+    Returns a list of fragment dicts."""
+    fragments = []
 
-    def __init__(self, environments_db: dict, lighting_db: dict, weather_db: dict, composition_db: dict, templates_db: dict):
-        self.environments = environments_db
-        self.lighting = lighting_db
-        self.weather = weather_db
-        self.composition = composition_db
-        self.templates = templates_db
+    # Find environment data: first check scene_objects for env-type objects,
+    # then fall back to scene_data["environment"]
+    env_data = None
+    for obj_id, obj in scene_objects.items():
+        if obj.get("type") == "environment":
+            env_data = obj
+            break
+    if env_data is None:
+        env_data = scene_data.get("environment")
 
-    def process(
-        self,
-        env_obj: Optional[SceneObject],
-        comp_obj: Optional[SceneObject],
-        scene_objects: dict,
-        owned_item_ids: set,
-        relationship_targets: set,
-    ) -> list:
-        candidates = []
+    if env_data:
+        env_type = env_data.get("template_key") or env_data.get("location") or env_data.get("type")
+        if env_type:
+            db_key = env_type
+            if db_key not in environments_db and db_key.lower() in environments_db:
+                db_key = db_key.lower()
+            env_def = environments_db.get(db_key, {})
+            template = env_def.get("template", "")
+            lighting_key = env_data.get("lighting") or env_def.get("default_lighting", "")
+            weather_key = env_data.get("weather") or env_def.get("default_weather", "")
 
-        if env_obj:
-            env_type = env_obj.get_component("template_key") or env_obj.get_component("type")
-            env_def = self.environments.get(env_type, {})
-            if not env_def and env_obj.get_component("type") in self.environments:
-                env_def = self.environments[env_obj.get_component("type")]
+            lighting_str = ""
+            if lighting_key:
+                lighting_str = lighting_db[lighting_key].get("template", lighting_key) if lighting_key in lighting_db else lighting_key
 
-            lighting_val = env_obj.get_component("lighting", env_def.get("default_lighting", ""))
-            lighting_str = self.lighting.get(lighting_val, {}).get("template", lighting_val)
-
-            weather_val = env_obj.get_component("weather", env_def.get("default_weather", ""))
-            weather_str = self.weather.get(weather_val, {}).get("template", weather_val)
-
-            env_tpl = self.templates.get(env_obj.get_component("template_key")) or env_def.get("template", "{weather} {lighting} {type}")
+            weather_str = ""
+            if weather_key:
+                weather_str = weather_db[weather_key].get("template", weather_key) if weather_key in weather_db else weather_key
 
             ctx = {
-                **env_obj.components,
-                "weather": weather_str,
+                "type": env_type,
                 "lighting": lighting_str,
-                "type": env_obj.get_component("type")
+                "weather": weather_str,
+                "location": env_data.get("location", ""),
+                "geolocation": env_data.get("geolocation", ""),
             }
-            env_text = safe_format(env_tpl, ctx)
+            env_text = safe_format(template, ctx)
 
             # ECS query: find ambient fixtures and furniture
+            owned_item_ids = set()
+            for o_id, o in scene_objects.items():
+                if o.get("type") == "human":
+                    for zone_name, zone_val in o.items():
+                        if isinstance(zone_val, dict) and "owned_item_id" in zone_val:
+                            owned_item_ids.add(zone_val["owned_item_id"])
+
+            relationship_targets = set()
+            for r in scene_data.get("relationships", []):
+                t_id = r.get("object") or r.get("target") or r.get("subject2") or r.get("container")
+                if t_id:
+                    relationship_targets.add(t_id)
+
             ambient_fixtures = []
-            for obj in scene_objects.values():
-                if obj.type in ("fixture", "furniture") and obj.id not in owned_item_ids and obj.id not in relationship_targets:
-                    tkey = obj.get_component("template_key")
-                    template = self.templates.get(tkey)
-                    if template:
-                        phrase = safe_format(template, obj.components)
+            for o_id, o in scene_objects.items():
+                o_type = o.get("type")
+                if o_type in ("fixture", "furniture") and o_id not in owned_item_ids and o_id not in relationship_targets:
+                    tkey = o.get("template_key")
+                    tpl = templates_db.get(tkey)
+                    if tpl:
+                        phrase = safe_format(tpl, o)
                     else:
-                        parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
+                        parts = [o.get("material", ""), o.get("color", ""), o_type]
                         phrase = " ".join(p for p in parts if p).strip()
                     if phrase:
-                        ambient_fixtures.append(with_article(phrase))
+                        if not phrase.startswith(("a ", "an ", "the ")):
+                            first_char = phrase[0].lower()
+                            art = "an" if first_char in "aeiou" else "a"
+                            phrase = f"{art} {phrase}"
+                        ambient_fixtures.append(phrase)
 
             if ambient_fixtures:
                 if len(ambient_fixtures) == 1:
@@ -1687,688 +575,817 @@ class EnvironmentSystem:
                     fixtures_str = ", ".join(ambient_fixtures[:-1]) + f", and {ambient_fixtures[-1]}"
                 env_text = f"{env_text} featuring {fixtures_str}"
 
-            candidates.append(CandidateFragment(
-                zone="environment", frag_type="environment",
-                tags=["environment"], priority=65, text=env_text,
-            ))
+            fragments.append({
+                "zone": "environment",
+                "frag_type": "environment",
+                "tags": ["environment"],
+                "priority": 65,
+                "text": env_text,
+            })
+
             if lighting_str:
-                candidates.append(CandidateFragment(
-                    zone="lighting", frag_type="lighting",
-                    tags=["lighting"], priority=55, text=lighting_str,
-                ))
+                fragments.append({
+                    "zone": "lighting",
+                    "frag_type": "lighting",
+                    "tags": ["lighting"],
+                    "priority": 55,
+                    "text": lighting_str,
+                })
+
             if weather_str:
-                candidates.append(CandidateFragment(
-                    zone="weather", frag_type="weather",
-                    tags=["weather"], priority=50, text=weather_str,
-                ))
+                fragments.append({
+                    "zone": "weather",
+                    "frag_type": "weather",
+                    "tags": ["weather"],
+                    "priority": 50,
+                    "text": weather_str,
+                })
 
-        if comp_obj:
-            comp_type = comp_obj.get_component("template_key") or comp_obj.get_component("type")
-            comp_def = self.composition.get(comp_type, {})
-            text = comp_def.get("template", comp_type)
-            tpl = self.templates.get(comp_type)
-            if tpl:
-                text = safe_format(tpl, comp_obj.components)
+    comp_data = scene_data.get("composition")
+    if comp_data:
+        comp_type = comp_data.get("type")
+        if comp_type and comp_type in composition_db:
+            comp_text = composition_db[comp_type].get("template", comp_type)
+            fragments.append({
+                "zone": "composition",
+                "frag_type": "composition",
+                "tags": ["composition"],
+                "priority": 88,
+                "text": comp_text,
+            })
 
-            candidates.append(CandidateFragment(
-                zone="composition", frag_type="composition",
-                tags=["composition"], priority=88,
-                text=text,
-            ))
-
-        return candidates
+    return fragments
 
 
 # ---------------------------------------------------------------------------
-# System: ValidationSystem
+# Pipeline Step 6: apply_style_tone
 # ---------------------------------------------------------------------------
 
-class ValidationSystem:
-    """Pre-flight validation of scene structure. Returns a list of ValidationErrors."""
+def apply_style_tone(scene_data: dict, styles_db: dict) -> list:
+    """Process style overlay and emit a fragment.
+    Returns a list with a single fragment (or empty)."""
+    style_name = scene_data.get("style")
+    if not style_name:
+        return []
 
-    def __init__(self, actions_db: dict, spatial_db: dict, templates_db: dict):
-        self.actions = actions_db
-        self.spatial = spatial_db
-        self.templates = templates_db
+    style_def = styles_db.get(style_name, {})
+    text = style_def.get("template", style_name)
 
-    def validate(self, scene: dict, scene_objects: dict) -> list:
-        errors = []
-        errors += self._check_missing_references(scene, scene_objects)
-        errors += self._check_relationship_roles(scene, scene_objects)
-        errors += self._check_unknown_templates(scene_objects)
-        return errors
+    return [{
+        "zone": "style",
+        "frag_type": "style",
+        "tags": ["style"],
+        "priority": 90,
+        "text": text,
+    }]
 
-    def _check_missing_references(self, scene: dict, scene_objects: dict) -> list:
-        errors = []
-        # anchors
-        for role, obj_id in scene.get("anchors", {}).items():
-            if obj_id not in scene_objects:
-                errors.append(ValidationError("error", f"Anchor '{role}' references unknown object '{obj_id}'"))
-        # placements
-        for obj_id in scene.get("placements", {}):
-            if obj_id not in scene_objects:
-                errors.append(ValidationError("warning", f"Placement references unknown object '{obj_id}'"))
-        # relationship participants
-        for rel in scene.get("relationships", []):
-            rel_type = rel.get("type")
-            rel_def = self.actions.get(rel_type) or self.spatial.get(rel_type)
-            if not rel_def:
-                errors.append(ValidationError("error", f"Unknown relationship type '{rel_type}'"))
+
+# ---------------------------------------------------------------------------
+# Pipeline Step 7: filter_by_camera
+# ---------------------------------------------------------------------------
+
+def filter_by_camera(
+    components: dict,
+    camera_framing: str,
+    pose_name: str = None,
+    poses_db: dict = None,
+) -> dict:
+    """Filter components based on camera profile and pose occlusion.
+    Returns a filtered component map."""
+    profiles_path = os.path.join(DATA_DIR, "camera_profiles.json")
+    with open(profiles_path, "r", encoding="utf-8") as f:
+        profiles = json.load(f)
+
+    included = set(profiles.get(camera_framing, []))
+
+    if pose_name and poses_db:
+        pose_def = poses_db.get(pose_name, {})
+        hidden = set(pose_def.get("hidden_zones", []))
+        included = included - hidden
+
+    result = {}
+    for zone, data in components.items():
+        if zone not in included:
+            continue
+        if isinstance(data, dict):
+            vis_tags = data.get("visibility_tags")
+            if vis_tags and camera_framing not in vis_tags:
                 continue
-            for role_name in rel_def.get("roles", {}):
-                target_id = rel.get(role_name)
-                if target_id and target_id not in scene_objects:
-                    errors.append(ValidationError("error",
-                        f"Relationship '{rel_type}' role '{role_name}' references unknown object '{target_id}'"))
-        return errors
+        result[zone] = data
 
-    def _check_relationship_roles(self, scene: dict, scene_objects: dict) -> list:
-        errors = []
-        for rel in scene.get("relationships", []):
-            rel_type = rel.get("type")
-            rel_def = self.actions.get(rel_type) or self.spatial.get(rel_type)
-            if not rel_def:
-                continue
-            for role_name, constraint in rel_def.get("roles", {}).items():
-                target_id = rel.get(role_name)
-                target_obj = scene_objects.get(target_id)
-                if not target_obj:
-                    continue
-                allowed = constraint.get("allowed", [])
-                if allowed and target_obj.type not in allowed:
-                    errors.append(ValidationError("warning",
-                        f"Relationship '{rel_type}': role '{role_name}' expected types {allowed}, "
-                        f"got '{target_obj.type}' (object '{target_id}') — will be skipped"))
-        return errors
-
-    def _check_unknown_templates(self, scene_objects: dict) -> list:
-        errors = []
-        for obj_id, obj in scene_objects.items():
-            tkey = obj.get_component("template_key")
-            if tkey and tkey not in self.templates:
-                errors.append(ValidationError("warning",
-                    f"Object '{obj_id}' references unknown template_key '{tkey}'"))
-        return errors
+    return result
 
 
 # ---------------------------------------------------------------------------
-# System: RenderSystem
+# Pipeline Step 8: render_to_text
 # ---------------------------------------------------------------------------
 
-class RenderSystem:
-    """Filters, budgets, and composes fragments into the final prompt string.
+def render_to_text(
+    visible_components: dict,
+    render_profile: str,
+    templates_db: dict,
+    attribute_metadata_db: dict,
+    render_profiles_db: dict,
+    active_tone: str = "default",
+) -> list:
+    """Render visible components into text fragments.
+    Returns a list of fragment dicts."""
+    fragments = []
 
-    Supports two narrative modes (set per render profile):
-      - "fact_chain"  (default): comma-separated clause list
-      - "scene_description": grammatically unified sentence
+    for zone, zone_data in visible_components.items():
+        if not isinstance(zone_data, dict):
+            continue
+        if zone in ("gender", "subject", "attire", "morphology"):
+            continue
+
+        metadata_key = zone_data.get("metadata_key")
+        if not metadata_key:
+            LEGACY_META_KEYS = {
+                "Face": "expression",
+                "Hair": "hair",
+            }
+            metadata_key = LEGACY_META_KEYS.get(zone, zone.lower())
+        priority = attribute_metadata_db.get(metadata_key, {}).get("priority", 50)
+        tags = attribute_metadata_db.get(metadata_key, {}).get("tags", ["identity"])
+
+        template_key = zone_data.get("template_key", zone)
+        template = templates_db.get(template_key) or templates_db.get(zone)
+
+        if template:
+            ctx = dict(zone_data)
+            ctx["_tone"] = active_tone
+            text = safe_format(template, ctx)
+        elif zone_data.get("type") in ("clothing", "item", "prop"):
+            # Skip clothing/items without templates (matches old compiler behavior)
+            continue
+        else:
+            text = _render_generic_zone(zone, zone_data)
+
+        if text.strip():
+            fragments.append({
+                "zone": zone,
+                "frag_type": "native",
+                "tags": tags,
+                "priority": priority,
+                "text": text,
+            })
+
+    return fragments
+
+
+def _render_generic_zone(zone: str, zone_data: dict) -> str:
+    """Render a zone without a template as key-value pairs."""
+    skip_keys = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer", "template_key"}
+    parts = []
+    for key, val in zone_data.items():
+        if key in skip_keys:
+            continue
+        if isinstance(val, dict):
+            for sub_key, sub_val in val.items():
+                parts.append(f"{sub_val} {sub_key}")
+        else:
+            if zone.lower() in key.lower():
+                parts.append(str(val))
+            else:
+                parts.append(f"{val} {key.lower()}")
+    return " ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Validation
+# ---------------------------------------------------------------------------
+
+def validate(scene_data: dict, templates_db: dict, actions_db: dict,
+             spatial_db: dict, subjects_db: dict, strict: bool = False) -> list:
+    """Pre-flight checks. Returns list of {"severity": "error"|"warning", "message": str}.
+
+    Checks:
+      1. Unknown template keys (severity: error)
+      2. Unknown relationship types (severity: error)
+      3. Missing subject presets (severity: warning)
     """
+    errors = []
 
-    def __init__(self, profiles_db: dict):
-        self.profiles = profiles_db
-
-    # Finite verb conversion for scene_description mode
-    _PARTICIPLE_TO_FINITE = {
-        "holding":           "holds",
-        "sitting":           "sits",
-        "hugging":           "hugs",
-        "standing next to":  "stands next to",
-        "sitting inside":    "sits inside",
-        "soaking in":        "soaks in",
-    }
-
-    def _to_finite(self, clause: str) -> str:
-        for participle, finite in self._PARTICIPLE_TO_FINITE.items():
-            if clause.startswith(participle):
-                return finite + clause[len(participle):]
-        return clause
-
-    def _get_render_group(self, zone: str, zone_data=None) -> str:
-        """Determine render group from zone data or zone name."""
-        if isinstance(zone_data, dict) and "render_group" in zone_data:
-            return zone_data["render_group"]
-        
-        # Fallback: derive from zone name
-        CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
-        ACCESSORY_ZONES = {"Hands"}
-        IDENTITY_ZONES = {"Face", "Hair", "Eyes"}
-        
-        if zone in CLOTHING_ZONES:
-            return "clothing"
-        elif zone in ACCESSORY_ZONES:
-            return "accessory"
-        elif zone in IDENTITY_ZONES:
-            return "identity"
-        else:
-            return "identity"  # Default for unknown zones (e.g., Tusks, Ears)
-
-    def _get_render_priority(self, zone: str, zone_data=None) -> int:
-        """Get render priority from zone data or default."""
-        if isinstance(zone_data, dict) and "render_priority" in zone_data:
-            return zone_data["render_priority"]
-        
-        # Default priorities
-        DEFAULT_PRIORITIES = {
-            "Face": 100, "Hair": 90, "Eyes": 85, "Headwear": 80,
-            "UpperBody": 70, "LowerBody": 65, "Feet": 60, "Hands": 55,
-        }
-        return DEFAULT_PRIORITIES.get(zone, 50)
-
-    def compose(
-        self,
-        candidates: list,
-        profile_name: str,
-        physical_entities: list,            # list of resolved SceneObject (supports multi-character)
-    ) -> str:
-        profile = self.profiles.get(profile_name, self.profiles.get("character_sheet", {}))
-        include_tags = set(profile.get("include_tags", []))
-        max_fragments = profile.get("max_fragments", 99)
-        narrative_mode = profile.get("narrative_mode", "fact_chain")
-
-        # Filter + sort + budget
-        filtered = [c for c in candidates if any(t in include_tags for t in c.tags)]
-        filtered.sort(key=lambda c: c.priority, reverse=True)
-        budgeted = filtered[:max_fragments]
-
-        # Partition
-        natives: dict = {}          # (actor_id, zone) -> CandidateFragment
-        clothing: list = []
-        relationships: list = []
-        env_frag: Optional[CandidateFragment] = None
-        atmospheric: list = []
-        composition_frags: list = []
-        body_surface_frags: list = []
-        pose_frag: Optional[CandidateFragment] = None
-        body_config_frags: list = []
-
-        for c in budgeted:
-            if c.frag_type == "native":
-                natives[(c.actor_id, c.zone)] = c
-            elif c.frag_type == "owned_item":
-                clothing.append(c)
-            elif c.frag_type == "relationship":
-                relationships.append(c)
-            elif c.frag_type == "environment":
-                env_frag = c
-            elif c.frag_type == "composition":
-                composition_frags.append(c)
-            elif c.frag_type == "body_surface":
-                body_surface_frags.append(c)
-            elif c.frag_type == "pose":
-                pose_frag = c
-            elif c.frag_type == "body_config":
-                body_config_frags.append(c)
-            elif c.frag_type in ("lighting", "weather", "style"):
-                atmospheric.append(c)
-
-        # Build per-subject narrative
-        # For multi-character scenes each human gets their own clause chain
-        subject_phrases = []
-        for human_obj in physical_entities:
-            human_id = human_obj.id
-            gender = human_obj.get_component("gender", "person")
-
-            # Partition natives and clothing that belong to this human
-            my_natives = {zone: c for (aid, zone), c in natives.items() if aid == human_id}
-            my_clothing = [c for c in clothing if c.actor_id == human_id]
-
-            # Collect all identity fragments (Face, Hair, Eyes, Tusks, Ears, etc.)
-            identity_frags = []
-            clothing_frags_from_natives = []
-            for zone, frag in my_natives.items():
-                zone_data = human_obj.get_component(zone)
-                render_group = self._get_render_group(zone, zone_data)
-                if render_group == "identity":
-                    identity_frags.append((zone, frag))
-                elif render_group in ("clothing", "accessory"):
-                    clothing_frags_from_natives.append(frag)
-            
-            # Sort identity fragments by render_priority
-            identity_frags.sort(
-                key=lambda x: self._get_render_priority(x[0], human_obj.get_component(x[0])),
-                reverse=True
-            )
-
-            # Build subject phrase from identity fragments
-            # Keep backward-compatible Face/Hair/Eyes logic as primary path
-            face_frag = my_natives.get("Face")
-            hair_frag = my_natives.get("Hair")
-            eyes_frag = my_natives.get("Eyes")
-
-            # Additional identity fragments (Tusks, Ears, etc.)
-            extra_identity = [(z, f) for z, f in identity_frags 
-                             if z not in ("Face", "Hair", "Eyes")]
-
-            _has_multiword_expr = False
-            if face_frag:
-                face_clean = face_frag.text.replace(f" {gender}", "").strip()
-                if " " in face_clean:
-                    _has_multiword_expr = True
-                    _first_word = face_clean.split()[0].lower()
-                    if _first_word.endswith("ing"):
-                        subject = f"{gender} with {face_clean}"
-                    else:
-                        _expr_article = with_article(face_clean)
-                        subject = f"{gender} with {_expr_article}"
-                else:
-                    subject = f"{face_clean} {gender}"
-            else:
-                subject = gender
-
-            with_parts = []
-            if hair_frag:
-                with_parts.append(hair_frag.text)
-            if eyes_frag:
-                with_parts.append(eyes_frag.text)
-            # Add extra identity fragments
-            for zone, frag in extra_identity:
-                with_parts.append(frag.text)
-
-            if with_parts:
-                if _has_multiword_expr:
-                    with_parts_str = ", ".join(with_parts[:-1]) + f" and {with_parts[-1]}" if len(with_parts) > 1 else with_parts[0]
-                    subject = f"{subject} and {with_parts_str}"
-                elif len(with_parts) == 1:
-                    subject = f"{subject} with {with_parts[0]}"
-                else:
-                    subject = f"{subject} with {with_parts[0]} and {with_parts[1]}"
-
-            # Clothing aggregation ("wearing X, Y and Z")
-            # Merge Headwear and other clothing/accessory natives into my_clothing
-            for frag in clothing_frags_from_natives:
-                my_clothing.append(frag)
-
-            if my_clothing:
-                items = [with_article(c.text) if len(my_clothing) == 1 else c.text for c in my_clothing]
-                if len(items) == 1:
-                    aggregated = items[0]
-                elif len(items) == 2:
-                    aggregated = f"{items[0]} and {items[1]}"
-                else:
-                    aggregated = ", ".join(items[:-1]) + f", and {items[-1]}"
-                subject = f"{subject} wearing {aggregated}"
-
-            # Body surface features (tattoos, scars, etc.) for this human
-            my_bsf = [c for c in body_surface_frags if c.actor_id == human_id]
-            if my_bsf:
-                bsf_texts = [c.text for c in my_bsf]
-                if len(bsf_texts) == 1:
-                    subject = f"{subject} {bsf_texts[0]}"
-                else:
-                    subject = f"{subject} {' and '.join(bsf_texts)}"
-
-            # Body config (per-human composable body configuration)
-            my_body_config = [c for c in body_config_frags if c.actor_id == human_id]
-            if my_body_config:
-                # Render body config parts in priority order
-                bc_texts = [c.text for c in sorted(my_body_config, key=lambda x: x.priority, reverse=True)]
-                subject = f"{subject} {', '.join(bc_texts)}"
-            elif pose_frag:
-                # Fallback: use legacy scene-level pose if no body config
-                # Skip if a relationship already implies body configuration
-                # (relationship implications now always produce body_config fragments,
-                #  so presence of any fragments means the relationship covered it)
-                subject = f"{subject} {pose_frag.text}"
-
-            # Relationships whose actor is this human
-            my_rels = [r for r in relationships if r.actor_id == human_id or not r.actor_id]
-
-            if narrative_mode == "scene_description":
-                # Produce a grammatically unified sentence
-                if my_rels:
-                    my_rels.sort(key=lambda r: r.chain_order)
-                    main_verb = self._to_finite(my_rels[0].clause_text)
-                    extra_clauses = [r.clause_text for r in my_rels[1:]]
-                    rel_part = main_verb
-                    if extra_clauses:
-                        rel_part += " " + " ".join(extra_clauses)
-                else:
-                    rel_part = ""
-
-                article = "An" if subject[0].lower() in "aeiou" else "A"
-                env_part = ""
-                if env_frag and env_frag.text:
-                    vowels = "aeiou"
-                    env_art = "an" if env_frag.text[0].lower() in vowels else "a"
-                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
-                        prep = "inside"
-                    elif "beach" in env_frag.text or "court" in env_frag.text:
-                        prep = "on"
-                    elif "poolside" in env_frag.text:
-                        prep = "at"
-                    else:
-                        prep = "in"
-                    env_part = f"{prep} {env_art} {env_frag.text}"
-
-                parts = [f"{article} {subject}"]
-                if rel_part:
-                    parts.append(rel_part)
-                if env_part:
-                    parts.append(env_part)
-                subject_phrases.append(" ".join(parts) + ".")
-
-            else:
-                # fact_chain mode (original behaviour)
-                parts = [subject]
-                if my_rels:
-                    my_rels.sort(key=lambda r: r.chain_order)
-                    chain = " ".join(r.clause_text for r in my_rels)
-                    parts.append(chain)
-                if env_frag and env_frag.text:
-                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
-                        prep = "inside"
-                    elif "beach" in env_frag.text or "court" in env_frag.text:
-                        prep = "on"
-                    elif "poolside" in env_frag.text:
-                        prep = "at"
-                    else:
-                        prep = "in"
-                    vowels = "aeiou"
-                    art = "an" if env_frag.text[0].lower() in vowels else "a"
-                    parts.append(f"{prep} {art} {env_frag.text}")
-                subject_phrases.append(", ".join(p for p in parts if p))
-
-        # Integrated composition for scene_description
-        if narrative_mode == "scene_description":
-            if composition_frags and subject_phrases:
-                comp_text = composition_frags[0].text
-                if "cinematic" in comp_text:
-                    suffix = ", shot in cinematic style"
-                elif "over-the-shoulder" in comp_text:
-                    suffix = ", shot in an over-the-shoulder style"
-                else:
-                    suffix = f", shot in {comp_text} style"
-                
-                # strip period from the last subject phrase
-                if subject_phrases[-1].endswith("."):
-                    subject_phrases[-1] = subject_phrases[-1][:-1] + suffix + "."
-                else:
-                    subject_phrases[-1] = subject_phrases[-1] + suffix + "."
-        else:
-            # In fact_chain mode, composition acts as normal atmospheric suffix
-            for c in composition_frags:
-                atmospheric.append(c)
-
-        # Atmospheric suffixes (composition, standalone lighting, etc.)
-        atm_parts = []
-        for a in atmospheric:
-            if env_frag and a.text in env_frag.text:
+    # 1. Unknown template keys
+    for obj_id, obj_data in scene_data.get("objects", {}).items():
+        template_key = obj_data.get("template_key")
+        if template_key and template_key not in templates_db:
+            # Check if zone name is a fallback
+            zone = obj_data.get("zone")
+            if zone and zone in templates_db:
                 continue
-            atm_parts.append(a.text)
+            errors.append({
+                "severity": "error",
+                "message": f"Unknown template_key '{template_key}' for object '{obj_id}'",
+            })
 
-        all_parts = subject_phrases + atm_parts
-        separator = " " if narrative_mode == "scene_description" else ", "
-        return separator.join(p for p in all_parts if p)
+    # 2. Unknown relationship types
+    for rel in scene_data.get("relationships", []):
+        rel_type = rel.get("type", "")
+        if rel_type not in actions_db and rel_type not in spatial_db:
+            errors.append({
+                "severity": "error",
+                "message": f"Unknown relationship type '{rel_type}'",
+            })
 
+    # 3. Missing subject presets
+    for obj_id, obj_data in scene_data.get("objects", {}).items():
+        subject = obj_data.get("subject")
+        if subject and subject not in subjects_db:
+            errors.append({
+                "severity": "warning",
+                "message": f"Unknown subject preset '{subject}' for object '{obj_id}'",
+            })
 
-class StyleSystem:
-    """Resolves photographic style directives into fragments."""
+    if strict and any(e["severity"] == "error" for e in errors):
+        raise ValueError("\n".join(e["message"] for e in errors if e["severity"] == "error"))
 
-    def __init__(self, styles_db: dict):
-        self.styles = styles_db
-
-    def process(self, scene: dict) -> list:
-        candidates = []
-        style_config = scene.get("style", {})
-        style_type = style_config.get("type") if isinstance(style_config, dict) else style_config
-        if style_type and style_type in self.styles:
-            style_def = self.styles[style_type]
-            candidates.append(CandidateFragment(
-                zone="style", frag_type="style",
-                tags=["style"], priority=90,
-                text=style_def.get("template", style_type),
-            ))
-        return candidates
+    return errors
 
 
 # ---------------------------------------------------------------------------
-# PromptCompiler — thin orchestrator
+# Assembler core
 # ---------------------------------------------------------------------------
 
-class PromptCompiler:
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
+class Assembler:
+    """Clean Slate Assembler — pipeline of pure functions."""
 
-        templates  = self._load("templates.json", {})
-        subjects   = self._load("subjects.json", {})
-        poses      = self._load("poses.json", {})
-        metadata   = self._load("attribute_metadata.json", {})
-        profiles   = self._load("render_profiles.json", {})
-        actions    = self._load("actions.json", {})
-        spatial    = self._load("spatial_relationships.json", {})
-        envs       = self._load("environments.json", {})
-        lighting   = self._load("lighting.json", {})
-        weather    = self._load("weather.json", {})
-        composition = self._load("composition.json", {})
-        styles     = self._load("styles.json", {})
-        attires    = self._load("attires.json", {})
+    def __init__(self, data_dir: str = None):
+        global DATA_DIR
+        if data_dir:
+            DATA_DIR = data_dir
+        else:
+            DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+        self.subjects_db = _load_json("subjects.json")
+        self.attires_db = _load_json("attires.json")
+        self.templates_db = _load_json("templates.json")
+        self.attribute_metadata_db = _load_json("attribute_metadata.json")
+        self.render_profiles_db = _load_json("render_profiles.json")
+        self.actions_db = _load_json("actions.json")
+        self.spatial_db = _load_json("spatial_relationships.json")
+        self.environments_db = _load_json("environments.json")
+        self.lighting_db = _load_json("lighting.json")
+        self.weather_db = _load_json("weather.json")
+        self.composition_db = _load_json("composition.json")
+        self.styles_db = _load_json("styles.json")
+        self.poses_db = _load_json("poses.json")
 
-        self.subject_system      = SubjectSystem(subjects)
-        self.visibility_system   = VisibilitySystem(poses)
-        self.wardrobe_system     = WardrobeSystem(attires)
-        self.attribute_system    = AttributeCollectorSystem(metadata, templates)
-        self.pose_system         = PoseSystem(poses, templates)
-        self.body_config_system  = BodyConfigSystem()
-        self.relationship_system = RelationshipSystem(actions, spatial, templates, envs)
-        self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition, templates)
-        self.validation_system   = ValidationSystem(actions, spatial, templates)
-        self.style_system        = StyleSystem(styles)
-        self.render_system       = RenderSystem(profiles)
+    def assemble(self, scene_data: dict, strict: bool = False) -> str:
+        """Assemble a scene into a prompt string.
 
-        # Expose safe_format as instance method for backwards-compat with tests
-        self.safe_format = staticmethod(safe_format)
+        Args:
+            scene_data: The scene dictionary.
+            strict: If True, raise ValueError on validation errors.
+        """
+        # Pre-flight validation
+        validate(scene_data, self.templates_db, self.actions_db,
+                 self.spatial_db, self.subjects_db, strict=strict)
+        camera = scene_data.get("camera", {})
+        camera_framing = camera.get("framing", "full_body")
+        pose_name = scene_data.get("pose")
+        render_profile_name = scene_data.get("render_profile", "character_sheet")
+        active_tone = scene_data.get("tone", "default")
 
-    def _load(self, filename: str, default):
-        path = os.path.join(self.data_dir, filename)
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except json.JSONDecodeError as e:
-                raise ValueError(f"Malformed JSON in '{filename}': {e}") from e
-        return default
+        render_profile = self.render_profiles_db.get(render_profile_name, {
+            "include_tags": ["identity", "emotion", "clothing", "action", "style"],
+            "max_fragments": 10,
+        })
+        include_tags = set(render_profile.get("include_tags", []))
 
-    def _is_physical(self, obj: SceneObject) -> bool:
-        """Check if object has physical form (subject, morphology, or human type)."""
-        return bool(
-            obj.get_component("subject") or 
-            obj.get_component("morphology") or
-            obj.type == "human"
-        )
+        # Load camera profiles for relationship zone checks and BSF visibility
+        camera_profiles_path = os.path.join(DATA_DIR, "camera_profiles.json")
+        with open(camera_profiles_path, "r", encoding="utf-8") as f:
+            camera_profiles = json.load(f)
+        camera_framing_zones = set(camera_profiles.get(camera_framing, []))
+        # Apply pose hidden zones to camera framing zones
+        if pose_name and pose_name in self.poses_db:
+            hidden = set(self.poses_db[pose_name].get("hidden_zones", []))
+            camera_framing_zones = camera_framing_zones - hidden
 
-    def compile_scene(self, scene: dict, strict: bool = False) -> str:
-        # Resolve active tone globally for safe_format
-        render_profile = scene.get("render_profile", "character_sheet")
-        profile = self.render_system.profiles.get(render_profile, {})
-        PromptCompiler.active_tone = scene.get("tone") or profile.get("tone") or "default"
+        scene_objects = {}
+        for obj_id, obj_data in scene_data.get("objects", {}).items():
+            scene_objects[obj_id] = {**obj_data, "id": obj_id}
 
-        # 1. Wrap raw dicts into SceneObjects
-        scene_objects: dict = {
-            obj_id: SceneObject(obj_id, obj_data.get("type"), obj_data)
-            for obj_id, obj_data in scene.get("objects", {}).items()
-        }
+        physical_ids = []
+        for obj_id, obj in scene_objects.items():
+            if _is_physical(obj):
+                physical_ids.append(obj_id)
 
-        # 2. Validation (pre-flight)
-        errors = self.validation_system.validate(scene, scene_objects)
-        hard_errors = [e for e in errors if e.severity == "error"]
-        if strict and hard_errors:
-            raise ValueError("\n".join(e.message for e in hard_errors))
-
-        # 3. Resolve subjects and attires for all physical objects
-        physical_entities = []
-        for obj in list(scene_objects.values()):
-            if self._is_physical(obj):
-                self.subject_system.resolve(obj)
-                self.wardrobe_system.resolve(obj, scene_objects)
-                # Auto-create clothing SceneObjects for any owned_item_id refs
-                for zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Head", "Headwear"):
-                    zone_data = obj.get_component(zone)
-                    if zone_data and isinstance(zone_data, dict):
-                        oid = zone_data.get("owned_item_id")
-                        if oid and oid not in scene_objects:
-                            base = oid
-                            if "_" in base:
-                                parts = base.split("_")
-                                if parts[-1].isdigit():
-                                    parts = parts[:-1]
-                                base = "_".join(parts)
-                            template_key = "".join(w.capitalize() for w in base.split("_"))
-                            scene_objects[oid] = SceneObject(oid, "clothing", {
-                                "type": "clothing", "template_key": template_key
-                            })
-                physical_entities.append(obj)
-
-        if not physical_entities:
+        if not physical_ids:
             return ""
 
-        # 4. Visibility
-        camera_framing = scene.get("camera", {}).get("framing", "full_body")
-        pose_name = scene.get("pose")
-        visible_zones = self.visibility_system.compute_visible_zones(
-            camera_framing, pose_name, scene_objects=scene_objects
-        )
+        all_fragments = []
 
-        # 5. Priority helper (shared by attribute + relationship systems)
-        anchors = scene.get("anchors", {})
-        placements = scene.get("placements", {})
+        for obj_id in physical_ids:
+            obj = scene_objects[obj_id]
 
-        def priority_fn(base: int, obj_ids: list) -> int:
-            p = base
-            for oid in obj_ids:
-                if anchors.get("primary") == oid:   p += 15
-                elif anchors.get("secondary") == oid: p += 5
-                if placements.get(oid) == "background": p -= 10
-            return p
+            components = resolve_blueprint(obj, self.subjects_db, self.attires_db, scene_objects)
 
-        # 6. Collect candidates from each system
-        # For multi-character we use the primary human for attribute collection
-        # (each human's attributes are collected separately and tagged by actor_id)
-        mentioned_ids = {h.id for h in physical_entities}
-        active_tone = PromptCompiler.active_tone
-        candidates = []
+            user_overrides = {k: v for k, v in obj.items()
+                              if k not in ("type", "id", "subject", "attire") and isinstance(v, dict)}
+            components = apply_delta(components, user_overrides)
 
-        # 6a. Pose (body configuration)
-        pose_frag = self.pose_system.process(scene.get("pose"))
-        if pose_frag:
-            candidates.append(pose_frag)
+            components = resolve_references(components, scene_objects)
 
-        for human_obj in physical_entities:
-            candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn, active_tone)
+            visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
 
-        # 6b. Resolve environment anchor targets (e.g. "balcony.railing" -> SceneObject)
-        env_type = None
-        if "environment" in scene:
-            env_type = scene["environment"].get("type")
-        # Also check scene_objects for environment type
-        if not env_type:
-            for obj in scene_objects.values():
-                if obj.type == "environment":
-                    env_type = obj.get_component("template_key") or obj.get_component("type")
-                    break
+            gender = components.get("gender", obj.get("gender", "person"))
+            subject_name = components.get("subject", obj.get("subject", ""))
+            morphology = components.get("morphology", obj.get("morphology", {}))
 
-        relationships = scene.get("relationships", [])
-        if env_type:
-            relationships = self.relationship_system.resolve_anchor_targets(
-                relationships, scene_objects, env_type
+            identity_frags = render_to_text(
+                visible, render_profile_name,
+                self.templates_db, self.attribute_metadata_db,
+                self.render_profiles_db, active_tone
             )
+            for f in identity_frags:
+                f["actor_id"] = obj_id
+            all_fragments.extend(identity_frags)
 
-        candidates += self.relationship_system.process(
-            relationships, scene_objects, placements, visible_zones, priority_fn, mentioned_ids, active_tone
+            # Body surface features (tattoos, scars, freckles, etc.)
+            bsf = components.get("body_surface_features") or []
+            # Determine covered zones: check attribute_metadata for covers_body_surface flag
+            covered_zones = set()
+            for zone_name in visible:
+                meta_key = zone_name.lower()
+                meta = self.attribute_metadata_db.get(meta_key, {})
+                if meta.get("covers_body_surface"):
+                    covered_zones.add(zone_name)
+            bs_meta = self.attribute_metadata_db.get("body_surface", {"tags": [], "priority": 50})
+            for feature in bsf:
+                loc = feature.get("location", "")
+                # BSF visibility is gated by camera framing zones (after pose hidden zones applied)
+                if loc not in camera_framing_zones:
+                    continue
+                if loc in covered_zones:
+                    continue
+                template = self.templates_db.get("BodySurface")
+                if template:
+                    text = safe_format(template, {**feature, "_tone": active_tone})
+                    all_fragments.append({
+                        "zone": loc,
+                        "frag_type": "body_surface",
+                        "tags": bs_meta.get("tags", []),
+                        "priority": bs_meta.get("priority", 50),
+                        "text": text,
+                        "actor_id": obj_id,
+                    })
+
+            all_fragments.append({
+                "zone": "_subject_type",
+                "frag_type": "native",
+                "tags": ["identity"],
+                "priority": 100,
+                "text": _get_subject_type(gender, morphology),
+                "actor_id": obj_id,
+            })
+
+            # body_config: scene-level > subject preset body_config
+            body_config_data = scene_data.get("body_config", {}).get(obj_id)
+            if body_config_data is None:
+                # Check subject preset for body_config
+                body_config_data = components.get("body_config")
+            if body_config_data:
+                all_fragments.extend(_render_body_config(body_config_data, obj_id))
+            elif pose_name and pose_name in self.poses_db:
+                pose_def = self.poses_db[pose_name]
+                pose_text = pose_def.get("pose_text", "")
+                if pose_text:
+                    all_fragments.append({
+                        "zone": "_pose",
+                        "frag_type": "pose",
+                        "tags": ["pose"],
+                        "priority": 70,
+                        "text": pose_text,
+                        "actor_id": obj_id,
+                    })
+                elif subject_name:
+                    all_fragments.append({
+                        "zone": "_default_gaze",
+                        "frag_type": "body_config",
+                        "tags": ["body_config"],
+                        "priority": 55,
+                        "text": "looking toward the camera",
+                        "actor_id": obj_id,
+                    })
+            elif subject_name:
+                all_fragments.append({
+                    "zone": "_default_gaze",
+                    "frag_type": "body_config",
+                    "tags": ["body_config"],
+                    "priority": 55,
+                    "text": "looking toward the camera",
+                    "actor_id": obj_id,
+                })
+
+        relationships = scene_data.get("relationships", [])
+        # Compute visible zones for relationship actor checks using camera framing zones directly.
+        # This ensures actors without components can still participate in relationships
+        # (e.g., a bare {"type": "human", "gender": "woman"} can still hold an object).
+        all_visible = list(camera_framing_zones)
+        placements = scene_data.get("placements", {})
+        rel_frags = apply_relationships(
+            relationships, scene_objects, all_visible,
+            self.actions_db, self.spatial_db, self.templates_db, self.environments_db,
+            placements
         )
+        all_fragments.extend(rel_frags)
 
-        # 6c. Body Config (per-human, composable body configuration)
-        scene_body_config = scene.get("body_config", {})
-        pose_name = scene.get("pose")
+        env_frags = apply_environment(
+            scene_data, scene_objects,
+            self.environments_db, self.lighting_db,
+            self.weather_db, self.composition_db, self.templates_db
+        )
+        all_fragments.extend(env_frags)
+
+        style_frags = apply_style_tone(scene_data, self.styles_db)
+        all_fragments.extend(style_frags)
+
+        max_frags = render_profile.get("max_fragments", 10)
+
+        filtered = [f for f in all_fragments if any(t in include_tags for t in f.get("tags", []))]
+        filtered.sort(key=lambda f: (-f.get("priority", 0), f.get("zone", ""), f.get("text", "")))
+        filtered = filtered[:max_frags]
+
+        return _assemble_output(filtered, physical_ids, render_profile, include_tags)
+
+
+def _is_physical(obj: dict) -> bool:
+    """Check if an object is a physical entity (human, creature, etc.)."""
+    if obj.get("type") in ("human", "creature"):
+        return True
+    if obj.get("subject"):
+        return True
+    if obj.get("morphology"):
+        return True
+    return False
+
+
+def _get_subject_type(gender: str, morphology: dict) -> str:
+    """Get the subject type string (e.g., 'orc', 'elf', 'woman', 'man')."""
+    if morphology and morphology.get("type"):
+        return morphology["type"]
+    if gender in ("woman", "man", "person"):
+        return gender
+    if gender:
+        return gender
+    return "person"
+
+
+def _render_body_config(body_config: dict, obj_id: str) -> list:
+    """Render body config into text fragments."""
+    fragments = []
+    parts = []
+
+    head = body_config.get("head", {})
+    tilt = head.get("tilt", "")
+    turn = head.get("turn", "")
+    if tilt and tilt != "upright":
+        tilt_words = {
+            "forward": "tilted forward",
+            "back": "tilted back",
+            "left": "tilted to the left",
+            "right": "tilted to the right",
+            "slightly_left": "tilted slightly to the left",
+            "slightly_right": "tilted slightly to the right",
+        }
+        parts.append(tilt_words.get(tilt, f"tilted {tilt.replace('_', ' ')}"))
+    if turn and turn != "toward_camera":
+        turn_words = {
+            "away_from_camera": "turned away from the camera",
+            "profile_left": "turned to the left",
+            "profile_right": "turned to the right",
+        }
+        parts.append(turn_words.get(turn, f"turned {turn.replace('_', ' ')}"))
+
+    gaze = body_config.get("gaze", {})
+    direction = gaze.get("direction", "")
+    target = gaze.get("target", "")
+    if direction == "toward_target" and target:
+        parts.append(f"looking at {target}")
+    elif direction == "toward_camera":
+        parts.append("looking toward the camera")
+    elif direction:
+        dir_words = {
+            "up": "looking upward",
+            "down": "looking downward",
+            "left": "looking to the left",
+            "right": "looking to the right",
+            "away": "looking away",
+        }
+        parts.append(dir_words.get(direction, f"looking {direction.replace('_', ' ')}"))
+
+    arms = body_config.get("arms", {})
+    left = arms.get("left", "")
+    right = arms.get("right", "")
+    if left and right and left == right:
+        # Symmetric case: "arms crossed" not "left arm crossed, right arm crossed"
+        pos_words = {
+            "crossed": "arms crossed",
+            "raised": "arms raised",
+            "extended": "arms extended",
+            "behind_back": "hands clasped behind their back",
+            "on_hips": "hands on hips",
+        }
+        parts.append(pos_words.get(left, f"arms {left.replace('_', ' ')}"))
+    else:
+        if left:
+            parts.append(f"left arm {left.replace('_', ' ')}")
+        if right:
+            parts.append(f"right arm {right.replace('_', ' ')}")
+
+    legs = body_config.get("legs", {})
+    if legs.get("position"):
+        parts.append(f"legs {legs['position'].replace('_', ' ')}")
+
+    torso = body_config.get("torso", {})
+    if torso.get("lean"):
+        parts.append(f"torso leaning {torso['lean'].replace('_', ' ')}")
+
+    if parts:
+        fragments.append({
+            "zone": "body_config",
+            "frag_type": "body_config",
+            "tags": ["body_config"],
+            "priority": 60,
+            "text": ", ".join(parts),
+            "actor_id": obj_id,
+        })
+
+    return fragments
+
+
+def _assemble_output(
+    fragments: list,
+    physical_ids: list,
+    render_profile: dict,
+    include_tags: set = None,
+) -> str:
+    """Assemble fragments into a natural language prompt string.
+
+    Groups fragments by actor_id so multi-character scenes render each
+    character separately, then joins them with commas.
+    """
+    if not fragments:
+        return ""
+    if include_tags is None:
+        include_tags = set(render_profile.get("include_tags", []))
+
+    # Group fragments by actor_id, preserving physical_ids ordering
+    # Fragments without actor_id (env, style) go into a shared pool
+    actor_frags: dict = {aid: [] for aid in physical_ids}
+    shared_frags: list = []
+
+    for f in fragments:
+        if f.get("frag_type") == "relationship":
+            continue
+        aid = f.get("actor_id")
+        if aid and aid in actor_frags:
+            actor_frags[aid].append(f)
+        else:
+            shared_frags.append(f)
+
+    # Separate env/style from relationships in shared_frags
+    env_frags = [f for f in shared_frags if f.get("frag_type") in ("environment", "lighting", "weather")]
+    style_frags_shared = [f for f in shared_frags if f.get("frag_type") == "style"]
+    rel_frags_shared = [f for f in shared_frags if f.get("frag_type") == "relationship"]
+    other_shared = [f for f in shared_frags
+                    if f.get("frag_type") not in ("environment", "lighting", "weather", "style", "relationship")]
+
+    def _render_actor(aid: str, frags: list) -> str:
+        """Render a single actor's fragments into a natural language string."""
+        identity_frags = []
+        clothing_frags = []
         body_config_frags = []
-        has_explicit_body_config = bool(scene_body_config)
+        pose_frags = []
+        rel_frags_actor = []
+        surface_frags = []
 
-        for human_obj in physical_entities:
-            # Get per-human body config: scene-level > subject preset > defaults
-            human_body_config = scene_body_config.get(human_obj.id, scene_body_config) if has_explicit_body_config else {}
-            # Subject preset body_config as fallback
-            if not human_body_config:
-                human_body_config = human_obj.get_component("body_config") or {}
+        for f in frags:
+            zone = f.get("zone", "")
+            frag_type = f.get("frag_type", "")
+            if frag_type == "relationship":
+                rel_frags_actor.append(f)
+            elif frag_type in ("body_config",):
+                body_config_frags.append(f)
+            elif frag_type == "pose":
+                pose_frags.append(f)
+            elif frag_type == "body_surface":
+                surface_frags.append(f)
+            elif zone in ("Face", "Hair", "Eyes", "Tusks", "Ears", "Jaw", "_subject_type"):
+                identity_frags.append(f)
+            elif zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Headwear"):
+                clothing_frags.append(f)
+            else:
+                identity_frags.append(f)
 
-            # Always normalize body config (explicit + pose fallback + defaults)
-            config = self.body_config_system.normalize(human_body_config, pose_name)
+        identity_frags.sort(key=lambda f: -f.get("priority", 0))
 
-            # Always apply relationship implications (kills the hardcoded verb list)
-            for rel in relationships:
-                if rel.get("actor") == human_obj.id or rel.get("subject") == human_obj.id:
-                    rel_type = rel.get("type", "")
-                    config = self.body_config_system.apply_relationship_implications(config, rel_type)
-                    # Fixture affordance gaze override (look_out_of -> gaze away, etc.)
-                    target_id = rel.get("target")
-                    if target_id and env_type:
-                        target_obj = scene_objects.get(target_id)
-                        config = self.body_config_system.apply_fixture_affordance(
-                            config, rel_type, target_obj, self.relationship_system.environments, env_type
-                        )
+        parts = []
 
-            # Generate fragments if body config has any non-default values
-            has_body_values = any(
-                config.get(part, {}).get(k)
-                for part in ("head", "gaze", "arms", "legs", "torso")
-                for k in config.get(part, {})
-            )
-            if has_body_values:
-                body_config_frags += self.body_config_system.render_fragments(config, human_obj.id, priority_fn)
+        subject_type = ""
+        # Only include face expression if "emotion" tag is in the include_tags
+        face_expr = "" if "emotion" not in include_tags else ""
+        face_expr_raw = ""
+        hair_frag = None
+        eyes_frag = None
+        other_identity = []
+        for frag in identity_frags:
+            if frag.get("zone") == "_subject_type":
+                subject_type = frag["text"]
+            elif frag.get("zone") == "Face":
+                face_expr_raw = frag["text"]
+            elif frag.get("zone") == "Hair":
+                hair_frag = frag
+            elif frag.get("zone") == "Eyes":
+                eyes_frag = frag
+            else:
+                other_identity.append(frag["text"])
 
-            # Update visibility based on body config
-            bc_hidden = self.body_config_system.get_hidden_zones(config)
-            for hz in bc_hidden:
-                if hz in visible_zones:
-                    visible_zones.remove(hz)
+        # Only show face expression if emotion tag is allowed by render profile
+        face_expr = face_expr_raw if "emotion" in include_tags else ""
 
-            # Store config on human for RenderSystem access
-            human_obj.components["_body_config"] = config
+        if face_expr and subject_type:
+            parts.append(f"{face_expr} {subject_type}")
+        elif subject_type:
+            parts.append(subject_type)
+        elif face_expr:
+            parts.append(face_expr)
 
-        candidates += body_config_frags
+        with_parts = []
+        if hair_frag:
+            with_parts.append(hair_frag["text"])
+        if eyes_frag:
+            with_parts.append(eyes_frag["text"])
+        for text in other_identity:
+            with_parts.append(text)
+        # Body surface features shown in "with" section
+        for sf in surface_frags:
+            with_parts.append(sf["text"])
 
-        # Identify occupied objects to exclude from ambient environment listing
-        owned_item_ids = set()
-        for human_obj in physical_entities:
-            for zone in visible_zones:
-                zone_data = human_obj.get_component(zone)
-                if zone_data and zone_data.get("owned_item_id"):
-                    owned_item_ids.add(zone_data["owned_item_id"])
+        if with_parts:
+            if len(with_parts) == 1:
+                if parts:
+                    parts[0] = f"{parts[0]} with {with_parts[0]}"
+                else:
+                    parts.append(with_parts[0])
+            else:
+                joined = ", ".join(with_parts[:-1]) + (f", and {with_parts[-1]}" if len(with_parts) > 1 else "")
+                if parts:
+                    parts[0] = f"{parts[0]} with {joined}"
+                else:
+                    parts.append(joined)
 
-        relationship_targets = set()
-        for rel in relationships:
-            for role_name, val in rel.items():
-                if role_name not in ("type", "actor", "subject", "subject1"):
-                    if val is not None:
-                        relationship_targets.add(val)
+        if clothing_frags:
+            clothing_frags.sort(key=lambda f: -f.get("priority", 50))
+            clothing_texts = [f["text"] for f in clothing_frags]
+            if len(clothing_texts) == 1:
+                text = clothing_texts[0]
+                # Add article for single clothing item
+                if text and not text.startswith(("a ", "an ", "the ")):
+                    first_char = text[0].lower()
+                    article = "an" if first_char in "aeiou" else "a"
+                    text = f"{article} {text}"
+                parts.append(f"wearing {text}")
+            elif len(clothing_texts) == 2:
+                parts.append(f"wearing {clothing_texts[0]} and {clothing_texts[1]}")
+            else:
+                joined = ", ".join(clothing_texts[:-1])
+                parts.append(f"wearing {joined}, and {clothing_texts[-1]}")
 
-        # Resolve environment and composition objects
-        env_obj = None
-        for obj in scene_objects.values():
-            if obj.type == "environment":
-                env_obj = obj
-                break
-        if not env_obj and "environment" in scene:
-            env_data = dict(scene["environment"])
-            env_data["template_key"] = env_data.get("type")
-            env_obj = SceneObject("env_legacy", "environment", env_data)
-            env_obj.components["type"] = env_data["template_key"]
-            scene_objects["env_legacy"] = env_obj
+        if body_config_frags:
+            for f in body_config_frags:
+                parts.append(f["text"])
 
-        comp_obj = None
-        for obj in scene_objects.values():
-            if obj.type == "composition":
-                comp_obj = obj
-                break
-        if not comp_obj and "composition" in scene:
-            comp_data = dict(scene["composition"])
-            comp_data["template_key"] = comp_data.get("type")
-            comp_obj = SceneObject("comp_legacy", "composition", comp_data)
-            comp_obj.components["type"] = comp_data["template_key"]
-            scene_objects["comp_legacy"] = comp_obj
+        if pose_frags:
+            for f in pose_frags:
+                parts.append(f["text"])
 
-        candidates += self.environment_system.process(
-            env_obj, comp_obj, scene_objects, owned_item_ids, relationship_targets
-        )
-        candidates += self.style_system.process(scene)
+        # Attach actor-specific relationship fragments
+        actor_rels = [f for f in rel_frags_actor]
+        if actor_rels:
+            if render_profile.get("narrative_mode") == "scene_description":
+                actor_rels.sort(key=lambda f: f.get("chain_order", 99))
+                # Convert the first one to finite verb
+                first_clause = actor_rels[0].get("clause_text", actor_rels[0]["text"])
+                for participle, finite in {
+                    "holding": "holds",
+                    "sitting": "sits",
+                    "hugging": "hugs",
+                    "standing next to": "stands next to",
+                    "sitting inside": "sits inside",
+                    "soaking in": "soaks in",
+                }.items():
+                    if first_clause.startswith(participle):
+                        first_clause = finite + first_clause[len(participle):]
+                        break
+                
+                parts.append(first_clause)
+                
+                # Append remaining clauses with space
+                for f in actor_rels[1:]:
+                    c = f.get("clause_text", f["text"])
+                    if c:
+                        parts.append(c)
+            else:
+                for f in actor_rels:
+                    clause = f.get("clause_text", f["text"])
+                    if clause:
+                        if parts and not parts[-1].endswith(","):
+                            parts[-1] = parts[-1].rstrip() + ","
+                        parts.append(f" {clause}" if not clause.startswith(" ") else clause)
 
-        # 7. Render
-        profile_name = scene.get("render_profile", "character_sheet")
-        return self.render_system.compose(candidates, profile_name, physical_entities)
+        if not parts:
+            return ""
+
+        result = " ".join(parts)
+        result = re.sub(r"\s+", " ", result).strip()
+        result = re.sub(r",\s*looking toward", " looking toward", result)
+        return result
+
+    # Build relationship lookup per actor
+    rel_by_actor: dict = {aid: [] for aid in physical_ids}
+    ungrouped_rels = []
+    for f in fragments:
+        if f.get("frag_type") == "relationship":
+            aid = f.get("actor_id")
+            if aid and aid in rel_by_actor:
+                rel_by_actor[aid].append(f)
+            else:
+                ungrouped_rels.append(f)
+
+    # Render each actor
+    actor_parts = []
+    for aid in physical_ids:
+        frags_for_actor = actor_frags[aid] + rel_by_actor[aid]
+        rendered = _render_actor(aid, frags_for_actor)
+        if rendered:
+            actor_parts.append(rendered)
+
+    if not actor_parts:
+        return ""
+
+    result = ", ".join(actor_parts)
+
+    # Append ungrouped relationships
+    if ungrouped_rels:
+        for f in ungrouped_rels:
+            clause = f.get("clause_text", f["text"])
+            if clause:
+                if not result.endswith(","):
+                    result = result.rstrip() + ","
+                result += f" {clause}" if not clause.startswith(" ") else clause
+
+    # Append environment
+    if env_frags:
+        env_text = env_frags[0]["text"] if env_frags else ""
+        if env_text:
+            if any(k in env_text.lower() for k in ("cafe", "office", "room", "restaurant", "tunnel")):
+                prep = "inside"
+            elif "beach" in env_text.lower() or "court" in env_text.lower():
+                prep = "on"
+            elif "poolside" in env_text.lower():
+                prep = "at"
+            else:
+                prep = "in"
+            
+            if env_text.startswith(("in ", "on ", "at ", "inside ")):
+                result += f" {env_text}"
+            elif env_text.startswith(("a ", "an ", "the ")):
+                result += f" {prep} {env_text}"
+            else:
+                vowels = "aeiou"
+                art = "an" if env_text[0].lower() in vowels else "a"
+                result += f" {prep} {art} {env_text}"
+
+    comp_frags = [f for f in other_shared if f.get("frag_type") == "composition"]
+    if render_profile.get("narrative_mode") == "scene_description":
+        other_shared = [f for f in other_shared if f.get("frag_type") != "composition"]
+
+    if render_profile.get("narrative_mode") == "scene_description" and comp_frags:
+        comp_text = comp_frags[0]["text"]
+        if "cinematic" in comp_text:
+            suffix = ", shot in cinematic style"
+        elif "over-the-shoulder" in comp_text:
+            suffix = ", shot in an over-the-shoulder style"
+        else:
+            suffix = f", shot in {comp_text} style"
+        result += suffix
+
+    # Append style/atmospheric
+    for f in style_frags_shared + other_shared:
+        text = f["text"]
+        if text:
+            if not result.endswith(","):
+                result = result.rstrip() + ","
+            result += f" {text}" if not text.startswith(" ") else text
+
+    result = re.sub(r"\s+", " ", result).strip()
+    result = re.sub(r",\s*looking toward", " looking toward", result)
+
+    return result
+
+
+class PromptCompiler(Assembler):
+    def compile_scene(self, scene_data: dict, strict: bool = False) -> str:
+        return self.assemble(scene_data, strict=strict)

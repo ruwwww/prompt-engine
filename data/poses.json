@@ -5,7 +5,7 @@
   },
   "sitting": {
     "hidden_zones": ["Feet"],
-    "pose_text": "seated"
+    "pose_text": "legs bent"
   },
   "arms_crossed": {
     "hidden_zones": ["Hands"],
