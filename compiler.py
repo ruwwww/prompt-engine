@@ -251,8 +251,17 @@ class SubjectSystem:
 # ---------------------------------------------------------------------------
 
 class VisibilitySystem:
-    """Resolves active body zones from camera framing + pose occlusion."""
+    """Resolves active body zones from camera framing + pose occlusion.
+    
+    Supports two modes:
+    1. Legacy: hardcoded CAMERA_ZONES dict (backward compatible)
+    2. Data-driven: components declare visibility_tags (new morphology support)
+    """
 
+    # Default tags when component doesn't specify visibility_tags
+    DEFAULT_VISIBILITY_TAGS = ["close_up", "medium", "full_body"]
+
+    # Legacy CAMERA_ZONES kept as fallback for backward compatibility
     CAMERA_ZONES = {
         "close_up":  ["Face", "Hair", "Eyes", "Headwear"],
         "medium":    ["Face", "Hair", "Eyes", "Headwear", "UpperBody", "Hands"],
@@ -262,13 +271,57 @@ class VisibilitySystem:
     def __init__(self, poses_db: dict):
         self.poses = poses_db
 
-    def compute_visible_zones(self, camera_framing: str, pose_name: Optional[str]) -> list:
-        zones = list(self.CAMERA_ZONES.get(camera_framing, self.CAMERA_ZONES["full_body"]))
+    def compute_visible_zones(self, camera_framing: str, pose_name: Optional[str],
+                               scene_objects: dict = None) -> list:
+        """Compute visible zones from camera framing + component visibility_tags.
+        
+        Args:
+            camera_framing: Camera framing string (close_up, medium, full_body)
+            pose_name: Optional pose name for occlusion
+            scene_objects: Optional dict of scene objects for data-driven visibility
+        """
+        if scene_objects:
+            # Data-driven visibility from components
+            zones = self._compute_zones_from_components(camera_framing, scene_objects)
+        else:
+            # Legacy: use hardcoded CAMERA_ZONES
+            zones = list(self.CAMERA_ZONES.get(camera_framing, self.CAMERA_ZONES["full_body"]))
+
+        # Apply pose occlusion
         if pose_name and pose_name in self.poses:
             for hz in self.poses[pose_name].get("hidden_zones", []):
                 if hz in zones:
                     zones.remove(hz)
         return zones
+
+    def _compute_zones_from_components(self, camera_framing: str,
+                                        scene_objects: dict) -> list:
+        """Compute zones from component visibility_tags."""
+        # Start with legacy CAMERA_ZONES for backward compatibility
+        legacy_zones = set(self.CAMERA_ZONES.get(camera_framing, self.CAMERA_ZONES["full_body"]))
+        
+        # Add any new zones from components with explicit visibility_tags
+        for obj in scene_objects.values():
+            if not self._is_physical(obj):
+                continue
+            for zone_name, zone_data in obj.components.items():
+                if not isinstance(zone_data, dict):
+                    continue
+                # Only process components with explicit visibility_tags
+                if "visibility_tags" in zone_data:
+                    tags = zone_data["visibility_tags"]
+                    if camera_framing in tags:
+                        legacy_zones.add(zone_name)
+        
+        return list(legacy_zones)
+
+    def _is_physical(self, obj: 'SceneObject') -> bool:
+        """Check if object has physical form (subject, morphology, or human type)."""
+        return bool(
+            obj.get_component("subject") or 
+            obj.get_component("morphology") or
+            obj.type == "human"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2005,7 +2058,9 @@ class PromptCompiler:
         # 4. Visibility
         camera_framing = scene.get("camera", {}).get("framing", "full_body")
         pose_name = scene.get("pose")
-        visible_zones = self.visibility_system.compute_visible_zones(camera_framing, pose_name)
+        visible_zones = self.visibility_system.compute_visible_zones(
+            camera_framing, pose_name, scene_objects=scene_objects
+        )
 
         # 5. Priority helper (shared by attribute + relationship systems)
         anchors = scene.get("anchors", {})
