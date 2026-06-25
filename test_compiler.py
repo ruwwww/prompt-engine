@@ -2160,7 +2160,6 @@ class TestBodyConfig(unittest.TestCase):
         self.assertIn("looking downward", out)
 
 
-@pytest.mark.skip(reason="Assembler v2: Anchors v2 TBD")
 class TestEnvironmentAnchors(unittest.TestCase):
     """Environment anchors allow relationships to target objects within environments."""
 

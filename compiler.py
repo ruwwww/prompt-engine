@@ -316,11 +316,11 @@ def apply_relationships(
         actor_id = rel.get("actor") or rel.get("subject") or rel.get("subject1")
         object_id = rel.get("object") or rel.get("target") or rel.get("subject2") or rel.get("container")
 
-        if not actor_id or not object_id:
+        if not actor_id:
             continue
 
         actor_obj = scene_objects.get(actor_id, {})
-        object_obj = scene_objects.get(object_id, {})
+        object_obj = scene_objects.get(object_id, {}) if object_id else {}
 
         roles = definition.get("roles", {})
         valid = True
@@ -425,6 +425,8 @@ def _get_noun_phrase(
     placements: dict = None,
 ) -> str:
     """Generate a noun phrase for an entity in a relationship."""
+    if not entity_id:
+        return ""
     obj = scene_objects.get(entity_id, {})
     obj_type = obj.get("type", "")
 
@@ -868,6 +870,36 @@ class Assembler:
         for obj_id, obj_data in scene_data.get("objects", {}).items():
             scene_objects[obj_id] = {**obj_data, "id": obj_id}
 
+        # Resolve environment anchors
+        environment_data = scene_data.get("environment", {})
+        env_type = environment_data.get("type")
+        env_def = self.environments_db.get(env_type, {}) if env_type else {}
+        affordances = env_def.get("affordances", {})
+
+        resolved_relationships = []
+        for rel in scene_data.get("relationships", []):
+            rel_copy = dict(rel)
+            valid_anchor_rel = True
+            for field in ("target", "actor", "subject", "container", "object"):
+                val = rel_copy.get(field)
+                if isinstance(val, str) and "." in val:
+                    parts = val.split(".", 1)
+                    if len(parts) == 2:
+                        prefix, suffix = parts
+                        if env_type and prefix == env_type and suffix in affordances:
+                            if val not in scene_objects:
+                                scene_objects[val] = {
+                                    "id": val,
+                                    "type": "fixture",
+                                    "template_key": "Fixture",
+                                    "anchor": suffix,
+                                    "env_type": env_type,
+                                }
+                        else:
+                            valid_anchor_rel = False
+            if valid_anchor_rel:
+                resolved_relationships.append(rel_copy)
+
         physical_ids = []
         for obj_id, obj in scene_objects.items():
             if _is_physical(obj):
@@ -980,14 +1012,13 @@ class Assembler:
                     "actor_id": obj_id,
                 })
 
-        relationships = scene_data.get("relationships", [])
         # Compute visible zones for relationship actor checks using camera framing zones directly.
         # This ensures actors without components can still participate in relationships
         # (e.g., a bare {"type": "human", "gender": "woman"} can still hold an object).
         all_visible = list(camera_framing_zones)
         placements = scene_data.get("placements", {})
         rel_frags = apply_relationships(
-            relationships, scene_objects, all_visible,
+            resolved_relationships, scene_objects, all_visible,
             self.actions_db, self.spatial_db, self.templates_db, self.environments_db,
             placements
         )

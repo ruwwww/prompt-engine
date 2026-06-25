@@ -14,5 +14,5 @@ This document tracks features that have been deferred during the transition to t
 
 ## 3. Environment Anchors v2
 - **Goal:** Support dot-notation environment anchors (e.g., `balcony.railing`) for physical fixture relationship targeting.
-- **Status:** Deferred (5 tests skipped).
-- **Target Implementation:** Resolve environment affordance sub-paths to automatically generate fixture objects before relationship resolution.
+- **Status:** Completed (7 tests unskipped and fully passing).
+- **Target Implementation:** Added parsing of dot-notation anchor targets inside `assemble()`, dynamically instantiating synthetic fixture objects using environment affordances if they match, and relaxed `object_id` requirement constraints in `apply_relationships` for single-actor relationships (e.g. `sitting`).
