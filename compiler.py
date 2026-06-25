@@ -1726,7 +1726,7 @@ class RenderSystem:
         self,
         candidates: list,
         profile_name: str,
-        humans: list,            # list of resolved SceneObject (supports multi-character)
+        physical_entities: list,            # list of resolved SceneObject (supports multi-character)
     ) -> str:
         profile = self.profiles.get(profile_name, self.profiles.get("character_sheet", {}))
         include_tags = set(profile.get("include_tags", []))
@@ -1772,7 +1772,7 @@ class RenderSystem:
         # Build per-subject narrative
         # For multi-character scenes each human gets their own clause chain
         subject_phrases = []
-        for human_obj in humans:
+        for human_obj in physical_entities:
             human_id = human_obj.id
             gender = human_obj.get_component("gender", "person")
 
@@ -2010,6 +2010,14 @@ class PromptCompiler:
                 raise ValueError(f"Malformed JSON in '{filename}': {e}") from e
         return default
 
+    def _is_physical(self, obj: SceneObject) -> bool:
+        """Check if object has physical form (subject, morphology, or human type)."""
+        return bool(
+            obj.get_component("subject") or 
+            obj.get_component("morphology") or
+            obj.type == "human"
+        )
+
     def compile_scene(self, scene: dict, strict: bool = False) -> str:
         # Resolve active tone globally for safe_format
         render_profile = scene.get("render_profile", "character_sheet")
@@ -2028,10 +2036,10 @@ class PromptCompiler:
         if strict and hard_errors:
             raise ValueError("\n".join(e.message for e in hard_errors))
 
-        # 3. Resolve subjects and attires for all human objects
-        humans = []
+        # 3. Resolve subjects and attires for all physical objects
+        physical_entities = []
         for obj in list(scene_objects.values()):
-            if obj.type == "human":
+            if self._is_physical(obj):
                 self.subject_system.resolve(obj)
                 self.wardrobe_system.resolve(obj, scene_objects)
                 # Auto-create clothing SceneObjects for any owned_item_id refs
@@ -2050,9 +2058,9 @@ class PromptCompiler:
                             scene_objects[oid] = SceneObject(oid, "clothing", {
                                 "type": "clothing", "template_key": template_key
                             })
-                humans.append(obj)
+                physical_entities.append(obj)
 
-        if not humans:
+        if not physical_entities:
             return ""
 
         # 4. Visibility
@@ -2077,7 +2085,7 @@ class PromptCompiler:
         # 6. Collect candidates from each system
         # For multi-character we use the primary human for attribute collection
         # (each human's attributes are collected separately and tagged by actor_id)
-        mentioned_ids = {h.id for h in humans}
+        mentioned_ids = {h.id for h in physical_entities}
         active_tone = PromptCompiler.active_tone
         candidates = []
 
@@ -2086,7 +2094,7 @@ class PromptCompiler:
         if pose_frag:
             candidates.append(pose_frag)
 
-        for human_obj in humans:
+        for human_obj in physical_entities:
             candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn, active_tone)
 
         # 6b. Resolve environment anchor targets (e.g. "balcony.railing" -> SceneObject)
@@ -2116,7 +2124,7 @@ class PromptCompiler:
         body_config_frags = []
         has_explicit_body_config = bool(scene_body_config)
 
-        for human_obj in humans:
+        for human_obj in physical_entities:
             # Get per-human body config: scene-level > subject preset > defaults
             human_body_config = scene_body_config.get(human_obj.id, scene_body_config) if has_explicit_body_config else {}
             # Subject preset body_config as fallback
@@ -2161,7 +2169,7 @@ class PromptCompiler:
 
         # Identify occupied objects to exclude from ambient environment listing
         owned_item_ids = set()
-        for human_obj in humans:
+        for human_obj in physical_entities:
             for zone in visible_zones:
                 zone_data = human_obj.get_component(zone)
                 if zone_data and zone_data.get("owned_item_id"):
@@ -2206,4 +2214,4 @@ class PromptCompiler:
 
         # 7. Render
         profile_name = scene.get("render_profile", "character_sheet")
-        return self.render_system.compose(candidates, profile_name, humans)
+        return self.render_system.compose(candidates, profile_name, physical_entities)
