@@ -329,7 +329,7 @@ class VisibilitySystem:
 # ---------------------------------------------------------------------------
 
 class AttributeCollectorSystem:
-    """Walks visible zones of a human object and emits CandidateFragments."""
+    """Walks visible zones of a physical object and emits CandidateFragments."""
 
     def __init__(self, metadata_db: dict, templates_db: dict):
         self.metadata = metadata_db
@@ -353,7 +353,7 @@ class AttributeCollectorSystem:
             if not zone_data:
                 continue
 
-            owned_item_id = zone_data.get("owned_item_id")
+            owned_item_id = zone_data.get("owned_item_id") if isinstance(zone_data, dict) else None
             if owned_item_id:
                 owned_item = scene_objects.get(owned_item_id)
                 if not owned_item:
@@ -367,11 +367,15 @@ class AttributeCollectorSystem:
                         tags=meta.get("tags", []),
                         priority=priority_fn(meta.get("priority", 50), [human_id, owned_item_id]),
                         text=safe_format(template, {**owned_item.components, "_tone": active_tone}),
-                        actor_id=human_id,          # ← owner tag
+                        actor_id=human_id,
                     ))
             else:
-                meta_key = "expression" if zone == "Face" else "hair" if zone == "Hair" else zone.lower()
+                # Get metadata key from zone_data or derive from zone name
+                meta_key = self._get_metadata_key(zone, zone_data)
                 meta = self.metadata.get(meta_key, {"tags": [], "priority": 50})
+
+                # Get render priority from zone_data or use default
+                render_priority = self._get_render_priority(zone, zone_data)
 
                 # Hair zone uses ontology renderer instead of flat template
                 if zone == "Hair":
@@ -382,31 +386,36 @@ class AttributeCollectorSystem:
                             zone=zone,
                             frag_type="native",
                             tags=meta.get("tags", []),
-                            priority=priority_fn(meta.get("priority", 50), [human_id]),
+                            priority=priority_fn(render_priority, [human_id]),
                             text=text,
                             actor_id=human_id,
                         ))
                 else:
+                    # Try template first, then generic fallback
                     template = self.templates.get(zone)
                     if template:
                         ctx = {**zone_data, "gender": gender, "_tone": active_tone}
                         text = safe_format(template, ctx)
-                        if text:
-                            candidates.append(CandidateFragment(
-                                zone=zone,
-                                frag_type="native",
-                                tags=meta.get("tags", []),
-                                priority=priority_fn(meta.get("priority", 50), [human_id]),
-                                text=text,
-                                actor_id=human_id,
-                            ))
+                    else:
+                        # Generic fallback rendering
+                        text = self._render_generic_zone(zone, zone_data)
+                    
+                    if text:
+                        candidates.append(CandidateFragment(
+                            zone=zone,
+                            frag_type="native",
+                            tags=meta.get("tags", []),
+                            priority=priority_fn(render_priority, [human_id]),
+                            text=text,
+                            actor_id=human_id,
+                        ))
 
         # Body surface features (tattoos, scars, freckles, etc.)
         # Determine which zones are covered by clothing that suppresses body surface
         covered_zones = set()
         for zone in visible_zones:
             zone_data = human_obj.get_component(zone)
-            if zone_data and zone_data.get("owned_item_id"):
+            if zone_data and isinstance(zone_data, dict) and zone_data.get("owned_item_id"):
                 # Check zone metadata for coverage flag
                 zone_meta = self.metadata.get(zone.lower(), {})
                 if zone_meta.get("covers_body_surface"):
@@ -433,6 +442,60 @@ class AttributeCollectorSystem:
                 ))
 
         return candidates
+
+    def _get_metadata_key(self, zone: str, zone_data) -> str:
+        """Derive metadata key from zone name and data."""
+        # Check if zone_data specifies a metadata_key
+        if isinstance(zone_data, dict) and "metadata_key" in zone_data:
+            return zone_data["metadata_key"]
+        
+        # Legacy mapping for backward compatibility
+        LEGACY_META_KEYS = {
+            "Face": "expression",
+            "Hair": "hair",
+        }
+        if zone in LEGACY_META_KEYS:
+            return LEGACY_META_KEYS[zone]
+        
+        # Fallback: use zone name lowercased
+        return zone.lower()
+
+    def _get_render_priority(self, zone: str, zone_data) -> int:
+        """Get render priority from zone data or default."""
+        if isinstance(zone_data, dict) and "render_priority" in zone_data:
+            return zone_data["render_priority"]
+        
+        # Default priorities
+        DEFAULT_PRIORITIES = {
+            "Face": 100, "Hair": 90, "Eyes": 85, "Headwear": 80,
+            "UpperBody": 70, "LowerBody": 65, "Feet": 60, "Hands": 55,
+        }
+        return DEFAULT_PRIORITIES.get(zone, 50)
+
+    def _render_generic_zone(self, zone: str, zone_data) -> str:
+        """Generic fallback: render zone as key-value pairs."""
+        if not isinstance(zone_data, dict):
+            return ""
+        
+        # Skip meta keys
+        META_KEYS = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer"}
+        
+        parts = []
+        for key, value in zone_data.items():
+            if key in META_KEYS:
+                continue
+            if isinstance(value, dict):
+                # Nested dict: render each key-value
+                for k, v in value.items():
+                    parts.append(f"{v} {k}")
+            else:
+                # Simple value: render as "value zone" or just "value"
+                if zone.lower() in key.lower():
+                    parts.append(str(value))
+                else:
+                    parts.append(f"{value} {key.lower()}")
+        
+        return " ".join(parts) if parts else ""
 
 
 # ---------------------------------------------------------------------------
