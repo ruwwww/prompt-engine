@@ -855,6 +855,351 @@ class PoseSystem:
 
 
 # ---------------------------------------------------------------------------
+# System: BodyConfigSystem
+# ---------------------------------------------------------------------------
+
+# --- BodyConfig Schema Constants ---
+HEAD_TILTS = {"forward", "back", "left", "right", "slightly_left", "slightly_right", "upright"}
+HEAD_TURNS = {"toward_camera", "away_from_camera", "profile_left", "profile_right"}
+GAZE_DIRECTIONS = {"up", "down", "left", "right", "away", "toward_camera", "toward_target"}
+GAZE_ENGAGEMENTS = {"direct", "averted", "fleeting", "side_glance"}
+ARM_POSITIONS = {"at_side", "crossed", "raised", "behind_back", "resting_on_object"}
+HAND_STATES = {"relaxed", "clenched", "in_pockets", "gripping", "pointing"}
+LEG_POSITIONS = {"standing", "bent", "crossed", "apart", "kneeling", "dangling"}
+LEG_WEIGHTS = {"left", "right", "even"}
+TORSO_LEANS = {"forward", "back", "left", "right", "upright"}
+TORSO_ANGLES = {"slight", "pronounced"}
+
+# --- Pose-to-BodyConfig Mapping (backward compat) ---
+POSE_TO_BODYCONFIG = {
+    "standing":    {"legs": {"position": "standing"}, "torso": {"lean": "upright"}},
+    "sitting":     {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
+    "leaning":     {"legs": {"position": "standing"}, "torso": {"lean": "forward"}},
+    "kneeling":    {"legs": {"position": "kneeling"}, "torso": {"lean": "upright"}},
+    "arms_crossed": {"arms": {"left": "crossed", "right": "crossed"}},
+    "hands_behind_back": {"arms": {"left": "behind_back", "right": "behind_back"}},
+    "reaching":    {"arms": {"left": "raised", "right": "raised"}},
+    "lying_down":  {"legs": {"position": "standing"}, "torso": {"lean": "back"}},  # approx
+}
+
+# --- Relationship-to-BodyConfig Mapping (physical implications) ---
+REL_TO_BODYCONFIG = {
+    "sitting":       {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
+    "sitting_on":    {"legs": {"position": "bent"}, "torso": {"lean": "upright"}},
+    "leaning_on":    {"torso": {"lean": "forward"}},
+    "rest_arms_on":  {"arms": {"left": "resting_on_object", "right": "resting_on_object"}},
+    "dangling_feet": {"legs": {"position": "dangling"}},
+    "kneeling":      {"legs": {"position": "kneeling"}, "torso": {"lean": "upright"}},
+    "hugging":       {"arms": {"left": "at_side", "right": "at_side"}},
+    "looking_at":    {"gaze": {"direction": "toward_target"}},
+    "looking_over":  {"gaze": {"direction": "away"}},
+    "looking_into":  {"gaze": {"direction": "toward_target"}},
+    "looking_out_of": {"gaze": {"direction": "away"}},
+}
+
+# --- Head turn hides face sub-zones ---
+HEAD_TURN_FACE_HIDDEN = {
+    "profile_left": ["Eyes"],   # eyes not visible in profile
+    "profile_right": ["Eyes"],
+    "away_from_camera": [],     # face still visible, just turned
+}
+
+# --- Arms positions that hide Hands zone ---
+ARMS_HANDS_HIDDEN = {"behind_back"}
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Deep merge override into base. Override wins on conflicts."""
+    result = dict(base)
+    for k, v in override.items():
+        if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            result[k] = _deep_merge(result[k], v)
+        else:
+            result[k] = v
+    return result
+
+
+def normalize_body_config(raw: dict, pose_fallback: Optional[str] = None) -> dict:
+    """Normalize body config from raw input + pose fallback.
+
+    Priority: raw body_config > pose fallback > defaults.
+    """
+    # Start with defaults
+    config = {
+        "head": {"tilt": "upright", "turn": ""},
+        "gaze": {"direction": "", "target": "", "engagement": ""},
+        "arms": {"left": "", "right": "", "hands": ""},
+        "legs": {"position": "", "weight": ""},
+        "torso": {"lean": "", "angle": ""},
+    }
+
+    # Apply pose fallback if provided
+    if pose_fallback and pose_fallback in POSE_TO_BODYCONFIG:
+        config = _deep_merge(config, POSE_TO_BODYCONFIG[pose_fallback])
+
+    # Apply raw body_config (highest priority)
+    if raw:
+        for section in ("head", "gaze", "arms", "legs", "torso"):
+            if section in raw and isinstance(raw[section], dict):
+                config[section] = _deep_merge(config[section], raw[section])
+
+    return config
+
+
+def render_body_config_part(part_name: str, part_data: dict) -> str:
+    """Render a body config sub-component to a natural language phrase."""
+    if part_name == "head":
+        return _render_head(part_data)
+    elif part_name == "gaze":
+        return _render_gaze(part_data)
+    elif part_name == "arms":
+        return _render_arms(part_data)
+    elif part_name == "legs":
+        return _render_legs(part_data)
+    elif part_name == "torso":
+        return _render_torso(part_data)
+    return ""
+
+
+def _render_head(head: dict) -> str:
+    """Render head configuration."""
+    parts = []
+    tilt = head.get("tilt", "")
+    turn = head.get("turn", "")
+
+    if tilt and tilt != "upright":
+        tilt_words = {
+            "forward": "tilted forward",
+            "back": "tilted back",
+            "left": "tilted to the left",
+            "right": "tilted to the right",
+            "slightly_left": "tilted slightly to the left",
+            "slightly_right": "tilted slightly to the right",
+        }
+        parts.append(tilt_words.get(tilt, f"tilted {tilt}"))
+
+    if turn and turn != "toward_camera":
+        turn_words = {
+            "away_from_camera": "turned away from the camera",
+            "profile_left": "turned to the left",
+            "profile_right": "turned to the right",
+        }
+        parts.append(turn_words.get(turn, f"turned {turn}"))
+
+    return " ".join(parts) if parts else ""
+
+
+def _render_gaze(gaze: dict) -> str:
+    """Render gaze configuration."""
+    parts = []
+    direction = gaze.get("direction", "")
+    target = gaze.get("target", "")
+    engagement = gaze.get("engagement", "")
+
+    if not direction:
+        return ""
+
+    if direction == "toward_target" and target:
+        parts.append(f"looking at {target}")
+    elif direction == "toward_camera":
+        if engagement == "direct":
+            parts.append("looking directly at the camera")
+        elif engagement == "averted":
+            parts.append("gaze averted from the camera")
+        else:
+            parts.append("looking toward the camera")
+    elif direction:
+        dir_words = {
+            "up": "looking upward",
+            "down": "looking downward",
+            "left": "looking to the left",
+            "right": "looking to the right",
+            "away": "looking away",
+        }
+        parts.append(dir_words.get(direction, f"looking {direction}"))
+
+    if engagement and engagement not in ("direct", "") and direction != "toward_target":
+        eng_words = {
+            "averted": "with averted gaze",
+            "fleeting": "with a fleeting glance",
+            "side_glance": "with a side glance",
+        }
+        eng_part = eng_words.get(engagement, f"with {engagement} gaze")
+        parts.append(eng_part)
+
+    return " ".join(parts) if parts else ""
+
+
+def _render_arms(arms: dict) -> str:
+    """Render arm configuration."""
+    left = arms.get("left", "")
+    right = arms.get("right", "")
+    hands = arms.get("hands", "")
+
+    # Both empty
+    if not left and not right and not hands:
+        return ""
+
+    # Default to at_side if only one is set
+    if not left:
+        left = "at_side"
+    if not right:
+        right = "at_side"
+
+    # Symmetric positions
+    if left == right:
+        pos_words = {
+            "crossed": "arms crossed",
+            "raised": "arms raised",
+            "behind_back": "hands clasped behind their back",
+            "resting_on_object": "resting arms on",
+            "at_side": "",
+        }
+        phrase = pos_words.get(left, f"arms {left}")
+        if hands == "in_pockets" and left == "at_side":
+            phrase = "hands in pockets"
+        return phrase
+
+    # Asymmetric positions
+    parts = []
+    if left != "at_side":
+        parts.append(f"left arm {left}" if left != "resting_on_object" else "left arm resting on")
+    if right != "at_side":
+        parts.append(f"right arm {right}" if right != "resting_on_object" else "right arm resting on")
+    if hands == "in_pockets":
+        parts.append("hands in pockets")
+    return " and ".join(parts) if parts else ""
+
+
+def _render_legs(legs: dict) -> str:
+    """Render leg configuration."""
+    position = legs.get("position", "")
+    weight = legs.get("weight", "")
+
+    if not position:
+        return ""
+
+    pos_words = {
+        "standing": "",
+        "bent": "legs bent",
+        "crossed": "legs crossed",
+        "apart": "legs apart",
+        "kneeling": "kneeling",
+        "dangling": "legs dangling",
+    }
+    phrase = pos_words.get(position, f"legs {position}")
+
+    if weight and weight != "even" and position == "standing":
+        phrase = f"weight on {weight} foot" if not phrase else f"{phrase}, weight on {weight} foot"
+
+    return phrase
+
+
+def _render_torso(torso: dict) -> str:
+    """Render torso configuration."""
+    lean = torso.get("lean", "")
+    angle = torso.get("angle", "")
+
+    if not lean or lean == "upright":
+        return ""
+
+    lean_words = {
+        "forward": "leaning forward",
+        "back": "leaning back",
+        "left": "leaning to the left",
+        "right": "leaning to the right",
+    }
+    phrase = lean_words.get(lean, f"leaning {lean}")
+
+    if angle == "pronounced":
+        phrase = phrase.replace("leaning", "leaning noticeably")
+
+    return phrase
+
+
+class BodyConfigSystem:
+    """Normalizes body config and generates CandidateFragments for each sub-component."""
+
+    HEAD_TILTS = HEAD_TILTS
+    HEAD_TURNS = HEAD_TURNS
+    GAZE_DIRECTIONS = GAZE_DIRECTIONS
+    GAZE_ENGAGEMENTS = GAZE_ENGAGEMENTS
+    ARM_POSITIONS = ARM_POSITIONS
+    HAND_STATES = HAND_STATES
+    LEG_POSITIONS = LEG_POSITIONS
+    LEG_WEIGHTS = LEG_WEIGHTS
+    TORSO_LEANS = TORSO_LEANS
+    TORSO_ANGLES = TORSO_ANGLES
+    POSE_TO_BODYCONFIG = POSE_TO_BODYCONFIG
+    REL_TO_BODYCONFIG = REL_TO_BODYCONFIG
+
+    def normalize(self, raw: dict, pose_fallback: Optional[str] = None) -> dict:
+        """Normalize body config data."""
+        return normalize_body_config(raw, pose_fallback)
+
+    def apply_relationship_implications(self, config: dict, rel_type: str) -> dict:
+        """Apply relationship physical implications to body config."""
+        if rel_type in REL_TO_BODYCONFIG:
+            return _deep_merge(config, REL_TO_BODYCONFIG[rel_type])
+        return config
+
+    def render_fragments(self, config: dict, human_id: str, priority_fn) -> list:
+        """Generate CandidateFragments for each body config sub-component."""
+        fragments = []
+        part_tags = {
+            "head": ["body_config", "pose"],
+            "gaze": ["body_config", "gaze"],
+            "arms": ["body_config", "pose"],
+            "legs": ["body_config", "pose"],
+            "torso": ["body_config", "pose"],
+        }
+        part_priorities = {
+            "head": 72,
+            "gaze": 71,
+            "arms": 70,
+            "legs": 69,
+            "torso": 68,
+        }
+
+        for part in ("head", "gaze", "arms", "legs", "torso"):
+            part_data = config.get(part, {})
+            text = render_body_config_part(part, part_data)
+            if text:
+                fragments.append(CandidateFragment(
+                    zone=part,
+                    frag_type="body_config",
+                    tags=part_tags.get(part, ["body_config"]),
+                    priority=priority_fn(part_priorities.get(part, 70), [human_id]),
+                    text=text,
+                    actor_id=human_id,
+                ))
+
+        return fragments
+
+    def get_hidden_zones(self, config: dict) -> list:
+        """Determine which body zones are hidden by body config."""
+        hidden = []
+
+        # Head turn hides eyes in profile
+        turn = config.get("head", {}).get("turn", "")
+        if turn in HEAD_TURN_FACE_HIDDEN:
+            hidden.extend(HEAD_TURN_FACE_HIDDEN[turn])
+
+        # Arms behind back hides hands
+        left_arm = config.get("arms", {}).get("left", "")
+        right_arm = config.get("arms", {}).get("right", "")
+        if left_arm in ARMS_HANDS_HIDDEN or right_arm in ARMS_HANDS_HIDDEN:
+            hidden.append("Hands")
+
+        # Legs position hides feet
+        leg_pos = config.get("legs", {}).get("position", "")
+        if leg_pos in ("bent", "kneeling", "dangling"):
+            hidden.append("Feet")
+
+        return hidden
+
+
+# ---------------------------------------------------------------------------
 # System: RelationshipSystem
 # ---------------------------------------------------------------------------
 
@@ -1324,6 +1669,7 @@ class RenderSystem:
         composition_frags: list = []
         body_surface_frags: list = []
         pose_frag: Optional[CandidateFragment] = None
+        body_config_frags: list = []
 
         for c in budgeted:
             if c.frag_type == "native":
@@ -1340,6 +1686,8 @@ class RenderSystem:
                 body_surface_frags.append(c)
             elif c.frag_type == "pose":
                 pose_frag = c
+            elif c.frag_type == "body_config":
+                body_config_frags.append(c)
             elif c.frag_type in ("lighting", "weather", "style"):
                 atmospheric.append(c)
 
@@ -1413,19 +1761,25 @@ class RenderSystem:
                 else:
                     subject = f"{subject} {' and '.join(bsf_texts)}"
 
-            # Pose (body configuration) — appended to subject phrase
-            # Skip if a relationship already describes body configuration
-            # (e.g. sitting, leaning_on, kneeling would clash with pose text)
-            _rel_implies_pose = False
-            if pose_frag and relationships:
-                for r in relationships:
-                    if r.actor_id == human_id and r.clause_text:
-                        _clause_start = r.clause_text.split()[0] if r.clause_text.split() else ""
-                        if _clause_start in ("sitting", "standing", "leaning", "kneeling", "seated", "lies", "lying"):
-                            _rel_implies_pose = True
-                            break
-            if pose_frag and not _rel_implies_pose:
-                subject = f"{subject} {pose_frag.text}"
+            # Body config (per-human composable body configuration)
+            my_body_config = [c for c in body_config_frags if c.actor_id == human_id]
+            if my_body_config:
+                # Render body config parts in priority order
+                bc_texts = [c.text for c in sorted(my_body_config, key=lambda x: x.priority, reverse=True)]
+                subject = f"{subject} {', '.join(bc_texts)}"
+            elif pose_frag:
+                # Fallback: use legacy scene-level pose if no body config
+                # Skip if a relationship already describes body configuration
+                _rel_implies_pose = False
+                if relationships:
+                    for r in relationships:
+                        if r.actor_id == human_id and r.clause_text:
+                            _clause_start = r.clause_text.split()[0] if r.clause_text.split() else ""
+                            if _clause_start in ("sitting", "standing", "leaning", "kneeling", "seated", "lies", "lying"):
+                                _rel_implies_pose = True
+                                break
+                if not _rel_implies_pose:
+                    subject = f"{subject} {pose_frag.text}"
 
             # Relationships whose actor is this human
             my_rels = [r for r in relationships if r.actor_id == human_id or not r.actor_id]
@@ -1565,6 +1919,7 @@ class PromptCompiler:
         self.wardrobe_system     = WardrobeSystem(attires)
         self.attribute_system    = AttributeCollectorSystem(metadata, templates)
         self.pose_system         = PoseSystem(poses, templates)
+        self.body_config_system  = BodyConfigSystem()
         self.relationship_system = RelationshipSystem(actions, spatial, templates, envs)
         self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition, templates)
         self.validation_system   = ValidationSystem(actions, spatial, templates)
@@ -1665,6 +2020,40 @@ class PromptCompiler:
         candidates += self.relationship_system.process(
             relationships, scene_objects, placements, visible_zones, priority_fn, mentioned_ids, active_tone
         )
+
+        # 6c. Body Config (per-human, composable body configuration)
+        scene_body_config = scene.get("body_config", {})
+        pose_name = scene.get("pose")
+        body_config_frags = []
+        has_explicit_body_config = bool(scene_body_config)
+
+        for human_obj in humans:
+            # Get per-human body config, with scene-level fallback
+            human_body_config = scene_body_config.get(human_obj.id, scene_body_config)
+
+            if has_explicit_body_config:
+                # Explicit body_config: normalize and generate fragments
+                config = self.body_config_system.normalize(human_body_config, pose_name)
+                # Apply relationship implications (sitting_on -> legs bent, etc.)
+                for rel in relationships:
+                    if rel.get("actor") == human_obj.id or rel.get("subject") == human_obj.id:
+                        rel_type = rel.get("type", "")
+                        config = self.body_config_system.apply_relationship_implications(config, rel_type)
+                # Generate fragments
+                body_config_frags += self.body_config_system.render_fragments(config, human_obj.id, priority_fn)
+                # Update visibility based on body config
+                bc_hidden = self.body_config_system.get_hidden_zones(config)
+                for hz in bc_hidden:
+                    if hz in visible_zones:
+                        visible_zones.remove(hz)
+                # Store config on human for RenderSystem access
+                human_obj.components["_body_config"] = config
+            else:
+                # No explicit body_config: use legacy pose text (backward compat)
+                # Still store default config for potential use
+                human_obj.components["_body_config"] = self.body_config_system.normalize({}, pose_name)
+
+        candidates += body_config_frags
 
         # Identify occupied objects to exclude from ambient environment listing
         owned_item_ids = set()

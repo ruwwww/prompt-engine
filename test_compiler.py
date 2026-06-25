@@ -1981,6 +1981,181 @@ class TestPoseRendering(unittest.TestCase):
         self.assertIn("holds", out)
 
 
+class TestBodyConfig(unittest.TestCase):
+    """Stage 8 — Body Configuration Ontology tests."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_body_config_head_tilt(self):
+        """Head tilt renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"head": {"tilt": "slightly_left"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("tilted slightly to the left", out)
+
+    def test_body_config_head_turn(self):
+        """Head turn renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"head": {"turn": "away_from_camera"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("turned away from the camera", out)
+
+    def test_body_config_gaze_direction(self):
+        """Gaze direction renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"gaze": {"direction": "down"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("looking downward", out)
+
+    def test_body_config_gaze_target(self):
+        """Gaze with target renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"gaze": {"direction": "toward_target", "target": "phone"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("looking at phone", out)
+
+    def test_body_config_arms_crossed(self):
+        """Arms crossed renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"arms": {"left": "crossed", "right": "crossed"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("arms crossed", out)
+
+    def test_body_config_arms_behind_back_hides_hands(self):
+        """Arms behind back hides Hands zone."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "body_config": {
+                "h1": {"arms": {"left": "behind_back", "right": "behind_back"}}
+            },
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hands": {"owned_item_id": "ring"}},
+                "ring": {"type": "accessory", "template_key": "Ring", "color": "gold"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("gold ring", out)
+        self.assertIn("hands clasped behind their back", out)
+
+    def test_body_config_legs_bent(self):
+        """Legs bent renders correctly."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "body_config": {
+                "h1": {"legs": {"position": "bent"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "man"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("legs bent", out)
+
+    def test_body_config_torso_lean(self):
+        """Torso lean renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"torso": {"lean": "forward"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("leaning forward", out)
+
+    def test_body_config_composable(self):
+        """Multiple body config parts compose correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {
+                    "head": {"tilt": "slightly_left"},
+                    "arms": {"left": "crossed", "right": "crossed"},
+                    "gaze": {"direction": "down"}
+                }
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("tilted slightly to the left", out)
+        self.assertIn("arms crossed", out)
+        self.assertIn("looking downward", out)
+
+    def test_body_config_overrides_pose(self):
+        """Body config overrides scene-level pose."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "standing",
+            "body_config": {
+                "h1": {"legs": {"position": "bent"}}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        # Body config should override pose
+        self.assertIn("legs bent", out)
+
+    def test_body_config_empty_renders_nothing(self):
+        """Empty body config renders nothing."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {}
+            },
+            "objects": {"h1": {"type": "human", "gender": "woman"}}
+        }
+        out = self.c.compile_scene(scene)
+        # Should not have any body config text
+        self.assertNotIn("tilted", out)
+        self.assertNotIn("looking", out)
+        self.assertNotIn("arms", out)
+        self.assertNotIn("legs", out)
+        self.assertNotIn("leaning", out)
+
+    def test_body_config_multi_character(self):
+        """Multi-character scenes have independent body configs."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "body_config": {
+                "h1": {"arms": {"left": "crossed", "right": "crossed"}},
+                "h2": {"gaze": {"direction": "down"}}
+            },
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"},
+                "h2": {"type": "human", "gender": "man"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("arms crossed", out)
+        self.assertIn("looking downward", out)
+
+
 class TestEnvironmentAnchors(unittest.TestCase):
     """Environment anchors allow relationships to target objects within environments."""
 
