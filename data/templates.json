@@ -176,5 +176,6 @@
     "slots": {
       "color": { "position": "pre" }
     }
-  }
+  },
+  "BodySurface": "with {design}"
 }

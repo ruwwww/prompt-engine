@@ -137,7 +137,7 @@ def safe_format(template_str, context: dict) -> str:
 @dataclass
 class CandidateFragment:
     zone: str
-    frag_type: str          # "native" | "owned_item" | "relationship" | "environment" | "lighting" | "weather" | "composition"
+    frag_type: str          # "native" | "owned_item" | "relationship" | "environment" | "lighting" | "weather" | "composition" | "body_surface"
     tags: list
     priority: int
     text: str
@@ -331,6 +331,37 @@ class AttributeCollectorSystem:
                             text=text,
                             actor_id=human_id,      # ← owner tag
                         ))
+
+        # Body surface features (tattoos, scars, freckles, etc.)
+        # Determine which zones are covered by clothing that suppresses body surface
+        covered_zones = set()
+        for zone in visible_zones:
+            zone_data = human_obj.get_component(zone)
+            if zone_data and zone_data.get("owned_item_id"):
+                # Check zone metadata for coverage flag
+                zone_meta = self.metadata.get(zone.lower(), {})
+                if zone_meta.get("covers_body_surface"):
+                    covered_zones.add(zone)
+
+        bsf = human_obj.get_component("body_surface_features") or []
+        for feature in bsf:
+            loc = feature.get("location", "")
+            if loc not in visible_zones:
+                continue
+            if loc in covered_zones:
+                continue
+            bs_meta = self.metadata.get("body_surface", {"tags": [], "priority": 50})
+            template = self.templates.get("BodySurface")
+            if template:
+                text = safe_format(template, {**feature, "_tone": active_tone})
+                candidates.append(CandidateFragment(
+                    zone=loc,
+                    frag_type="body_surface",
+                    tags=bs_meta.get("tags", []),
+                    priority=priority_fn(bs_meta.get("priority", 50), [human_id]),
+                    text=text,
+                    actor_id=human_id,
+                ))
 
         return candidates
 
@@ -759,6 +790,7 @@ class RenderSystem:
         env_frag: Optional[CandidateFragment] = None
         atmospheric: list = []
         composition_frags: list = []
+        body_surface_frags: list = []
 
         for c in budgeted:
             if c.frag_type == "native":
@@ -771,6 +803,8 @@ class RenderSystem:
                 env_frag = c
             elif c.frag_type == "composition":
                 composition_frags.append(c)
+            elif c.frag_type == "body_surface":
+                body_surface_frags.append(c)
             elif c.frag_type in ("lighting", "weather", "style"):
                 atmospheric.append(c)
 
@@ -821,6 +855,15 @@ class RenderSystem:
                 else:
                     aggregated = ", ".join(items[:-1]) + f", and {items[-1]}"
                 subject = f"{subject} wearing {aggregated}"
+
+            # Body surface features (tattoos, scars, etc.) for this human
+            my_bsf = [c for c in body_surface_frags if c.actor_id == human_id]
+            if my_bsf:
+                bsf_texts = [c.text for c in my_bsf]
+                if len(bsf_texts) == 1:
+                    subject = f"{subject} {bsf_texts[0]}"
+                else:
+                    subject = f"{subject} {' and '.join(bsf_texts)}"
 
             # Relationships whose actor is this human
             my_rels = [r for r in relationships if r.actor_id == human_id or not r.actor_id]

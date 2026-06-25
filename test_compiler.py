@@ -1394,3 +1394,221 @@ class TestNewEdgeCases(unittest.TestCase):
         }
         out = self.c.compile_scene(scene)
         self.assertIn("their eye", out)
+
+
+class TestBodySurfaceFeatures(unittest.TestCase):
+    """Tests for body surface features (tattoos, scars, freckles, etc.)."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_tattoo_visible_no_clothing(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "UpperBody", "marking": "tattoo", "design": "a dragon on her forearm"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("dragon on her forearm", out)
+
+    def test_tattoo_covered_by_clothing(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "persona": "professional_man",
+                    "body_surface_features": [
+                        {"location": "UpperBody", "marking": "tattoo", "design": "a tribal band on his arm"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("tribal band", out)
+
+    def test_tattoo_covered_by_pose(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "pose": "hands_behind_back",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "Hands", "marking": "tattoo", "design": "a small star on her hand"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("star on her hand", out)
+
+    def test_freckles_visible_on_face(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "Face", "marking": "freckles", "design": "light freckles across her nose"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("light freckles across her nose", out)
+
+    def test_scar_visible_on_leg_no_pants(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "determined"},
+                    "body_surface_features": [
+                        {"location": "LowerBody", "marking": "scar", "design": "a thin scar on her thigh"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("thin scar on her thigh", out)
+
+    def test_scar_covered_by_pants(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "persona": "professional_man",
+                    "body_surface_features": [
+                        {"location": "LowerBody", "marking": "scar", "design": "a scar on his leg"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("scar on his leg", out)
+
+    def test_multiple_features_partial_coverage(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "UpperBody": {"owned_item_id": "hoodie_1"},
+                    "body_surface_features": [
+                        {"location": "UpperBody", "marking": "tattoo", "design": "a rose on her shoulder"},
+                        {"location": "LowerBody", "marking": "scar", "design": "a scrape on her knee"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("rose on her shoulder", out)
+        self.assertIn("scrape on her knee", out)
+
+    def test_close_up_hides_body_surface_on_lower_body(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "LowerBody", "marking": "tattoo", "design": "an ankle tattoo"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("ankle tattoo", out)
+
+    def test_body_surface_feature_tag_in_cinematic(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "UpperBody", "marking": "tattoo", "design": "a vine tattoo on her arm"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("vine tattoo on her arm", out)
+
+    def test_body_surface_feature_excluded_from_portrait(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "render_profile": "portrait",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "smiling"},
+                    "body_surface_features": [
+                        {"location": "Face", "marking": "freckles", "design": "freckles"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("freckles", out)
+
+    def test_birthmark_visible(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {"expression": "thoughtful"},
+                    "body_surface_features": [
+                        {"location": "UpperBody", "marking": "birthmark", "design": "a small birthmark on her collarbone"}
+                    ]
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("small birthmark on her collarbone", out)
+
+    def test_no_body_surface_features_component(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "persona": "urban_influencer"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("with", out.split("on her")[0] if "on her" in out else "")

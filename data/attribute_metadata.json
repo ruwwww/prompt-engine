@@ -25,15 +25,18 @@
   },
   "upperbody": {
     "tags": ["clothing"],
-    "priority": 72
+    "priority": 72,
+    "covers_body_surface": true
   },
   "lowerbody": {
     "tags": ["clothing"],
-    "priority": 65
+    "priority": 65,
+    "covers_body_surface": true
   },
   "feet": {
     "tags": ["clothing"],
-    "priority": 55
+    "priority": 55,
+    "covers_body_surface": true
   },
   "hands": {
     "tags": ["accessory"],
@@ -42,5 +45,9 @@
   "head": {
     "tags": ["accessory"],
     "priority": 68
+  },
+  "body_surface": {
+    "tags": ["body_art"],
+    "priority": 58
   }
 }
