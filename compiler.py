@@ -1461,14 +1461,17 @@ class RelationshipSystem:
             is_plural = True
 
         if obj_id in mentioned_ids:
-            if obj.type == "human":
-                gender = obj.get_component("gender", "person")
+            # Check if object has gender component (works for humans and non-humans)
+            gender = obj.get_component("gender")
+            if gender:
                 if role in ("actor", "subject", "subject1"):
                     return "they" if is_plural else "she" if gender == "woman" else "he" if gender == "man" else "they"
                 else:
                     return "them" if is_plural else "her" if gender == "woman" else "him" if gender == "man" else "them"
             else:
-                return "them" if is_plural else "the " + obj.type
+                # Use type-based reference for non-gendered objects
+                obj_type = obj.get_component("morphology", {}).get("type", obj.type)
+                return "them" if is_plural else f"the {obj_type}"
         else:
             mentioned_ids.add(obj_id)
 

@@ -4,7 +4,7 @@
     "priority": 94,
     "chain_order": 1,
     "roles": {
-      "subject": { "allowed": ["human"] },
+      "subject": { "allowed": ["human", "orc", "elf", "robot", "creature"] },
       "container": { "allowed": ["vehicle", "building"] }
     },
     "template": "{subject} inside {container}",
@@ -15,8 +15,8 @@
     "priority": 93,
     "chain_order": 1,
     "roles": {
-      "subject": { "allowed": ["human"] },
-      "target": { "allowed": ["human", "vehicle", "item", "environment_object"] }
+      "subject": { "allowed": ["human", "orc", "elf", "robot", "creature"] },
+      "target": { "allowed": ["human", "orc", "elf", "robot", "creature", "vehicle", "item", "environment_object"] }
     },
     "template": "{subject} standing next to {target}",
     "clause": "standing next to {target}"

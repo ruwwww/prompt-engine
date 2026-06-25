@@ -1,6 +1,8 @@
 {
   "holding": {
-    "tags": ["action"],
+    "tags": [
+      "action"
+    ],
     "priority": 95,
     "chain_order": 2,
     "required_zones": {
@@ -8,23 +10,42 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "object": {
-        "allowed": ["drink", "clothing", "item"]
+        "allowed": [
+          "drink",
+          "clothing",
+          "item"
+        ]
       }
     },
     "template": {
       "head": "holding",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "object": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "object": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "holding",
       "slots": {
-        "object": { "position": "post", "required": true }
+        "object": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "variants": [
@@ -35,14 +56,23 @@
         "template": {
           "head": "holding a cup of",
           "slots": {
-            "actor": { "position": "pre", "required": true },
-            "object": { "position": "post", "required": true }
+            "actor": {
+              "position": "pre",
+              "required": true
+            },
+            "object": {
+              "position": "post",
+              "required": true
+            }
           }
         },
         "clause": {
           "head": "holding a cup of",
           "slots": {
-            "object": { "position": "post", "required": true }
+            "object": {
+              "position": "post",
+              "required": true
+            }
           }
         }
       },
@@ -53,21 +83,32 @@
         "template": {
           "head": "using",
           "slots": {
-            "actor": { "position": "pre", "required": true },
-            "object": { "position": "post", "required": true }
+            "actor": {
+              "position": "pre",
+              "required": true
+            },
+            "object": {
+              "position": "post",
+              "required": true
+            }
           }
         },
         "clause": {
           "head": "using",
           "slots": {
-            "object": { "position": "post", "required": true }
+            "object": {
+              "position": "post",
+              "required": true
+            }
           }
         }
       }
     ]
   },
   "sitting": {
-    "tags": ["action"],
+    "tags": [
+      "action"
+    ],
     "priority": 80,
     "chain_order": 1,
     "required_zones": {
@@ -75,19 +116,30 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       }
     },
     "template": {
       "head": "sitting",
       "slots": {
-        "actor": { "position": "pre", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        }
       }
     },
     "clause": "sitting"
   },
   "soaking_in": {
-    "tags": ["action"],
+    "tags": [
+      "action"
+    ],
     "priority": 94,
     "chain_order": 1,
     "required_zones": {
@@ -95,28 +147,48 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "object": {
-        "allowed": ["fixture", "furniture"]
+        "allowed": [
+          "fixture",
+          "furniture"
+        ]
       }
     },
     "template": {
       "head": "soaking in",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "object": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "object": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "soaking in",
       "slots": {
-        "object": { "position": "post", "required": true }
+        "object": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   },
   "hugging": {
-    "tags": ["interaction"],
+    "tags": [
+      "interaction"
+    ],
     "priority": 96,
     "chain_order": 1,
     "required_zones": {
@@ -125,28 +197,51 @@
     },
     "roles": {
       "subject1": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "subject2": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       }
     },
     "template": {
       "head": "hugging",
       "slots": {
-        "subject1": { "position": "pre", "required": true },
-        "subject2": { "position": "post", "required": true }
+        "subject1": {
+          "position": "pre",
+          "required": true
+        },
+        "subject2": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "hugging",
       "slots": {
-        "subject2": { "position": "post", "required": true }
+        "subject2": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   },
   "holding_near_eye": {
-    "tags": ["action"],
+    "tags": [
+      "action"
+    ],
     "priority": 95,
     "chain_order": 2,
     "required_zones": {
@@ -154,10 +249,19 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "object": {
-        "allowed": ["item", "clothing"]
+        "allowed": [
+          "item",
+          "clothing"
+        ]
       }
     },
     "template": {
@@ -167,8 +271,15 @@
         "agreement_with": "actor"
       },
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "object": { "position": "post", "required": true, "prep": "" }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "object": {
+          "position": "post",
+          "required": true,
+          "prep": ""
+        }
       },
       "suffix": "near {_possessive} eye"
     },
@@ -179,13 +290,20 @@
         "agreement_with": "actor"
       },
       "slots": {
-        "object": { "position": "post", "required": true, "prep": "" }
+        "object": {
+          "position": "post",
+          "required": true,
+          "prep": ""
+        }
       },
       "suffix": "near {_possessive} eye"
     }
   },
   "leaning_on": {
-    "tags": ["action", "interaction"],
+    "tags": [
+      "action",
+      "interaction"
+    ],
     "priority": 88,
     "chain_order": 1,
     "required_zones": {
@@ -193,28 +311,49 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "target": {
-        "allowed": ["fixture", "furniture"]
+        "allowed": [
+          "fixture",
+          "furniture"
+        ]
       }
     },
     "template": {
       "head": "leaning on",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "target": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "leaning on",
       "slots": {
-        "target": { "position": "post", "required": true }
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   },
   "rest_arms_on": {
-    "tags": ["action", "interaction"],
+    "tags": [
+      "action",
+      "interaction"
+    ],
     "priority": 85,
     "chain_order": 2,
     "required_zones": {
@@ -222,75 +361,136 @@
     },
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "target": {
-        "allowed": ["fixture", "furniture"]
+        "allowed": [
+          "fixture",
+          "furniture"
+        ]
       }
     },
     "template": {
       "head": "resting {possessive} arms on",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "target": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "resting arms on",
       "slots": {
-        "target": { "position": "post", "required": true }
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   },
   "dangling_feet": {
-    "tags": ["action", "interaction"],
+    "tags": [
+      "action",
+      "interaction"
+    ],
     "priority": 82,
     "chain_order": 3,
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "target": {
-        "allowed": ["fixture", "furniture"]
+        "allowed": [
+          "fixture",
+          "furniture"
+        ]
       }
     },
     "template": {
       "head": "with {_possessive} legs dangling into",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "target": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "with legs dangling into",
       "slots": {
-        "target": { "position": "post", "required": true }
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   },
   "looking_at": {
-    "tags": ["action", "interaction"],
+    "tags": [
+      "action",
+      "interaction"
+    ],
     "priority": 80,
     "chain_order": 4,
     "roles": {
       "actor": {
-        "allowed": ["human"]
+        "allowed": [
+          "human",
+          "orc",
+          "elf",
+          "robot",
+          "creature"
+        ]
       },
       "target": {
-        "allowed": ["human", "fixture", "furniture"]
+        "allowed": [
+          "human",
+          "fixture",
+          "furniture"
+        ]
       }
     },
     "template": {
       "head": "looking at",
       "slots": {
-        "actor": { "position": "pre", "required": true },
-        "target": { "position": "post", "required": true }
+        "actor": {
+          "position": "pre",
+          "required": true
+        },
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     },
     "clause": {
       "head": "looking at",
       "slots": {
-        "target": { "position": "post", "required": true }
+        "target": {
+          "position": "post",
+          "required": true
+        }
       }
     }
   }
