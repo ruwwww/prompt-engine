@@ -11,6 +11,22 @@
     "tags": ["identity"],
     "priority": 82
   },
+  "tusks": {
+    "tags": ["identity"],
+    "priority": 95
+  },
+  "ears": {
+    "tags": ["identity"],
+    "priority": 90
+  },
+  "jaw": {
+    "tags": ["identity"],
+    "priority": 85
+  },
+  "morphology": {
+    "tags": ["identity"],
+    "priority": 80
+  },
   "headwear": {
     "tags": ["accessory"],
     "priority": 68

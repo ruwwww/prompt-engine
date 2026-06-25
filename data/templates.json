@@ -2,6 +2,10 @@
   "Face": "{expression} {gender}",
   "Hair": "{length} {style} {color} hair",
   "Eyes": "{color} eyes",
+  "Tusks": "{size} {material} tusks",
+  "Ears": "{shape} {length} ears",
+  "Jaw": "{shape} jaw",
+  "Morphology": "{frame} {type} frame",
   "Headwear": {
     "head": "",
     "slots": {

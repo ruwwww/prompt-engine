@@ -120,5 +120,74 @@
       "head": {"tilt": "forward"},
       "arms": {"left": "at_side", "right": "at_side"}
     }
+  },
+  "orc_warrior": {
+    "gender": "orc",
+    "morphology": {"type": "orc", "frame": "muscular"},
+    "Face": {
+      "expression": "snarling",
+      "render_priority": 100
+    },
+    "Tusks": {
+      "size": "large",
+      "material": "ivory",
+      "visibility_tags": ["close_up", "medium", "full_body"],
+      "render_priority": 95,
+      "render_group": "identity"
+    },
+    "Jaw": {
+      "shape": "oversized",
+      "visibility_tags": ["close_up", "medium"],
+      "render_priority": 90,
+      "render_group": "identity"
+    },
+    "UpperBody": {
+      "owned_item_id": "chainmail_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "leather_pants_1"
+    },
+    "Feet": {
+      "owned_item_id": "iron_boots_1"
+    },
+    "body_config": {
+      "gaze": {"direction": "toward_camera"},
+      "arms": {"left": "at_side", "right": "at_side"},
+      "legs": {"position": "standing"}
+    }
+  },
+  "elf_archer": {
+    "gender": "elf",
+    "morphology": {"type": "elf", "frame": "slender"},
+    "Face": {
+      "expression": "focused",
+      "render_priority": 100
+    },
+    "Ears": {
+      "shape": "pointed",
+      "length": "long",
+      "visibility_tags": ["close_up", "medium"],
+      "render_priority": 95,
+      "render_group": "identity"
+    },
+    "Hair": {
+      "color": "silver",
+      "length": "long",
+      "style": "braided"
+    },
+    "UpperBody": {
+      "owned_item_id": "leather_vest_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "leggings_1"
+    },
+    "Feet": {
+      "owned_item_id": "elven_boots_1"
+    },
+    "body_config": {
+      "gaze": {"direction": "toward_camera"},
+      "arms": {"left": "at_side", "right": "at_side"},
+      "legs": {"position": "standing"}
+    }
   }
 }
