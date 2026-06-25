@@ -62,7 +62,7 @@ class TestVisibility(unittest.TestCase):
             "camera": {"framing": "medium"},
             "pose": "hands_behind_back",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer",
+                "h1": {"type": "human", "subject": "urban_influencer",
                        "Face": {"expression": "grinning"}},
                 "ring_1": {"type": "accessory", "template_key": "Ring", "material": "silver"},
             }
@@ -86,25 +86,25 @@ class TestVisibility(unittest.TestCase):
         self.assertNotIn("shoes", out)
 
 
-class TestPersonas(unittest.TestCase):
-    """Stage 2 — Persona resolution and overrides"""
+class TestSubjects(unittest.TestCase):
+    """Stage 2 — Subject resolution and overrides"""
 
     def setUp(self):
         self.c = PromptCompiler()
 
-    def test_persona_defaults_applied(self):
+    def test_subject_defaults_applied(self):
         scene = {
             "camera": {"framing": "close_up"},
-            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}}
+            "objects": {"h1": {"type": "human", "subject": "urban_influencer"}}
         }
         out = self.c.compile_scene(scene)
         self.assertIn("smiling", out)
         self.assertIn("long wavy brown hair", out)
 
-    def test_persona_face_override(self):
+    def test_subject_face_override(self):
         scene = {
             "camera": {"framing": "close_up"},
-            "objects": {"h1": {"type": "human", "persona": "urban_influencer",
+            "objects": {"h1": {"type": "human", "subject": "urban_influencer",
                                 "Face": {"expression": "laughing"}}}
         }
         out = self.c.compile_scene(scene)
@@ -447,7 +447,7 @@ class TestRelationships(unittest.TestCase):
             "pose": "standing",
             "render_profile": "character_sheet",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "c1": {"type": "drink", "template_key": "CoffeeCup",
                         "material": "ceramic", "color": "white"},
             },
@@ -462,7 +462,7 @@ class TestRelationships(unittest.TestCase):
             "pose": "hands_behind_back",
             "render_profile": "character_sheet",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "c1": {"type": "drink", "template_key": "CoffeeCup",
                         "material": "ceramic", "color": "white"},
             },
@@ -477,7 +477,7 @@ class TestRelationships(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "character_sheet",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "car1": {"type": "vehicle", "template_key": "Car", "color": "red"},
             },
             "relationships": [{"type": "holding", "actor": "h1", "object": "car1"}]  # vehicle not allowed for holding
@@ -502,7 +502,7 @@ class TestSpatialAndScene(unittest.TestCase):
             "anchors": {"primary": "h1"},
             "placements": {"car_1": "background"},
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "car_1": {"type": "vehicle", "template_key": "Car", "color": "red"},
             },
             "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}]
@@ -524,7 +524,7 @@ class TestRenderProfiles(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "portrait",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
                               "fit": "oversized", "color": "black", "material": "cotton"},
             }
@@ -538,7 +538,7 @@ class TestRenderProfiles(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "fashion",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
                               "fit": "oversized", "color": "black", "material": "cotton"},
             }
@@ -591,10 +591,10 @@ class TestValidationSystem(unittest.TestCase):
     def test_clean_scene_no_errors(self):
         from compiler import SceneObject
         scene = {
-            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}},
+            "objects": {"h1": {"type": "human", "subject": "urban_influencer"}},
         }
         scene_objects = {
-            "h1": SceneObject("h1", "human", {"type": "human", "persona": "urban_influencer"})
+            "h1": SceneObject("h1", "human", {"type": "human", "subject": "urban_influencer"})
         }
         errors = self.c.validation_system.validate(scene, scene_objects)
         hard = [e for e in errors if e.severity == "error"]
@@ -621,10 +621,10 @@ class TestEdgeCases(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertEqual(out, "")
 
-    def test_unknown_persona_does_not_crash(self):
+    def test_unknown_subject_does_not_crash(self):
         scene = {
             "camera": {"framing": "close_up"},
-            "objects": {"h1": {"type": "human", "gender": "man", "persona": "nonexistent_persona"}}
+            "objects": {"h1": {"type": "human", "gender": "man", "subject": "nonexistent_subject"}}
         }
         out = self.c.compile_scene(scene)
         self.assertIn("man", out)
@@ -664,7 +664,7 @@ class TestEdgeCases(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "environment": {"type": "alley", "lighting": "neon"},
-            "objects": {"h1": {"type": "human", "persona": "urban_influencer"}},
+            "objects": {"h1": {"type": "human", "subject": "urban_influencer"}},
         }
         out = self.c.compile_scene(scene)
         self.assertIn("neon", out)
@@ -711,7 +711,7 @@ class TestNarrativeMode(unittest.TestCase):
             "render_profile": "cinematic",
             "environment": {"type": "alley", "lighting": "neon", "weather": "rainy"},
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "car_1": {"type": "vehicle", "template_key": "Car", "color": "red"},
             },
             "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}]
@@ -742,7 +742,7 @@ class TestNewFeatures(unittest.TestCase):
             "render_profile": "portrait",
             "style": "editorial",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
             }
         }
         out = self.c.compile_scene(scene)
@@ -826,7 +826,7 @@ class TestNewFeatures(unittest.TestCase):
             "render_profile": "cinematic",
             "environment": {"type": "bathroom", "lighting": "steamy"},
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "tub_1": {
                     "type": "fixture",
                     "template_key": "Bathtub",
@@ -851,7 +851,7 @@ class TestNewFeatures(unittest.TestCase):
             "render_profile": "cinematic",
             "environment": {"type": "bathroom", "lighting": "steamy"},
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "tub_1": {
                     "type": "fixture",
                     "template_key": "Bathtub",
@@ -881,7 +881,7 @@ class TestNewFeatures(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "env_beach": {
                     "type": "environment",
                     "template_key": "Beach",
@@ -899,7 +899,7 @@ class TestNewFeatures(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "env_forest": {
                     "type": "environment",
                     "template_key": "Forest",
@@ -931,7 +931,7 @@ class TestSlotDescriptors(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "env_beach": {
                     "type": "environment",
                     "template_key": "Beach",
@@ -950,7 +950,7 @@ class TestSlotDescriptors(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "env_beach": {
                     "type": "environment",
                     "template_key": "Beach",
@@ -967,7 +967,7 @@ class TestSlotDescriptors(unittest.TestCase):
             "camera": {"framing": "full_body"},
             "render_profile": "cinematic",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "env_beach": {
                     "type": "environment",
                     "template_key": "Beach",
@@ -986,7 +986,7 @@ class TestSlotDescriptors(unittest.TestCase):
             "pose": "standing",
             "render_profile": "character_sheet",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"},
+                "h1": {"type": "human", "subject": "urban_influencer"},
                 "c1": {"type": "drink", "template_key": "CoffeeCup",
                         "material": "ceramic", "color": "white"},
             },
@@ -1607,11 +1607,11 @@ class TestNewEdgeCases(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("her eye", out)
 
-    def test_new_persona_professional_man(self):
+    def test_new_subject_professional_man(self):
         scene = {
             "camera": {"framing": "medium"},
             "objects": {
-                "h1": {"type": "human", "persona": "professional_man"},
+                "h1": {"type": "human", "subject": "professional_man"},
                 "suit_jacket_1": {"type": "clothing", "template_key": "SuitJacket", "color": "navy"},
                 "suit_pants_1": {"type": "clothing", "template_key": "SuitPants", "color": "navy"},
                 "oxford_shoes_1": {"type": "clothing", "template_key": "OxfordShoes", "color": "brown"}
@@ -1621,11 +1621,11 @@ class TestNewEdgeCases(unittest.TestCase):
         self.assertIn("man", out)
         self.assertIn("navy suit jacket", out)
 
-    def test_new_persona_athletic_woman(self):
+    def test_new_subject_athletic_woman(self):
         scene = {
             "camera": {"framing": "full_body"},
             "objects": {
-                "h1": {"type": "human", "persona": "athletic_woman"}
+                "h1": {"type": "human", "subject": "athletic_woman"}
             }
         }
         out = self.c.compile_scene(scene)
@@ -1715,7 +1715,7 @@ class TestBodySurfaceFeatures(unittest.TestCase):
             "objects": {
                 "h1": {
                     "type": "human",
-                    "persona": "professional_man",
+                    "subject": "professional_man",
                     "body_surface_features": [
                         {"location": "UpperBody", "marking": "tattoo", "design": "a tribal band on his arm"}
                     ]
@@ -1787,7 +1787,7 @@ class TestBodySurfaceFeatures(unittest.TestCase):
             "objects": {
                 "h1": {
                     "type": "human",
-                    "persona": "professional_man",
+                    "subject": "professional_man",
                     "body_surface_features": [
                         {"location": "LowerBody", "marking": "scar", "design": "a scar on his leg"}
                     ]
@@ -1895,7 +1895,7 @@ class TestBodySurfaceFeatures(unittest.TestCase):
             "camera": {"framing": "medium"},
             "render_profile": "character_sheet",
             "objects": {
-                "h1": {"type": "human", "persona": "urban_influencer"}
+                "h1": {"type": "human", "subject": "urban_influencer"}
             }
         }
         out = self.c.compile_scene(scene)

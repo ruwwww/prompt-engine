@@ -214,34 +214,34 @@ class WardrobeSystem:
 
 
 # ---------------------------------------------------------------------------
-# System: PersonaSystem
+# System: SubjectSystem
 # ---------------------------------------------------------------------------
 
-class PersonaSystem:
-    """Merges persona defaults into a human SceneObject."""
+class SubjectSystem:
+    """Merges subject defaults into a human SceneObject."""
 
-    def __init__(self, personas_db: dict):
-        self.personas = personas_db
+    def __init__(self, subjects_db: dict):
+        self.subjects = subjects_db
 
     def resolve(self, human_obj: SceneObject) -> SceneObject:
-        persona_name = human_obj.get_component("persona")
-        if not persona_name or persona_name not in self.personas:
+        subject_name = human_obj.get_component("subject")
+        if not subject_name or subject_name not in self.subjects:
             return human_obj
 
-        persona_data = self.personas[persona_name]
-        for comp_key, comp_val in persona_data.items():
+        subject_data = self.subjects[subject_name]
+        for comp_key, comp_val in subject_data.items():
             if comp_key in ("type",):
                 continue
             existing = human_obj.get_component(comp_key)
             if isinstance(existing, dict) and isinstance(comp_val, dict):
-                merged = dict(comp_val)       # persona defaults first
+                merged = dict(comp_val)       # subject defaults first
                 merged.update(existing)       # scene overrides win
                 human_obj.components[comp_key] = merged
             elif existing is None:
                 human_obj.components[comp_key] = comp_val
 
-        if "gender" not in human_obj.components and "gender" in persona_data:
-            human_obj.components["gender"] = persona_data["gender"]
+        if "gender" not in human_obj.components and "gender" in subject_data:
+            human_obj.components["gender"] = subject_data["gender"]
 
         return human_obj
 
@@ -1901,7 +1901,7 @@ class PromptCompiler:
         self.data_dir = data_dir
 
         templates  = self._load("templates.json", {})
-        personas   = self._load("personas.json", {})
+        subjects   = self._load("subjects.json", {})
         poses      = self._load("poses.json", {})
         metadata   = self._load("attribute_metadata.json", {})
         profiles   = self._load("render_profiles.json", {})
@@ -1914,7 +1914,7 @@ class PromptCompiler:
         styles     = self._load("styles.json", {})
         attires    = self._load("attires.json", {})
 
-        self.persona_system      = PersonaSystem(personas)
+        self.subject_system      = SubjectSystem(subjects)
         self.visibility_system   = VisibilitySystem(poses)
         self.wardrobe_system     = WardrobeSystem(attires)
         self.attribute_system    = AttributeCollectorSystem(metadata, templates)
@@ -1957,11 +1957,11 @@ class PromptCompiler:
         if strict and hard_errors:
             raise ValueError("\n".join(e.message for e in hard_errors))
 
-        # 3. Resolve personas and attires for all human objects
+        # 3. Resolve subjects and attires for all human objects
         humans = []
         for obj in list(scene_objects.values()):
             if obj.type == "human":
-                self.persona_system.resolve(obj)
+                self.subject_system.resolve(obj)
                 self.wardrobe_system.resolve(obj, scene_objects)
                 humans.append(obj)
 

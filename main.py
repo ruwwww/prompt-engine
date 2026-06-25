@@ -32,7 +32,7 @@ def main():
         "anchors": {"primary": "h1"},
         "placements": {"car_1": "background"},
         "objects": {
-            "h1": {"type": "human", "persona": "urban_influencer"},
+            "h1": {"type": "human", "subject": "urban_influencer"},
             "car_1": {"type": "vehicle", "template_key": "Car", "color": "red"},
         },
         "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}],
@@ -58,7 +58,7 @@ def main():
         "camera": {"framing": "full_body"},
         "pose": "standing",
         "objects": {
-            "h1": {"type": "human", "persona": "urban_influencer"},
+            "h1": {"type": "human", "subject": "urban_influencer"},
             "hoodie_1": {"type": "clothing", "template_key": "Hoodie",
                           "fit": "oversized", "color": "black", "material": "cotton"},
             "pants_1": {"type": "clothing", "template_key": "CargoPants",
@@ -82,7 +82,7 @@ def main():
         "camera": {"framing": "medium"},
         "render_profile": "character_sheet",
         "objects": {
-            "h1": {"type": "human", "persona": "urban_influencer"},
+            "h1": {"type": "human", "subject": "urban_influencer"},
             "c1": {"type": "drink", "template_key": "CoffeeCup",
                     "material": "ceramic", "color": "white"},
         },

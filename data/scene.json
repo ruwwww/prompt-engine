@@ -23,7 +23,7 @@
   "objects": {
     "human_1": {
       "type": "human",
-      "persona": "urban_influencer"
+      "subject": "urban_influencer"
     },
     "car_1": {
       "type": "vehicle",
