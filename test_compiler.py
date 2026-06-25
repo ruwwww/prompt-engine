@@ -1069,5 +1069,69 @@ class TestSlotDescriptors(unittest.TestCase):
         self.assertIn("cinematic lighting, high contrast between teal and orange tones", out)
 
 
+class TestPatterns(unittest.TestCase):
+    """Test diverse pattern types and their prepositions across different templates."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_garment_pattern_floral(self):
+        # 1. Floral pattern on a halter top
+        desc = {
+            "head": "halter top",
+            "slots": {
+                "color": { "position": "pre" },
+                "pattern": { "position": "post", "prep": "featuring a floral print of" }
+            }
+        }
+        ctx = {"color": "red", "pattern": "cherry blossoms"}
+        self.assertEqual(
+            safe_format(desc, ctx),
+            "red halter top featuring a floral print of cherry blossoms"
+        )
+
+    def test_garment_pattern_plaid_preposition(self):
+        # 2. Plaid pattern using "in a" preposition
+        desc = {
+            "head": "flannel shirt",
+            "slots": {
+                "pattern": { "position": "post", "prep": "in a" }
+            }
+        }
+        ctx = {"pattern": "green and black plaid"}
+        self.assertEqual(
+            safe_format(desc, ctx),
+            "flannel shirt in a green and black plaid"
+        )
+
+    def test_structural_pattern_checkered(self):
+        # 3. Checkered pattern on structural objects (Wallpaper)
+        desc = {
+            "head": "wallpaper",
+            "slots": {
+                "pattern": { "position": "post", "prep": "with a" }
+            }
+        }
+        ctx = {"pattern": "black and white checkered"}
+        self.assertEqual(
+            safe_format(desc, ctx),
+            "wallpaper with a black and white checkered"
+        )
+
+    def test_abstract_pattern_paisley(self):
+        # 4. Paisley pattern using "featuring"
+        desc = {
+            "head": "silk scarf",
+            "slots": {
+                "pattern": { "position": "post", "prep": "featuring" }
+            }
+        }
+        ctx = {"pattern": "intricate blue paisley"}
+        self.assertEqual(
+            safe_format(desc, ctx),
+            "silk scarf featuring intricate blue paisley"
+        )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
