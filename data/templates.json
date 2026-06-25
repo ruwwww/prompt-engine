@@ -85,6 +85,7 @@
     "slots": {
       "style": { "position": "pre" },
       "color": { "position": "pre" },
+      "pattern": { "position": "post", "prep": "with" },
       "material": { "position": "post", "prep": "" }
     }
   },

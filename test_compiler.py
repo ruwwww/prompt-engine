@@ -1052,7 +1052,8 @@ class TestSlotDescriptors(unittest.TestCase):
                     "template_key": "Dress",
                     "color": "green",
                     "style": "sleeveless",
-                    "material": "with white polka dots and a thin belt around her waist"
+                    "pattern": "white polka dots",
+                    "material": "and a thin belt around her waist"
                 },
                 "env_tunnel": {
                     "type": "environment",

@@ -53,6 +53,7 @@ def safe_format(template_str, context: dict) -> str:
         "age": 5,
         "color": 6,
         "origin": 7,
+        "pattern": 8,
         "material": 8
     }
 
