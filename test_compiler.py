@@ -2270,3 +2270,68 @@ class TestEnvironmentAnchors(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("leaning", out)
         self.assertIn("window", out)
+
+
+class TestCozyCreative(unittest.TestCase):
+    """Tests for the cozy_creative subject with seasonal outfits."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_subject_cozy_creative_summer_default(self):
+        """Cozy creative subject renders summer outfit by default."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "subject": "cozy_creative"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("woman", out)
+        self.assertIn("linen top", out)
+        self.assertIn("denim shorts", out)
+        self.assertIn("sandals", out)
+        self.assertIn("bracelets", out)
+
+    def test_subject_cozy_creative_winter_attire(self):
+        """Cozy creative with winter attire renders winter outfit."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "subject": "cozy_creative", "attire": "cozy_winter"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("woman", out)
+        self.assertIn("knit sweater", out)
+        self.assertIn("high-waist jeans", out)
+        self.assertIn("ankle boots", out)
+        self.assertIn("knit beanie", out)
+
+    def test_subject_cozy_creative_body_config(self):
+        """Cozy creative subject has correct body_config defaults."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "subject": "cozy_creative"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("looking downward", out)
+        self.assertIn("tilted forward", out)
+
+    def test_cozy_winter_overrides_summer_no_duplication(self):
+        """Winter attire replaces summer items, no duplication."""
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "subject": "cozy_creative", "attire": "cozy_winter"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("linen top", out)
+        self.assertNotIn("denim shorts", out)
+        self.assertNotIn("sandals", out)
+        self.assertIn("knit sweater", out)
+        self.assertIn("high-waist jeans", out)
+        self.assertIn("ankle boots", out)

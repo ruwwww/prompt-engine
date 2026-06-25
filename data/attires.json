@@ -8,5 +8,11 @@
     "UpperBody": { "owned_item_id": "polo_shirt_1" },
     "LowerBody": { "owned_item_id": "tennis_skirt_1" },
     "Feet": { "owned_item_id": "sneakers_1" }
+  },
+  "cozy_winter": {
+    "UpperBody": { "owned_item_id": "knit_sweater_1" },
+    "LowerBody": { "owned_item_id": "high_waist_jeans_1" },
+    "Feet": { "owned_item_id": "ankle_boots_1" },
+    "Headwear": { "owned_item_id": "knit_beanie_1" }
   }
 }

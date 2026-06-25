@@ -194,5 +194,65 @@
       "color": { "position": "pre", "rank": 1 },
       "style": { "position": "post", "prep": "with", "rank": 2 }
     }
+  },
+  "LinenTop": {
+    "head": "linen top",
+    "slots": {
+      "color": { "position": "pre" },
+      "fit": { "position": "pre" }
+    }
+  },
+  "DenimShorts": {
+    "head": "denim shorts",
+    "plural": { "irregular": "denim shorts" },
+    "slots": {
+      "color": { "position": "pre" },
+      "fit": { "position": "pre" }
+    }
+  },
+  "Sandals": {
+    "head": "sandals",
+    "plural": { "irregular": "sandals" },
+    "slots": {
+      "color": { "position": "pre" },
+      "material": { "position": "pre" }
+    }
+  },
+  "Bracelets": {
+    "head": "bracelets",
+    "plural": { "irregular": "bracelets" },
+    "slots": {
+      "material": { "position": "pre" },
+      "style": { "position": "pre" }
+    }
+  },
+  "KnitSweater": {
+    "head": "knit sweater",
+    "slots": {
+      "color": { "position": "pre" },
+      "fit": { "position": "pre" }
+    }
+  },
+  "HighWaistJeans": {
+    "head": "high-waist jeans",
+    "plural": { "irregular": "high-waist jeans" },
+    "slots": {
+      "color": { "position": "pre" },
+      "fit": { "position": "pre" }
+    }
+  },
+  "AnkleBoots": {
+    "head": "ankle boots",
+    "plural": { "irregular": "ankle boots" },
+    "slots": {
+      "color": { "position": "pre" },
+      "material": { "position": "pre" }
+    }
+  },
+  "KnitBeanie": {
+    "head": "knit beanie",
+    "slots": {
+      "color": { "position": "pre" }
+    }
   }
 }

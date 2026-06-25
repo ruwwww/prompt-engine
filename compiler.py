@@ -186,8 +186,8 @@ class WardrobeSystem:
             elif not isinstance(existing_slot, dict):
                 continue
 
-            if not existing_slot.get("owned_item_id"):
-                existing_slot["owned_item_id"] = slot_data.get("owned_item_id")
+            # Explicit attire always overrides existing clothing references
+            existing_slot["owned_item_id"] = slot_data.get("owned_item_id")
 
             owned_item_id = existing_slot.get("owned_item_id")
             if owned_item_id:
@@ -1981,6 +1981,22 @@ class PromptCompiler:
             if obj.type == "human":
                 self.subject_system.resolve(obj)
                 self.wardrobe_system.resolve(obj, scene_objects)
+                # Auto-create clothing SceneObjects for any owned_item_id refs
+                for zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Head", "Headwear"):
+                    zone_data = obj.get_component(zone)
+                    if zone_data and isinstance(zone_data, dict):
+                        oid = zone_data.get("owned_item_id")
+                        if oid and oid not in scene_objects:
+                            base = oid
+                            if "_" in base:
+                                parts = base.split("_")
+                                if parts[-1].isdigit():
+                                    parts = parts[:-1]
+                                base = "_".join(parts)
+                            template_key = "".join(w.capitalize() for w in base.split("_"))
+                            scene_objects[oid] = SceneObject(oid, "clothing", {
+                                "type": "clothing", "template_key": template_key
+                            })
                 humans.append(obj)
 
         if not humans:

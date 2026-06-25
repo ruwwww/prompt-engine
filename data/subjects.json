@@ -92,5 +92,33 @@
       "gaze": {"direction": "down"},
       "head": {"tilt": "forward"}
     }
+  },
+  "cozy_creative": {
+    "gender": "woman",
+    "Face": {
+      "expression": "relaxed"
+    },
+    "Hair": {
+      "color": "auburn",
+      "length": "shoulder-length",
+      "style": "messy_bun"
+    },
+    "UpperBody": {
+      "owned_item_id": "linen_top_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "denim_shorts_1"
+    },
+    "Feet": {
+      "owned_item_id": "sandals_1"
+    },
+    "Hands": {
+      "owned_item_id": "bracelets_1"
+    },
+    "body_config": {
+      "gaze": {"direction": "down"},
+      "head": {"tilt": "forward"},
+      "arms": {"left": "at_side", "right": "at_side"}
+    }
   }
 }
