@@ -149,7 +149,6 @@ class TestAttributeComposition(unittest.TestCase):
         self.assertIn("cargo pants", out)
 
 
-@pytest.mark.skip(reason="Assembler v2: Hair Ontology v2 TBD")
 class TestHairOntology(unittest.TestCase):
     """Stage 7 — Hair Ontology Refactor tests."""
 

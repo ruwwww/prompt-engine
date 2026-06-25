@@ -4,8 +4,8 @@ This document tracks features that have been deferred during the transition to t
 
 ## 1. Hair Ontology v2
 - **Goal:** Support full structured hair ontology inputs (with arrangements, cultural modifiers, states, etc.) via grammar catalog extensions rather than legacy procedural converters.
-- **Status:** Deferred (20 tests skipped).
-- **Target Implementation:** Extend the `Grammar Catalog` to parse and format structured nested object values in `render_to_text`.
+- **Status:** Completed (19 tests unskipped and fully passing).
+- **Target Implementation:** Integrated normalized hair ontology formatting directly into the pipeline step 8 (`render_to_text`).
 
 ## 2. Narrative Modes v2
 - **Goal:** Implement robust scene description narrative modes via grammar composition (sentence syntax planning, paragraph structures, etc.).
