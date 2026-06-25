@@ -22,5 +22,25 @@
   "accessory": {
     "tags": ["accessory"],
     "priority": 20
+  },
+  "upperbody": {
+    "tags": ["clothing"],
+    "priority": 72
+  },
+  "lowerbody": {
+    "tags": ["clothing"],
+    "priority": 65
+  },
+  "feet": {
+    "tags": ["clothing"],
+    "priority": 55
+  },
+  "hands": {
+    "tags": ["accessory"],
+    "priority": 25
+  },
+  "head": {
+    "tags": ["accessory"],
+    "priority": 68
   }
 }

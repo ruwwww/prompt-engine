@@ -18,5 +18,62 @@
     "Hands": {
       "owned_item_id": "ring_1"
     }
+  },
+  "professional_man": {
+    "gender": "man",
+    "Face": {
+      "expression": "confident"
+    },
+    "Hair": {
+      "color": "dark",
+      "length": "short",
+      "style": "neat"
+    },
+    "UpperBody": {
+      "owned_item_id": "suit_jacket_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "suit_pants_1"
+    },
+    "Feet": {
+      "owned_item_id": "oxford_shoes_1"
+    }
+  },
+  "athletic_woman": {
+    "gender": "woman",
+    "Face": {
+      "expression": "determined"
+    },
+    "Hair": {
+      "color": "black",
+      "length": "medium",
+      "style": "ponytail"
+    },
+    "UpperBody": {
+      "owned_item_id": "polo_shirt_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "tennis_skirt_1"
+    },
+    "Feet": {
+      "owned_item_id": "sneakers_1"
+    }
+  },
+  "artistic_teens": {
+    "gender": "person",
+    "Face": {
+      "expression": "thoughtful"
+    },
+    "Hair": {
+      "color": "auburn",
+      "length": "shoulder-length",
+      "style": "messy"
+    },
+    "UpperBody": {
+      "owned_item_id": "hoodie_2"
+    },
+    "LowerBody": {
+      "owned_item_id": "cargo_pants_2"
+    }
   }
 }

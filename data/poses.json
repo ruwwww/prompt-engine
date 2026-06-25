@@ -4,5 +4,17 @@
   },
   "sitting": {
     "hidden_zones": ["Feet"]
+  },
+  "arms_crossed": {
+    "hidden_zones": ["Hands"]
+  },
+  "reaching": {
+    "hidden_zones": []
+  },
+  "leaning": {
+    "hidden_zones": ["Feet"]
+  },
+  "kneeling": {
+    "hidden_zones": ["Feet"]
   }
 }

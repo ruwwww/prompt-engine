@@ -7,5 +7,23 @@
   },
   "golden_hour": {
     "template": "golden-hour"
+  },
+  "soft": {
+    "template": "soft diffused"
+  },
+  "studio": {
+    "template": "studio-lit"
+  },
+  "natural": {
+    "template": "naturally lit"
+  },
+  "dark": {
+    "template": "dimly lit"
+  },
+  "harsh": {
+    "template": "harshly lit"
+  },
+  "moonlight": {
+    "template": "moonlit"
   }
 }

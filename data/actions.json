@@ -170,7 +170,7 @@
         "actor": { "position": "pre", "required": true },
         "object": { "position": "post", "required": true, "prep": "" }
       },
-      "suffix": "near her eye"
+      "suffix": "near {_possessive} eye"
     },
     "clause": {
       "head": {
@@ -181,7 +181,7 @@
       "slots": {
         "object": { "position": "post", "required": true, "prep": "" }
       },
-      "suffix": "near her eye"
+      "suffix": "near {_possessive} eye"
     }
   }
 }

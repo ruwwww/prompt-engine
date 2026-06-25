@@ -690,7 +690,7 @@ class TestSlotDescriptors(unittest.TestCase):
             }
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("on a stormy dark beach", out)
+        self.assertIn("on a stormy dimly lit beach", out)
         self.assertNotIn("beach in", out)
     def test_action_slot_descriptor_realization(self):
         # Test that relationship slot descriptors from actions.json compile correctly
@@ -1223,5 +1223,174 @@ class TestCompositionApproach(unittest.TestCase):
         self.assertNotIn("oxford shoes", out_medium)
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+class TestNewEdgeCases(unittest.TestCase):
+    """Edge cases: contradictory scenes, empty data, pronoun correctness, new presets."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_empty_relationships_array(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {"h1": {"type": "human", "gender": "woman"}},
+            "relationships": []
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("woman", out)
+
+    def test_environment_with_missing_fields(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "man"},
+                "env1": {"type": "environment", "template_key": "nonexistent_env"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIsInstance(out, str)
+
+    def test_feet_visible_but_no_feet_data(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Face": {"expression": "smiling"}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("smiling", out)
+        self.assertIn("woman", out)
+
+    def test_invalid_tone_falls_back_to_default(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "tone": "nonexistent_tone",
+            "objects": {
+                "h1": {"type": "human", "gender": "man",
+                       "Face": {"expression": "confident"}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("man", out)
+
+    def test_malformed_json_raises_value_error(self):
+        import tempfile, os, json
+        tmpdir = tempfile.mkdtemp()
+        bad_path = os.path.join(tmpdir, "bad.json")
+        with open(bad_path, "w") as f:
+            f.write("{bad json content")
+        try:
+            compiler = PromptCompiler(data_dir=tmpdir)
+            with self.assertRaises(ValueError) as ctx:
+                compiler._load("bad.json", {})
+            self.assertIn("Malformed JSON", str(ctx.exception))
+        finally:
+            os.remove(bad_path)
+            os.rmdir(tmpdir)
+
+    def test_holding_near_eye_male_pronoun(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "man"},
+                "item1": {"type": "item", "template_key": "Sunglasses", "color": "black"}
+            },
+            "relationships": [
+                {"type": "holding_near_eye", "actor": "h1", "object": "item1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("his eye", out)
+
+    def test_holding_near_eye_female_pronoun(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman"},
+                "item1": {"type": "item", "template_key": "Sunglasses", "color": "black"}
+            },
+            "relationships": [
+                {"type": "holding_near_eye", "actor": "h1", "object": "item1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("her eye", out)
+
+    def test_new_persona_professional_man(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "persona": "professional_man"},
+                "suit_jacket_1": {"type": "clothing", "template_key": "SuitJacket", "color": "navy"},
+                "suit_pants_1": {"type": "clothing", "template_key": "SuitPants", "color": "navy"},
+                "oxford_shoes_1": {"type": "clothing", "template_key": "OxfordShoes", "color": "brown"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("man", out)
+        self.assertIn("navy suit jacket", out)
+
+    def test_new_persona_athletic_woman(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {
+                "h1": {"type": "human", "persona": "athletic_woman"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("woman", out)
+
+    def test_new_pose_arms_crossed_hides_hands(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "pose": "arms_crossed",
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hands": {"owned_item_id": "ring_1"}},
+                "ring_1": {"type": "accessory", "template_key": "Ring", "color": "gold"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertNotIn("gold ring", out)
+
+    def test_new_lighting_preset_soft(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "man"},
+                "env1": {"type": "environment", "template_key": "cafe", "lighting": "soft"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("soft diffused", out)
+
+    def test_new_weather_preset_foggy(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "render_profile": "cinematic",
+            "objects": {
+                "h1": {"type": "human", "gender": "man"},
+                "env1": {"type": "environment", "template_key": "forest", "weather": "foggy"}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("foggy", out)
+
+    def test_person_user_gender_uses_they_pronoun(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {"type": "human", "gender": "person"},
+                "item1": {"type": "item", "template_key": "Sunglasses", "color": "black"}
+            },
+            "relationships": [
+                {"type": "holding_near_eye", "actor": "h1", "object": "item1"}
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("their eye", out)

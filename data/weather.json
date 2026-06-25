@@ -4,5 +4,23 @@
   },
   "rainy": {
     "template": "rain-soaked"
+  },
+  "foggy": {
+    "template": "foggy"
+  },
+  "cloudy": {
+    "template": "overcast"
+  },
+  "breezy": {
+    "template": "breezy"
+  },
+  "snowy": {
+    "template": "snowy"
+  },
+  "stormy": {
+    "template": "stormy"
+  },
+  "windy": {
+    "template": "windy"
   }
 }

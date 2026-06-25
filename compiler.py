@@ -15,14 +15,8 @@ from typing import Optional
 def safe_format(template_str, context: dict) -> str:
     """Format a template string or slot descriptor, replacing missing keys with empty string
     and collapsing any resulting multi-spaces."""
-    # Resolve tone
-    tone = context.get("_tone")
-    if not tone:
-        compiler_cls = globals().get("PromptCompiler")
-        if compiler_cls and hasattr(compiler_cls, "active_tone"):
-            tone = compiler_cls.active_tone
-        else:
-            tone = "default"
+    # Resolve tone from context only (no global state)
+    tone = context.get("_tone", "default")
 
     def resolve_tone_value(val):
         if isinstance(val, dict):
@@ -115,6 +109,10 @@ def safe_format(template_str, context: dict) -> str:
         if "suffix" in template_str:
             suffix_val = resolve_tone_value(template_str["suffix"])
             if suffix_val:
+                # Resolve context placeholders in suffix (e.g. {_possessive})
+                for k, v in context.items():
+                    if k.startswith("_") and isinstance(v, str):
+                        suffix_val = suffix_val.replace("{" + k + "}", v)
                 parts.append(suffix_val)
         rendered = " ".join(parts)
         rendered = re.sub(r"\s+", " ", rendered).strip()
@@ -290,6 +288,7 @@ class AttributeCollectorSystem:
         scene_objects: dict,
         visible_zones: list,
         priority_fn,
+        active_tone: str = "default",
     ) -> list:
         candidates = []
         human_id = human_obj.id
@@ -313,7 +312,7 @@ class AttributeCollectorSystem:
                         frag_type="owned_item",
                         tags=meta.get("tags", []),
                         priority=priority_fn(meta.get("priority", 50), [human_id, owned_item_id]),
-                        text=safe_format(template, owned_item.components),
+                        text=safe_format(template, {**owned_item.components, "_tone": active_tone}),
                         actor_id=human_id,          # ← owner tag
                     ))
             else:
@@ -321,7 +320,7 @@ class AttributeCollectorSystem:
                 meta = self.metadata.get(meta_key, {"tags": [], "priority": 50})
                 template = self.templates.get(zone)
                 if template:
-                    ctx = {**zone_data, "gender": gender}
+                    ctx = {**zone_data, "gender": gender, "_tone": active_tone}
                     text = safe_format(template, ctx)
                     if text:
                         candidates.append(CandidateFragment(
@@ -406,11 +405,12 @@ class RelationshipSystem:
                 parts = [obj.get_component("material", ""), obj.get_component("color", ""), obj.type]
                 phrase = " ".join(p for p in parts if p).strip()
             
-            if not is_plural:
-                phrase = with_article(phrase)
-            else:
-                if not template:
-                    phrase = phrase + "s"
+            if phrase:
+                if not is_plural:
+                    phrase = with_article(phrase)
+                else:
+                    if not template:
+                        phrase = phrase + "s"
 
         placement = placements.get(obj_id)
         if placement:
@@ -425,6 +425,7 @@ class RelationshipSystem:
         visible_zones: list,
         priority_fn,
         mentioned_ids: set,
+        active_tone: str = "default",
     ) -> list:
         candidates = []
 
@@ -508,13 +509,22 @@ class RelationshipSystem:
             else:
                 track_actor_id = actor_id or ""
 
+            # Resolve actor possessive pronoun for gender-aware suffixes
+            _possessive = "her"
+            if track_actor_id:
+                _actor_obj = scene_objects.get(track_actor_id)
+                if _actor_obj:
+                    _actor_gender = _actor_obj.get_component("gender", "person")
+                    _possessive = "their" if _actor_gender == "person" else "his" if _actor_gender == "man" else "her"
+            role_phrases["_possessive"] = _possessive
+
             candidates.append(CandidateFragment(
                 zone="relationship",
                 frag_type="relationship",
                 tags=rel_def.get("tags", ["spatial" if is_spatial else "action"]),
                 priority=priority_fn(rel_def.get("priority", 50), related_ids),
-                text=safe_format(template, role_phrases),
-                clause_text=safe_format(clause_template, role_phrases),
+                text=safe_format(template, {**role_phrases, "_tone": active_tone}),
+                clause_text=safe_format(clause_template, {**role_phrases, "_tone": active_tone}),
                 actor_id=track_actor_id,
                 chain_order=rel_def.get("chain_order", 99),
             ))
@@ -829,7 +839,7 @@ class RenderSystem:
 
                 article = "An" if subject[0].lower() in "aeiou" else "A"
                 env_part = ""
-                if env_frag:
+                if env_frag and env_frag.text:
                     vowels = "aeiou"
                     env_art = "an" if env_frag.text[0].lower() in vowels else "a"
                     if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
@@ -854,7 +864,7 @@ class RenderSystem:
                     my_rels.sort(key=lambda r: r.chain_order)
                     chain = " ".join(r.clause_text for r in my_rels)
                     parts.append(chain)
-                if env_frag:
+                if env_frag and env_frag.text:
                     if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
@@ -957,8 +967,11 @@ class PromptCompiler:
     def _load(self, filename: str, default):
         path = os.path.join(self.data_dir, filename)
         if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except json.JSONDecodeError as e:
+                raise ValueError(f"Malformed JSON in '{filename}': {e}") from e
         return default
 
     def compile_scene(self, scene: dict, strict: bool = False) -> str:
@@ -1011,12 +1024,13 @@ class PromptCompiler:
         # For multi-character we use the primary human for attribute collection
         # (each human's attributes are collected separately and tagged by actor_id)
         mentioned_ids = {h.id for h in humans}
+        active_tone = PromptCompiler.active_tone
         candidates = []
         for human_obj in humans:
-            candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn)
+            candidates += self.attribute_system.collect(human_obj, scene_objects, visible_zones, priority_fn, active_tone)
 
         candidates += self.relationship_system.process(
-            scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn, mentioned_ids
+            scene.get("relationships", []), scene_objects, placements, visible_zones, priority_fn, mentioned_ids, active_tone
         )
 
         # Identify occupied objects to exclude from ambient environment listing
