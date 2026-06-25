@@ -1317,27 +1317,61 @@ class BodyConfigSystem:
 
         return fragments
 
-    def get_hidden_zones(self, config: dict) -> list:
-        """Determine which body zones are hidden by body config."""
+    def get_hidden_zones(self, config: dict, body_config_def: dict = None) -> list:
+        """Determine which body zones are hidden by body config.
+        
+        Args:
+            config: Normalized body config dict
+            body_config_def: Optional body config definition with occlusion_rules
+        """
         hidden = []
+        
+        # Check if body_config_def specifies custom occlusion rules
+        if body_config_def and "occlusion_rules" in body_config_def:
+            for rule in body_config_def["occlusion_rules"]:
+                condition = rule.get("condition", {})
+                zones = rule.get("hidden_zones", [])
+                if self._evaluate_occlusion_condition(condition, config):
+                    hidden.extend(zones)
+        else:
+            # Fallback: use hardcoded rules for backward compatibility
+            # Head turn hides eyes in profile
+            turn = config.get("head", {}).get("turn", "")
+            if turn in HEAD_TURN_FACE_HIDDEN:
+                hidden.extend(HEAD_TURN_FACE_HIDDEN[turn])
 
-        # Head turn hides eyes in profile
-        turn = config.get("head", {}).get("turn", "")
-        if turn in HEAD_TURN_FACE_HIDDEN:
-            hidden.extend(HEAD_TURN_FACE_HIDDEN[turn])
+            # Arms behind back hides hands
+            left_arm = config.get("arms", {}).get("left", "")
+            right_arm = config.get("arms", {}).get("right", "")
+            if left_arm in ARMS_HANDS_HIDDEN or right_arm in ARMS_HANDS_HIDDEN:
+                hidden.append("Hands")
 
-        # Arms behind back hides hands
-        left_arm = config.get("arms", {}).get("left", "")
-        right_arm = config.get("arms", {}).get("right", "")
-        if left_arm in ARMS_HANDS_HIDDEN or right_arm in ARMS_HANDS_HIDDEN:
-            hidden.append("Hands")
-
-        # Legs position hides feet
-        leg_pos = config.get("legs", {}).get("position", "")
-        if leg_pos in ("bent", "kneeling", "dangling"):
-            hidden.append("Feet")
+            # Legs position hides feet
+            leg_pos = config.get("legs", {}).get("position", "")
+            if leg_pos in ("bent", "kneeling", "dangling"):
+                hidden.append("Feet")
 
         return hidden
+
+    def _evaluate_occlusion_condition(self, condition: dict, config: dict) -> bool:
+        """Evaluate an occlusion condition against the body config."""
+        for part, required_values in condition.items():
+            part_config = config.get(part, {})
+            if isinstance(required_values, str):
+                # Single value: check if any sub-key matches
+                for sub_key, sub_val in part_config.items():
+                    if sub_val == required_values:
+                        return True
+            elif isinstance(required_values, dict):
+                # Dict of sub-key -> required value
+                match = True
+                for sub_key, sub_val in required_values.items():
+                    if part_config.get(sub_key) != sub_val:
+                        match = False
+                        break
+                if match:
+                    return True
+        return False
 
 
 # ---------------------------------------------------------------------------
