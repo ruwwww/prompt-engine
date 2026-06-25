@@ -281,6 +281,7 @@ class AttributeCollectorSystem:
     def __init__(self, metadata_db: dict, templates_db: dict):
         self.metadata = metadata_db
         self.templates = templates_db
+        self.hair_ontology = HairOntologySystem()
 
     def collect(
         self,
@@ -318,10 +319,11 @@ class AttributeCollectorSystem:
             else:
                 meta_key = "expression" if zone == "Face" else "hair" if zone == "Hair" else zone.lower()
                 meta = self.metadata.get(meta_key, {"tags": [], "priority": 50})
-                template = self.templates.get(zone)
-                if template:
-                    ctx = {**zone_data, "gender": gender, "_tone": active_tone}
-                    text = safe_format(template, ctx)
+
+                # Hair zone uses ontology renderer instead of flat template
+                if zone == "Hair":
+                    ontology = self.hair_ontology.normalize(zone_data)
+                    text = self.hair_ontology.render(ontology)
                     if text:
                         candidates.append(CandidateFragment(
                             zone=zone,
@@ -329,8 +331,22 @@ class AttributeCollectorSystem:
                             tags=meta.get("tags", []),
                             priority=priority_fn(meta.get("priority", 50), [human_id]),
                             text=text,
-                            actor_id=human_id,      # ← owner tag
+                            actor_id=human_id,
                         ))
+                else:
+                    template = self.templates.get(zone)
+                    if template:
+                        ctx = {**zone_data, "gender": gender, "_tone": active_tone}
+                        text = safe_format(template, ctx)
+                        if text:
+                            candidates.append(CandidateFragment(
+                                zone=zone,
+                                frag_type="native",
+                                tags=meta.get("tags", []),
+                                priority=priority_fn(meta.get("priority", 50), [human_id]),
+                                text=text,
+                                actor_id=human_id,
+                            ))
 
         # Body surface features (tattoos, scars, freckles, etc.)
         # Determine which zones are covered by clothing that suppresses body surface
@@ -364,6 +380,145 @@ class AttributeCollectorSystem:
                 ))
 
         return candidates
+
+
+# ---------------------------------------------------------------------------
+# System: HairOntologySystem
+# ---------------------------------------------------------------------------
+
+# Known arrangement types (hairdos)
+ARRANGEMENT_TYPES = {"bun", "ponytail", "braid", "updo", "twist", "dreadlocks", "cornrows", "pigtails", "buns"}
+
+# Known shape/style values
+SHAPE_VALUES = {"wavy", "straight", "curly", "coily", "kinky", "afro", "loose", "tousled"}
+
+# Hair regions scaffold
+HAIR_REGIONS = {"front", "back", "sides", "bangs"}
+
+
+def normalize_hair(raw: dict) -> dict:
+    """Normalize old flat format or new structured format to ontology schema.
+
+    Old format: {"color": "brown", "length": "long", "style": "wavy"}
+    New format: {"structure": {...}, "appearance": {...}, "arrangement": {...}, "state": [...], "regions": {...}}
+    """
+    # Check if already in new format
+    if "structure" in raw or "appearance" in raw or "arrangement" in raw or "state" in raw:
+        # Partial new format — merge with defaults
+        ontology = {
+            "structure": raw.get("structure", {}),
+            "appearance": raw.get("appearance", {}),
+            "arrangement": raw.get("arrangement", {"type": "loose"}),
+            "state": raw.get("state", []),
+            "regions": raw.get("regions", {r: True for r in HAIR_REGIONS}),
+        }
+        # Normalize nested keys
+        s = ontology["structure"]
+        if "length" not in s and "length" in raw:
+            s["length"] = raw["length"]
+        if "shape" not in s and "style" in raw:
+            s["shape"] = raw["style"]
+        a = ontology["appearance"]
+        if "color" not in a and "color" in raw:
+            a["color"] = raw["color"]
+        if "texture" not in a and "texture" in raw:
+            a["texture"] = raw["texture"]
+        if ontology["arrangement"].get("type") is None:
+            ontology["arrangement"]["type"] = "loose"
+        return ontology
+
+    # Old flat format — classify style into shape vs arrangement
+    style = raw.get("style", "")
+    if style.lower() in ARRANGEMENT_TYPES:
+        arrangement_type = style
+        shape = ""
+    else:
+        arrangement_type = "loose"
+        shape = style
+
+    ontology = {
+        "structure": {
+            "length": raw.get("length", ""),
+            "shape": shape,
+        },
+        "appearance": {
+            "color": raw.get("color", ""),
+            "texture": raw.get("texture", ""),
+        },
+        "arrangement": {
+            "type": arrangement_type,
+        },
+        "state": raw.get("state", []),
+        "regions": {r: True for r in HAIR_REGIONS},
+    }
+
+    # Preserve legacy top-level keys as pass-through for backward compat
+    ontology["_legacy"] = {k: v for k, v in raw.items() if k not in ("structure", "appearance", "arrangement", "state", "regions")}
+
+    return ontology
+
+
+def render_hair(ontology: dict) -> str:
+    """Render structured hair ontology to a natural language phrase.
+
+    Renders as: [state] [structure.length] [structure.shape] [appearance.color] [appearance.texture] hair
+    Arrangement modifies: "ponytail" -> "ponytail of ... hair" or "hair in a ponytail"
+    """
+    parts = []
+
+    # State words come first (wet, windblown, messy, etc.)
+    state = ontology.get("state", [])
+    if isinstance(state, str):
+        state = [state]
+    parts.extend(state)
+
+    # Structure: length + shape
+    structure = ontology.get("structure", {})
+    if isinstance(structure, dict):
+        length = structure.get("length", "")
+        shape = structure.get("shape", "")
+        if length:
+            parts.append(length)
+        if shape:
+            parts.append(shape)
+
+    # Appearance: color + texture
+    appearance = ontology.get("appearance", {})
+    if isinstance(appearance, dict):
+        color = appearance.get("color", "")
+        texture = appearance.get("texture", "")
+        if color:
+            parts.append(color)
+        if texture:
+            parts.append(texture)
+
+    # Arrangement modifies the construction
+    arrangement = ontology.get("arrangement", {})
+    arr_type = arrangement.get("type", "loose") if isinstance(arrangement, dict) else "loose"
+
+    base = " ".join(p for p in parts if p) + " hair" if parts else "hair"
+
+    if arr_type and arr_type != "loose":
+        # "ponytail of long wavy brown hair" or "hair in a ponytail"
+        base = f"{arr_type} of {base}"
+
+    return base
+
+
+class HairOntologySystem:
+    """Normalizes hair data from any format and renders structured hair description."""
+
+    ARRANGEMENT_TYPES = ARRANGEMENT_TYPES
+    SHAPE_VALUES = SHAPE_VALUES
+    HAIR_REGIONS = HAIR_REGIONS
+
+    def normalize(self, raw: dict) -> dict:
+        """Normalize hair data to ontology schema."""
+        return normalize_hair(raw)
+
+    def render(self, ontology: dict) -> str:
+        """Render normalized hair ontology to text."""
+        return render_hair(ontology)
 
 
 # ---------------------------------------------------------------------------

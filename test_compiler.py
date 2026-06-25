@@ -148,6 +148,150 @@ class TestAttributeComposition(unittest.TestCase):
         self.assertIn("cargo pants", out)
 
 
+class TestHairOntology(unittest.TestCase):
+    """Stage 7 — Hair Ontology Refactor tests."""
+
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_basic_hair_renders_correctly(self):
+        """Old format still renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "dark brown", "length": "long", "style": "wavy"}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy dark brown hair", out)
+
+    def test_hair_with_state_windblown(self):
+        """State words render before structure."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "dark brown", "length": "long", "style": "wavy",
+                                "state": ["windblown"]}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("windblown long wavy dark brown hair", out)
+
+    def test_hair_wet_pool_scene(self):
+        """Wet state for pool scene."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "dark brown", "length": "long",
+                                "state": ["wet"]}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("wet long dark brown hair", out)
+
+    def test_hair_backward_compat_old_format(self):
+        """Old format with style key still works."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "brown", "length": "long", "style": "wavy"}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy brown hair", out)
+
+    def test_hair_new_format_structure(self):
+        """New format with structure/appearance."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "structure": {"length": "shoulder-length", "shape": "curly"},
+                           "appearance": {"color": "auburn"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("shoulder-length curly auburn hair", out)
+
+    def test_hair_new_format_arrangement(self):
+        """Arrangement type renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "structure": {"length": "long", "shape": "straight"},
+                           "appearance": {"color": "black"},
+                           "arrangement": {"type": "ponytail"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("ponytail of long straight black hair", out)
+
+    def test_hair_new_format_texture(self):
+        """Texture renders in appearance."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "structure": {"length": "long", "shape": "wavy"},
+                           "appearance": {"color": "blonde", "texture": "silky"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy blonde silky hair", out)
+
+    def test_hair_multiple_states(self):
+        """Multiple states render in order."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "structure": {"length": "long", "shape": "wavy"},
+                           "appearance": {"color": "brown"},
+                           "state": ["wet", "messy"]
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("wet messy long wavy brown hair", out)
+
+    def test_hair_backward_compat_style_as_arrangement(self):
+        """Old format style='ponytail' maps to arrangement."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "black", "length": "long", "style": "ponytail"}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("ponytail of long black hair", out)
+
+    def test_hair_empty_state_renders_normally(self):
+        """Empty state list doesn't affect output."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {"color": "brown", "length": "short", "style": "straight",
+                                "state": []}}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("short straight brown hair", out)
+
+
 class TestRelationships(unittest.TestCase):
     """Stage 4 — Actions, interactions, variants, visibility"""
 
