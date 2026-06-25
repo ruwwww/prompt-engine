@@ -291,6 +291,149 @@ class TestHairOntology(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("short straight brown hair", out)
 
+    def test_hair_color_balayage(self):
+        """Balayage technique renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "color": {"base": "brown", "technique": "balayage", "secondary": "caramel"},
+                           "structure": {"length": "long", "shape": "wavy"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy brown balayage with caramel hair", out)
+
+    def test_hair_color_highlights(self):
+        """Highlights technique renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "color": {"base": "dark brown", "technique": "highlights", "secondary": "honey blonde"},
+                           "structure": {"length": "shoulder-length", "shape": "straight"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("shoulder-length straight honey blonde highlights on dark brown hair", out)
+
+    def test_hair_color_fashion_vibrancy(self):
+        """Fashion vibrancy prefix renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "color": {"base": "pink", "vibrancy": "pastel"},
+                           "structure": {"length": "short", "shape": "straight"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("short straight pastel pink hair", out)
+
+    def test_hair_arrangement_ponytail_position(self):
+        """Arrangement with position renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "arrangement": {"type": "ponytail", "position": "high"},
+                           "structure": {"length": "long", "shape": "straight"},
+                           "color": {"base": "black"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("ponytail of long straight black hair", out)
+
+    def test_hair_arrangement_braids_with_accessories(self):
+        """Arrangement with accessories renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "arrangement": {
+                               "primary": {"type": "box_braids", "length": "waist"},
+                               "accessories": ["gold cuffs"]
+                           },
+                           "color": {"base": "black"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("box_braids of waist black hair with gold cuffs", out)
+
+    def test_hair_cultural_locs(self):
+        """Cultural style (locs) renders correctly."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "cultural": {"style_type": "locs", "subtype": "traditional"},
+                           "color": {"base": "black"},
+                           "arrangement": {"primary": {"type": "locs", "length": "long"}}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("locs of long black hair", out)
+
+    def test_hair_texture_strand_density(self):
+        """Texture with strand and density (structural, not rendered)."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "texture": {"curl_pattern": "coily", "density": "thick", "strand": "fine"},
+                           "color": {"base": "black"},
+                           "arrangement": {"primary": {"type": "locs", "length": "waist"}}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        # curl_pattern is rendered, but density/strand are structural
+        self.assertIn("locs of waist coily black hair", out)
+
+    def test_hair_appearance_sheen_silky(self):
+        """Appearance sheen renders when not 'natural'."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "appearance": {"sheen": "silky", "condition": "healthy"},
+                           "color": {"base": "blonde"},
+                           "structure": {"length": "long", "shape": "straight"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long straight blonde silky hair", out)
+
+    def test_hair_backward_compat_partial_new_format(self):
+        """Partial new format with structure/appearance still works."""
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {
+                "h1": {"type": "human", "gender": "woman",
+                       "Hair": {
+                           "structure": {"length": "long", "shape": "wavy"},
+                           "appearance": {"color": "brown"}
+                       }}
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("long wavy brown hair", out)
+
 
 class TestRelationships(unittest.TestCase):
     """Stage 4 — Actions, interactions, variants, visibility"""

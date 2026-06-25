@@ -386,133 +386,439 @@ class AttributeCollectorSystem:
 # System: HairOntologySystem
 # ---------------------------------------------------------------------------
 
-# Known arrangement types (hairdos)
-ARRANGEMENT_TYPES = {"bun", "ponytail", "braid", "updo", "twist", "dreadlocks", "cornrows", "pigtails", "buns"}
+# --- Texture: physical hair properties ---
+CURL_PATTERNS = {"straight", "wavy", "curly", "coily", "kinky"}
+DENSITY_VALUES = {"thin", "medium", "thick"}
+STRAND_VALUES = {"fine", "medium", "coarse"}
+POROSITY_VALUES = {"low", "normal", "high"}
 
-# Known shape/style values
-SHAPE_VALUES = {"wavy", "straight", "curly", "coily", "kinky", "afro", "loose", "tousled"}
+# --- Color: technique-aware structure ---
+COLOR_TECHNIQUES = {
+    "none", "balayage", "ombre", "sombre", "highlights", "lowlights",
+    "money_piece", "babylights", "color_melt", "peekaboo",
+    "root_smudge", "frosting", "dip_dye",
+}
+COLOR_VIBRANCY = {"natural", "fashion", "pastel", "neon"}
+COLOR_PLACEMENT = {
+    "all_over", "lengths_and_ends", "roots", "money_piece",
+    "peekaboo", "underneath", "face_framing",
+}
+
+# --- Arrangement: typed hierarchy ---
+ARRANGEMENT_TYPES = {
+    # Loose / simple
+    "loose", "down", "tousled",
+    # Tied
+    "ponytail", "half_up_half_down",
+    # Buns
+    "bun", "top_knot", "chignon", "ballerina_bun", "messy_bun", "donut_bun",
+    "space_buns", "double_buns",
+    # Braids
+    "braid", "three_strand_braid", "french_braid", "dutch_braid",
+    "fishtail_braid", "boxer_braids", "crown_braid",
+    "double_dutch_braids", "triple_braid",
+    # Cultural / textured
+    "locs", "starter_locs", "traditional_locs", "freeform_locs", "sisterlocks",
+    "twists", "two_strand_twists", "flat_twists", "senegalese_twists", "marley_twists",
+    "box_braids", "knotless_braids", "cornrows", "faux_locs",
+    "protective_style",
+}
+
+ARRANGEMENT_POSITIONS = {"high", "mid", "low", "side", "nape", "top", "crown"}
+
+# --- Appearance: visual qualities ---
+SHEEN_VALUES = {"matte", "natural", "silky", "glossy"}
+CONDITION_VALUES = {"healthy", "dry", "damaged", "chemically_treated", "freshly_cut"}
+
+# --- State: temporary conditions ---
+HAIR_STATES = {
+    "wet", "dry", "frizzy", "flat", "static", "humidity_affected",
+    "freshly_washed", "second_day", "heat_styled", "air_dried",
+    "windblown", "tousled", "messy", "freshly_done", "bed_head",
+}
+
+# --- Cultural specificity ---
+CULTURAL_STYLE_TYPES = {"locs", "twists", "protective_style", "natural", "treated"}
+CULTURAL_SUBTYPES = {
+    # Locs
+    "starter", "traditional", "freeform", "sisterlocks", "comb_coils",
+    # Twists
+    "two_strand", "flat", "senegalese", "marley",
+    # Protective
+    "box_braids", "knotless_braids", "cornrows", "faux_locs", "goddess_locs",
+    # Natural
+    "wash_and_go", "twist_out", "braid_out", "bantu_knots", "puff",
+}
+CULTURAL_STAGES = {"new", "mature", "growing"}
+CULTURAL_TREATMENTS = {"rebonded", "permed", "straightened", "relaxed", "texturized"}
 
 # Hair regions scaffold
 HAIR_REGIONS = {"front", "back", "sides", "bangs"}
+
+
+def _is_arrangement_type(val: str) -> bool:
+    """Check if a value is a known arrangement type."""
+    return val.lower().replace(" ", "_").replace("-", "_") in ARRANGEMENT_TYPES
 
 
 def normalize_hair(raw: dict) -> dict:
     """Normalize old flat format or new structured format to ontology schema.
 
     Old format: {"color": "brown", "length": "long", "style": "wavy"}
-    New format: {"structure": {...}, "appearance": {...}, "arrangement": {...}, "state": [...], "regions": {...}}
+    Previous new format: {"structure": {...}, "appearance": {...}}
+    Current new format: {"texture": {...}, "color": {...}, "arrangement": {...}, ...}
     """
-    # Check if already in new format
-    if "structure" in raw or "appearance" in raw or "arrangement" in raw or "state" in raw:
-        # Partial new format — merge with defaults
-        ontology = {
-            "structure": raw.get("structure", {}),
-            "appearance": raw.get("appearance", {}),
-            "arrangement": raw.get("arrangement", {"type": "loose"}),
-            "state": raw.get("state", []),
-            "regions": raw.get("regions", {r: True for r in HAIR_REGIONS}),
-        }
-        # Normalize nested keys
-        s = ontology["structure"]
-        if "length" not in s and "length" in raw:
-            s["length"] = raw["length"]
-        if "shape" not in s and "style" in raw:
-            s["shape"] = raw["style"]
-        a = ontology["appearance"]
-        if "color" not in a and "color" in raw:
-            a["color"] = raw["color"]
-        if "texture" not in a and "texture" in raw:
-            a["texture"] = raw["texture"]
-        if ontology["arrangement"].get("type") is None:
-            ontology["arrangement"]["type"] = "loose"
-        return ontology
+    # Check if already in new format (any new key present)
+    has_new_keys = any(k in raw for k in ("texture", "arrangement", "appearance", "cultural"))
+    has_prev_new_keys = any(k in raw for k in ("structure",))
 
-    # Old flat format — classify style into shape vs arrangement
-    style = raw.get("style", "")
-    if style.lower() in ARRANGEMENT_TYPES:
-        arrangement_type = style
-        shape = ""
+    if has_new_keys or has_prev_new_keys:
+        ontology = _normalize_new_format(raw)
     else:
-        arrangement_type = "loose"
-        shape = style
+        ontology = _normalize_old_format(raw)
+
+    # Ensure regions scaffold
+    if "regions" not in ontology:
+        ontology["regions"] = {r: True for r in HAIR_REGIONS}
+
+    return ontology
+
+
+def _normalize_new_format(raw: dict) -> dict:
+    """Handle partial new-format input, merging with old keys for compatibility.
+
+    Supports both:
+    - Previous new format: {"structure": {length, shape}, "appearance": {color, texture}}
+    - Current new format: {"texture": {curl_pattern, ...}, "color": {base, ...}, ...}
+    """
+    ontology = {}
+
+    # Texture (physical properties)
+    # Support old "structure" format as well
+    texture = raw.get("texture", {})
+    structure = raw.get("structure", {})
+    if isinstance(texture, dict):
+        ontology["texture"] = {
+            "curl_pattern": texture.get("curl_pattern", "") or structure.get("shape", ""),
+            "density": texture.get("density", ""),
+            "strand": texture.get("strand", ""),
+            "porosity": texture.get("porosity", ""),
+        }
+    else:
+        ontology["texture"] = {
+            "curl_pattern": structure.get("shape", ""),
+            "density": "",
+            "strand": "",
+            "porosity": "",
+        }
+
+    # Color (technique-aware structure)
+    # Support old "appearance.color" format
+    color = raw.get("color", {})
+    appearance = raw.get("appearance", {})
+    if isinstance(color, str):
+        ontology["color"] = {"base": color, "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
+    elif isinstance(color, dict) and color.get("base"):
+        # New format with structured color
+        ontology["color"] = {
+            "base": color.get("base", ""),
+            "technique": color.get("technique", "none"),
+            "secondary": color.get("secondary", ""),
+            "placement": color.get("placement", "all_over"),
+            "vibrancy": color.get("vibrancy", "natural"),
+        }
+    elif isinstance(appearance, dict) and appearance.get("color"):
+        # Old format: appearance.color
+        ontology["color"] = {"base": appearance["color"], "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
+    else:
+        ontology["color"] = {"base": "", "technique": "none", "secondary": "", "placement": "all_over", "vibrancy": "natural"}
+
+    # Arrangement (typed hierarchy)
+    # Support old "structure.length" for length
+    arrangement = raw.get("arrangement", {})
+    if isinstance(arrangement, str):
+        ontology["arrangement"] = {
+            "primary": {"type": arrangement, "position": "", "subtype": "", "length": structure.get("length", ""), "thickness": ""},
+            "secondary": "",
+            "accessories": [],
+        }
+    elif isinstance(arrangement, dict):
+        primary = arrangement.get("primary", arrangement)
+        if isinstance(primary, str):
+            primary = {"type": primary, "position": "", "subtype": "", "length": "", "thickness": ""}
+        ontology["arrangement"] = {
+            "primary": {
+                "type": primary.get("type", "loose"),
+                "position": primary.get("position", ""),
+                "subtype": primary.get("subtype", ""),
+                "length": primary.get("length", "") or structure.get("length", ""),
+                "thickness": primary.get("thickness", ""),
+            },
+            "secondary": arrangement.get("secondary", ""),
+            "accessories": arrangement.get("accessories", []),
+        }
+    else:
+        ontology["arrangement"] = {
+            "primary": {"type": "loose", "position": "", "subtype": "", "length": structure.get("length", ""), "thickness": ""},
+            "secondary": "",
+            "accessories": [],
+        }
+
+    # Appearance (visual qualities)
+    # Support old "appearance.texture" -> sheen
+    if isinstance(appearance, dict):
+        ontology["appearance"] = {
+            "sheen": appearance.get("sheen", "") or appearance.get("texture", ""),
+            "condition": appearance.get("condition", ""),
+        }
+    else:
+        ontology["appearance"] = {"sheen": "", "condition": ""}
+
+    # State (temporary conditions)
+    state = raw.get("state", [])
+    if isinstance(state, str):
+        state = [state]
+    ontology["state"] = state
+
+    # Cultural specificity
+    cultural = raw.get("cultural", {})
+    if isinstance(cultural, dict):
+        ontology["cultural"] = {
+            "style_type": cultural.get("style_type", ""),
+            "subtype": cultural.get("subtype", ""),
+            "stage": cultural.get("stage", ""),
+            "treatment": cultural.get("treatment", ""),
+        }
+    else:
+        ontology["cultural"] = {"style_type": "", "subtype": "", "stage": "", "treatment": ""}
+
+    # Fill in from old-format keys for backward compat
+    _backfill_from_legacy(ontology, raw)
+
+    return ontology
+
+
+def _normalize_old_format(raw: dict) -> dict:
+    """Convert old flat {color, length, style, texture} to new ontology."""
+    style = raw.get("style", "")
+
+    # Classify style: is it an arrangement or a curl pattern?
+    if _is_arrangement_type(style):
+        arr_type = style
+        curl_pattern = ""
+    elif style.lower() in CURL_PATTERNS:
+        arr_type = "loose"
+        curl_pattern = style
+    else:
+        arr_type = "loose"
+        curl_pattern = style  # preserve unknown values
 
     ontology = {
-        "structure": {
-            "length": raw.get("length", ""),
-            "shape": shape,
+        "texture": {
+            "curl_pattern": curl_pattern,
+            "density": raw.get("density", ""),
+            "strand": raw.get("strand", raw.get("strand_thickness", "")),
+            "porosity": raw.get("porosity", ""),
         },
-        "appearance": {
-            "color": raw.get("color", ""),
-            "texture": raw.get("texture", ""),
+        "color": {
+            "base": raw.get("color", ""),
+            "technique": raw.get("technique", "none"),
+            "secondary": raw.get("secondary_color", ""),
+            "placement": raw.get("placement", "all_over"),
+            "vibrancy": raw.get("vibrancy", "natural"),
         },
         "arrangement": {
-            "type": arrangement_type,
+            "primary": {
+                "type": arr_type,
+                "position": raw.get("position", ""),
+                "subtype": raw.get("subtype", ""),
+                "length": raw.get("length", ""),
+                "thickness": raw.get("thickness", ""),
+            },
+            "secondary": raw.get("half_up", ""),
+            "accessories": raw.get("accessories", []),
+        },
+        "appearance": {
+            "sheen": raw.get("sheen", raw.get("texture", "")),  # old "texture" -> sheen
+            "condition": raw.get("condition", ""),
         },
         "state": raw.get("state", []),
+        "cultural": {
+            "style_type": raw.get("style_type", ""),
+            "subtype": raw.get("cultural_subtype", ""),
+            "stage": raw.get("stage", ""),
+            "treatment": raw.get("treatment", ""),
+        },
         "regions": {r: True for r in HAIR_REGIONS},
     }
 
-    # Preserve legacy top-level keys as pass-through for backward compat
-    ontology["_legacy"] = {k: v for k, v in raw.items() if k not in ("structure", "appearance", "arrangement", "state", "regions")}
-
     return ontology
+
+
+def _backfill_from_legacy(ontology: dict, raw: dict) -> None:
+    """Fill in new-format fields from old-format keys for partial new input."""
+    # If texture is empty but old keys exist
+    tex = ontology["texture"]
+    if not tex["curl_pattern"] and "style" in raw:
+        if raw["style"].lower() in CURL_PATTERNS:
+            tex["curl_pattern"] = raw["style"]
+    if not tex["density"] and "density" in raw:
+        tex["density"] = raw["density"]
+    if not tex["strand"] and "strand" in raw:
+        tex["strand"] = raw["strand"]
+    if not tex["strand"] and "strand_thickness" in raw:
+        tex["strand"] = raw["strand_thickness"]
+
+    # Color backfill
+    col = ontology["color"]
+    if not col["base"] and "color" in raw:
+        col["base"] = raw["color"] if isinstance(raw["color"], str) else ""
+    if col["technique"] == "none" and "technique" in raw:
+        col["technique"] = raw["technique"]
+    if not col["secondary"] and "secondary_color" in raw:
+        col["secondary"] = raw["secondary_color"]
+
+    # Arrangement backfill
+    arr = ontology["arrangement"]["primary"]
+    if arr["type"] == "loose" and "style" in raw:
+        if _is_arrangement_type(raw["style"]):
+            arr["type"] = raw["style"]
+    if not arr["length"] and "length" in raw:
+        arr["length"] = raw["length"]
+    if not arr["position"] and "position" in raw:
+        arr["position"] = raw["position"]
+
+    # Appearance backfill
+    app = ontology["appearance"]
+    if not app["sheen"]:
+        if "texture" in raw and isinstance(raw["texture"], str):
+            app["sheen"] = raw["texture"]
+        elif "sheen" in raw:
+            app["sheen"] = raw["sheen"]
 
 
 def render_hair(ontology: dict) -> str:
     """Render structured hair ontology to a natural language phrase.
 
-    Renders as: [state] [structure.length] [structure.shape] [appearance.color] [appearance.texture] hair
-    Arrangement modifies: "ponytail" -> "ponytail of ... hair" or "hair in a ponytail"
+    Rendering order: state + length + curl_pattern + color + sheen + hair
+    Arrangement modifies: "ponytail of ... hair"
     """
     parts = []
 
-    # State words come first (wet, windblown, messy, etc.)
+    # --- State words first (wet, windblown, frizzy, etc.) ---
     state = ontology.get("state", [])
     if isinstance(state, str):
         state = [state]
     parts.extend(state)
 
-    # Structure: length + shape
-    structure = ontology.get("structure", {})
-    if isinstance(structure, dict):
-        length = structure.get("length", "")
-        shape = structure.get("shape", "")
-        if length:
-            parts.append(length)
-        if shape:
-            parts.append(shape)
+    # --- Length (from arrangement.primary.length) ---
+    arrangement = ontology.get("arrangement", {})
+    if isinstance(arrangement, dict):
+        primary = arrangement.get("primary", {})
+        if isinstance(primary, dict):
+            length = primary.get("length", "")
+            if length:
+                parts.append(length)
 
-    # Appearance: color + texture
+    # --- Texture (curl pattern only for rendering) ---
+    texture = ontology.get("texture", {})
+    if isinstance(texture, dict):
+        curl = texture.get("curl_pattern", "")
+        if curl and curl not in parts:
+            parts.append(curl)
+
+    # --- Color ---
+    color = ontology.get("color", {})
+    if isinstance(color, dict):
+        color_str = _render_color(color)
+        if color_str:
+            parts.append(color_str)
+
+    # --- Appearance (sheen only; condition is structural detail) ---
     appearance = ontology.get("appearance", {})
     if isinstance(appearance, dict):
-        color = appearance.get("color", "")
-        texture = appearance.get("texture", "")
-        if color:
-            parts.append(color)
-        if texture:
-            parts.append(texture)
+        sheen = appearance.get("sheen", "")
+        if sheen and sheen not in ("natural", ""):
+            parts.append(sheen)
 
-    # Arrangement modifies the construction
-    arrangement = ontology.get("arrangement", {})
-    arr_type = arrangement.get("type", "loose") if isinstance(arrangement, dict) else "loose"
-
+    # --- Build base phrase ---
     base = " ".join(p for p in parts if p) + " hair" if parts else "hair"
 
-    if arr_type and arr_type != "loose":
-        # "ponytail of long wavy brown hair" or "hair in a ponytail"
-        base = f"{arr_type} of {base}"
+    # --- Arrangement modifies construction ---
+    if isinstance(arrangement, dict):
+        primary = arrangement.get("primary", {})
+        if isinstance(primary, dict):
+            arr_type = primary.get("type", "loose")
+            if arr_type and arr_type not in ("loose", "down"):
+                base = f"{arr_type} of {base}"
+
+            # Accessories append
+            accessories = arrangement.get("accessories", [])
+            if accessories:
+                acc_str = " with " + ", ".join(accessories)
+                base = base + acc_str
 
     return base
+
+
+def _render_color(color: dict) -> str:
+    """Render color structure to a natural language phrase."""
+    base = color.get("base", "")
+    technique = color.get("technique", "none")
+    secondary = color.get("secondary", "")
+    vibrancy = color.get("vibrancy", "natural")
+
+    # Fashion/pastel/neon prefix
+    prefix = ""
+    if vibrancy in ("fashion", "pastel", "neon"):
+        prefix = f"{vibrancy} " if vibrancy != "fashion" else ""
+
+    if technique == "none" or not technique:
+        return f"{prefix}{base}".strip() if base else ""
+
+    # Technique-based rendering
+    if technique in ("balayage", "ombre", "sombre") and secondary:
+        return f"{prefix}{base} {technique} with {secondary}".strip()
+    elif technique in ("highlights", "lowlights", "babylights") and secondary:
+        return f"{prefix}{secondary} {technique} on {base}".strip()
+    elif technique == "money_piece" and secondary:
+        return f"{prefix}{base} with {secondary} money piece".strip()
+    elif technique == "peekaboo" and secondary:
+        return f"{prefix}{base} with {secondary} peekaboo".strip()
+    elif technique == "color_melt" and secondary:
+        return f"{prefix}{base} to {secondary} color melt".strip()
+    else:
+        return f"{prefix}{base}".strip() if base else ""
 
 
 class HairOntologySystem:
     """Normalizes hair data from any format and renders structured hair description."""
 
+    CURL_PATTERNS = CURL_PATTERNS
+    DENSITY_VALUES = DENSITY_VALUES
+    STRAND_VALUES = STRAND_VALUES
+    POROSITY_VALUES = POROSITY_VALUES
+    COLOR_TECHNIQUES = COLOR_TECHNIQUES
+    COLOR_VIBRANCY = COLOR_VIBRANCY
+    COLOR_PLACEMENT = COLOR_PLACEMENT
     ARRANGEMENT_TYPES = ARRANGEMENT_TYPES
-    SHAPE_VALUES = SHAPE_VALUES
+    ARRANGEMENT_POSITIONS = ARRANGEMENT_POSITIONS
+    SHEEN_VALUES = SHEEN_VALUES
+    CONDITION_VALUES = CONDITION_VALUES
+    HAIR_STATES = HAIR_STATES
+    CULTURAL_STYLE_TYPES = CULTURAL_STYLE_TYPES
+    CULTURAL_SUBTYPES = CULTURAL_SUBTYPES
+    CULTURAL_STAGES = CULTURAL_STAGES
+    CULTURAL_TREATMENTS = CULTURAL_TREATMENTS
     HAIR_REGIONS = HAIR_REGIONS
 
     def normalize(self, raw: dict) -> dict:
+        """Normalize hair data to ontology schema."""
+        return normalize_hair(raw)
+
+    def render(self, ontology: dict) -> str:
+        """Render normalized hair ontology to text."""
+        return render_hair(ontology)
         """Normalize hair data to ontology schema."""
         return normalize_hair(raw)
 
