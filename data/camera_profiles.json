@@ -1,0 +1,5 @@
+{
+  "close_up": ["Face", "Eyes", "Hair", "Tusks", "Ears", "Jaw", "Headwear"],
+  "medium": ["Face", "Eyes", "Hair", "Tusks", "Ears", "Jaw", "Headwear", "UpperBody", "Hands"],
+  "full_body": ["Face", "Eyes", "Hair", "Tusks", "Ears", "Jaw", "Headwear", "UpperBody", "Hands", "LowerBody", "Feet"]
+}
