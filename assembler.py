@@ -169,6 +169,19 @@ def resolve_blueprint(
             else:
                 components[comp_key] = comp_val
 
+        # Auto-create scene objects for subject preset owned_item_id references
+        for zone, zone_data in components.items():
+            if isinstance(zone_data, dict) and "owned_item_id" in zone_data:
+                item_id = zone_data["owned_item_id"]
+                if item_id not in scene_objects:
+                    base_name = re.sub(r"_\d+$", "", item_id)
+                    template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                    scene_objects[item_id] = {
+                        "id": item_id,
+                        "type": "clothing",
+                        "template_key": template_key,
+                    }
+
     attire_name = components.get("attire")
     if attire_name and attire_name in attires_db:
         attire = attires_db[attire_name]
@@ -201,7 +214,8 @@ def resolve_blueprint(
 def apply_delta(components: dict, user_overrides: dict) -> dict:
     """Apply user overrides on top of resolved blueprint.
     Returns a NEW dict (no mutation of input).
-    Dot-notation keys like "Face.expression" are supported."""
+    Dot-notation keys like "Face.expression" are supported.
+    Dict overrides are MERGED (not replaced) to preserve owned_item_id."""
     result = json.loads(json.dumps(components))
 
     for key_path, value in user_overrides.items():
@@ -211,7 +225,11 @@ def apply_delta(components: dict, user_overrides: dict) -> dict:
             if part not in current:
                 current[part] = {}
             current = current[part]
-        current[parts[-1]] = value
+        # Merge dicts instead of replacing to preserve owned_item_id
+        if isinstance(current.get(parts[-1]), dict) and isinstance(value, dict):
+            current[parts[-1]].update(value)
+        else:
+            current[parts[-1]] = value
 
     return result
 
@@ -229,15 +247,23 @@ def resolve_references(components: dict, scene_objects: dict) -> dict:
         if not isinstance(zone_data, dict):
             continue
         item_id = zone_data.get("owned_item_id")
-        if item_id and item_id in scene_objects:
-            item = scene_objects[item_id]
-            item_components = {k: v for k, v in item.items() if k not in ("type", "id")}
-            resolved = dict(item_components)
-            for k, v in zone_data.items():
-                if k != "owned_item_id":
-                    resolved[k] = v
-            resolved["template_key"] = item.get("template_key", zone)
-            result[zone] = resolved
+        if item_id:
+            if item_id in scene_objects:
+                item = scene_objects[item_id]
+                item_components = {k: v for k, v in item.items() if k not in ("type", "id")}
+                resolved = dict(item_components)
+                for k, v in zone_data.items():
+                    if k != "owned_item_id" and k != "template_key":
+                        resolved[k] = v
+                if "template_key" not in resolved:
+                    resolved["template_key"] = item.get("template_key", zone)
+                result[zone] = resolved
+            else:
+                base_name = re.sub(r"_\d+$", "", item_id)
+                template_key = "".join(w.capitalize() for w in base_name.split("_"))
+                resolved = {k: v for k, v in zone_data.items() if k != "owned_item_id"}
+                resolved["template_key"] = template_key
+                result[zone] = resolved
 
     return result
 
@@ -356,23 +382,49 @@ def _get_noun_phrase(
 
     if obj_type in ("human", "creature"):
         gender = obj.get("gender", "person")
-        if gender == "woman":
-            return "she" if entity_id in mentioned_ids else "a woman"
-        elif gender == "man":
-            return "he" if entity_id in mentioned_ids else "a man"
+        if entity_id in mentioned_ids:
+            if gender == "woman":
+                return "she"
+            elif gender == "man":
+                return "he"
+            else:
+                return "they"
         else:
-            return "they" if entity_id in mentioned_ids else "a person"
+            if gender == "woman":
+                return "a woman"
+            elif gender == "man":
+                return "a man"
+            else:
+                return "a person"
+
+    if entity_id in mentioned_ids:
+        # Reuse previously mentioned entity
+        template_key = obj.get("template_key")
+        if template_key and template_key in templates_db:
+            return safe_format(templates_db[template_key], obj)
+        parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
+        phrase = " ".join(p for p in parts if p).strip()
+        return phrase if phrase else entity_id
+
+    mentioned_ids.add(entity_id)
 
     template_key = obj.get("template_key")
     if template_key and template_key in templates_db:
-        template = templates_db[template_key]
-        article = "a" if obj_type != "clothing" else "a"
-        rendered = safe_format(template, obj)
-        if entity_id in mentioned_ids:
-            return rendered
-        return f"{article} {rendered}"
+        phrase = safe_format(templates_db[template_key], obj)
+    else:
+        # Fallback: material + color + type
+        parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
+        phrase = " ".join(p for p in parts if p).strip()
+        if not phrase:
+            phrase = entity_id
 
-    return entity_id
+    # Add article for non-plural
+    if phrase and not phrase.startswith(("a ", "an ", "the ")):
+        first_char = phrase[0].lower()
+        article = "an" if first_char in "aeiou" else "a"
+        phrase = f"{article} {phrase}"
+
+    return phrase
 
 
 # ---------------------------------------------------------------------------
@@ -508,8 +560,13 @@ def filter_by_camera(
 
     result = {}
     for zone, data in components.items():
-        if zone in included:
-            result[zone] = data
+        if zone not in included:
+            continue
+        if isinstance(data, dict):
+            vis_tags = data.get("visibility_tags")
+            if vis_tags and camera_framing not in vis_tags:
+                continue
+        result[zone] = data
 
     return result
 
@@ -536,14 +593,20 @@ def render_to_text(
         if zone in ("gender", "subject", "attire", "morphology"):
             continue
 
-        priority = attribute_metadata_db.get(zone.lower(), {}).get("priority", 50)
-        tags = attribute_metadata_db.get(zone.lower(), {}).get("tags", ["identity"])
+        metadata_key = zone_data.get("metadata_key", zone.lower())
+        priority = attribute_metadata_db.get(metadata_key, {}).get("priority", 50)
+        tags = attribute_metadata_db.get(metadata_key, {}).get("tags", ["identity"])
 
-        template = templates_db.get(zone)
+        template_key = zone_data.get("template_key", zone)
+        template = templates_db.get(template_key) or templates_db.get(zone)
+
         if template:
             ctx = dict(zone_data)
             ctx["_tone"] = active_tone
             text = safe_format(template, ctx)
+        elif zone_data.get("type") in ("clothing", "item", "prop"):
+            # Skip clothing/items without templates (matches old compiler behavior)
+            continue
         else:
             text = _render_generic_zone(zone, zone_data)
 
@@ -561,7 +624,7 @@ def render_to_text(
 
 def _render_generic_zone(zone: str, zone_data: dict) -> str:
     """Render a zone without a template as key-value pairs."""
-    skip_keys = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer"}
+    skip_keys = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer", "template_key"}
     parts = []
     for key, val in zone_data.items():
         if key in skip_keys:
@@ -639,6 +702,10 @@ class Assembler:
 
             visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
 
+            gender = components.get("gender", obj.get("gender", "person"))
+            subject_name = components.get("subject", obj.get("subject", ""))
+            morphology = components.get("morphology", obj.get("morphology", {}))
+
             identity_frags = render_to_text(
                 visible, render_profile_name,
                 self.templates_db, self.attribute_metadata_db,
@@ -648,13 +715,39 @@ class Assembler:
                 f["actor_id"] = obj_id
             all_fragments.extend(identity_frags)
 
+            all_fragments.append({
+                "zone": "_subject_type",
+                "frag_type": "native",
+                "tags": ["identity"],
+                "priority": 100,
+                "text": _get_subject_type(gender, morphology),
+                "actor_id": obj_id,
+            })
+
             body_config_data = scene_data.get("body_config", {}).get(obj_id)
             if body_config_data:
                 all_fragments.extend(_render_body_config(body_config_data, obj_id))
+            elif subject_name:
+                all_fragments.append({
+                    "zone": "_default_gaze",
+                    "frag_type": "body_config",
+                    "tags": ["body_config"],
+                    "priority": 55,
+                    "text": "looking toward the camera",
+                    "actor_id": obj_id,
+                })
 
         relationships = scene_data.get("relationships", [])
+        # Compute visible zones for relationship actor checks
+        all_visible = list(set(
+            z for obj_id in physical_ids
+            for z in filter_by_camera(
+                resolve_blueprint(scene_objects[obj_id], self.subjects_db, self.attires_db, scene_objects),
+                camera_framing, pose_name, self.poses_db
+            ).keys()
+        ))
         rel_frags = apply_relationships(
-            relationships, scene_objects, [],
+            relationships, scene_objects, all_visible,
             self.actions_db, self.spatial_db, self.templates_db, self.environments_db
         )
         all_fragments.extend(rel_frags)
@@ -690,24 +783,59 @@ def _is_physical(obj: dict) -> bool:
     return False
 
 
+def _get_subject_type(gender: str, morphology: dict) -> str:
+    """Get the subject type string (e.g., 'orc', 'elf', 'woman', 'man')."""
+    if morphology and morphology.get("type"):
+        return morphology["type"]
+    if gender in ("woman", "man", "person"):
+        return gender
+    if gender:
+        return gender
+    return "person"
+
+
 def _render_body_config(body_config: dict, obj_id: str) -> list:
     """Render body config into text fragments."""
     fragments = []
     parts = []
 
     head = body_config.get("head", {})
-    if head.get("tilt"):
-        parts.append(f"head tilted {head['tilt'].replace('_', ' ')}")
-    if head.get("turn"):
-        parts.append(f"head turned {head['turn'].replace('_', ' ')}")
+    tilt = head.get("tilt", "")
+    turn = head.get("turn", "")
+    if tilt and tilt != "upright":
+        tilt_words = {
+            "forward": "tilted forward",
+            "back": "tilted back",
+            "left": "tilted to the left",
+            "right": "tilted to the right",
+            "slightly_left": "tilted slightly to the left",
+            "slightly_right": "tilted slightly to the right",
+        }
+        parts.append(tilt_words.get(tilt, f"tilted {tilt.replace('_', ' ')}"))
+    if turn and turn != "toward_camera":
+        turn_words = {
+            "away_from_camera": "turned away from the camera",
+            "profile_left": "turned to the left",
+            "profile_right": "turned to the right",
+        }
+        parts.append(turn_words.get(turn, f"turned {turn.replace('_', ' ')}"))
 
     gaze = body_config.get("gaze", {})
-    if gaze.get("direction"):
-        direction = gaze["direction"].replace("_", " ")
-        if gaze.get("target"):
-            parts.append(f"gaze {direction} {gaze['target']}")
-        else:
-            parts.append(f"gaze {direction}")
+    direction = gaze.get("direction", "")
+    target = gaze.get("target", "")
+    if direction == "toward_target" and target:
+        parts.append(f"looking at {target}")
+    elif direction == "toward_camera":
+        parts.append("looking toward the camera")
+    elif direction:
+        dir_words = {
+            "up": "looking upward",
+            "down": "looking downward",
+            "left": "looking to the left",
+            "right": "looking to the right",
+            "away": "looking away",
+        }
+        parts.append(dir_words.get(direction, f"looking {direction.replace('_', ' ')}"))
 
     arms = body_config.get("arms", {})
     if arms.get("left"):
@@ -750,7 +878,6 @@ def _assemble_output(
     relationship_frags = []
     env_frags = []
     atmospheric_frags = []
-    pose_frags = []
     body_config_frags = []
 
     for f in fragments:
@@ -762,29 +889,80 @@ def _assemble_output(
             env_frags.append(f)
         elif frag_type == "style":
             atmospheric_frags.append(f)
-        elif frag_type == "pose":
-            pose_frags.append(f)
         elif frag_type == "body_config":
             body_config_frags.append(f)
-        elif zone in ("Face", "Hair", "Eyes", "Headwear", "Tusks", "Ears", "Jaw"):
+        elif zone in ("Face", "Hair", "Eyes", "Headwear", "Tusks", "Ears", "Jaw", "_subject_type"):
             identity_frags.append(f)
         elif zone in ("UpperBody", "LowerBody", "Feet", "Hands"):
             clothing_frags.append(f)
         else:
             atmospheric_frags.append(f)
 
+    identity_frags.sort(key=lambda f: -f.get("priority", 0))
+
     parts = []
 
+    subject_type = ""
+    face_expr = ""
+    hair_frag = None
+    eyes_frag = None
+    other_identity = []
     for frag in identity_frags:
-        parts.append(frag["text"])
+        if frag.get("zone") == "_subject_type":
+            subject_type = frag["text"]
+        elif frag.get("zone") == "Face":
+            face_expr = frag["text"]
+        elif frag.get("zone") == "Hair":
+            hair_frag = frag
+        elif frag.get("zone") == "Eyes":
+            eyes_frag = frag
+        else:
+            other_identity.append(frag["text"])
+
+    if face_expr and subject_type:
+        parts.append(f"{face_expr} {subject_type}")
+    elif subject_type:
+        parts.append(subject_type)
+    elif face_expr:
+        parts.append(face_expr)
+
+    with_parts = []
+    if hair_frag:
+        with_parts.append(hair_frag["text"])
+    if eyes_frag:
+        with_parts.append(eyes_frag["text"])
+    for text in other_identity:
+        with_parts.append(text)
+
+    if with_parts:
+        if len(with_parts) == 1:
+            if parts:
+                parts[0] = f"{parts[0]} with {with_parts[0]}"
+            else:
+                parts.append(with_parts[0])
+        else:
+            joined = " and ".join(with_parts)
+            if parts:
+                parts[0] = f"{parts[0]} with {joined}"
+            else:
+                parts.append(joined)
 
     if clothing_frags:
+        clothing_frags.sort(key=lambda f: -f.get("priority", 50))
         clothing_texts = [f["text"] for f in clothing_frags]
         if len(clothing_texts) == 1:
-            parts.append(f"wearing {clothing_texts[0]}")
+            text = clothing_texts[0]
+            # Add article for single clothing item
+            if text and not text.startswith(("a ", "an ", "the ")):
+                first_char = text[0].lower()
+                article = "an" if first_char in "aeiou" else "a"
+                text = f"{article} {text}"
+            parts.append(f"wearing {text}")
+        elif len(clothing_texts) == 2:
+            parts.append(f"wearing {clothing_texts[0]} and {clothing_texts[1]}")
         else:
             joined = ", ".join(clothing_texts[:-1])
-            parts.append(f"wearing {joined} and {clothing_texts[-1]}")
+            parts.append(f"wearing {joined}, and {clothing_texts[-1]}")
 
     if body_config_frags:
         for f in body_config_frags:
@@ -792,7 +970,12 @@ def _assemble_output(
 
     if relationship_frags:
         for f in relationship_frags:
-            parts.append(f["text"])
+            clause = f.get("clause_text", f["text"])
+            if clause:
+                # Ensure comma separation before relationship text
+                if parts and not parts[-1].endswith(","):
+                    parts[-1] = parts[-1].rstrip() + ","
+                parts.append(f" {clause}" if not clause.startswith(" ") else clause)
 
     if env_frags:
         env_text = env_frags[0]["text"] if env_frags else ""
@@ -801,15 +984,23 @@ def _assemble_output(
 
     if atmospheric_frags:
         for f in atmospheric_frags:
-            parts.append(f["text"])
+            text = f["text"]
+            if text:
+                # Ensure comma separation before atmospheric text
+                if parts and not parts[-1].endswith(","):
+                    parts[-1] = parts[-1].rstrip() + ","
+                parts.append(f" {text}" if not text.startswith(" ") else text)
 
     if not parts:
         return ""
 
-    result = ", ".join(parts)
+    result = " ".join(parts)
     result = re.sub(r"\s+", " ", result).strip()
 
-    if result:
-        result = result[0].upper() + result[1:]
+    # Fix Oxford comma: "X, Y and Z" -> "X, Y, and Z"
+    result = re.sub(r", ([^,]+) and ", r", \1, and ", result)
+
+    # Remove trailing comma before "looking toward"
+    result = re.sub(r",\s*looking toward", " looking toward", result)
 
     return result
