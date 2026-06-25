@@ -1785,6 +1785,37 @@ class RenderSystem:
                 return finite + clause[len(participle):]
         return clause
 
+    def _get_render_group(self, zone: str, zone_data=None) -> str:
+        """Determine render group from zone data or zone name."""
+        if isinstance(zone_data, dict) and "render_group" in zone_data:
+            return zone_data["render_group"]
+        
+        # Fallback: derive from zone name
+        CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
+        ACCESSORY_ZONES = {"Hands"}
+        IDENTITY_ZONES = {"Face", "Hair", "Eyes"}
+        
+        if zone in CLOTHING_ZONES:
+            return "clothing"
+        elif zone in ACCESSORY_ZONES:
+            return "accessory"
+        elif zone in IDENTITY_ZONES:
+            return "identity"
+        else:
+            return "identity"  # Default for unknown zones (e.g., Tusks, Ears)
+
+    def _get_render_priority(self, zone: str, zone_data=None) -> int:
+        """Get render priority from zone data or default."""
+        if isinstance(zone_data, dict) and "render_priority" in zone_data:
+            return zone_data["render_priority"]
+        
+        # Default priorities
+        DEFAULT_PRIORITIES = {
+            "Face": 100, "Hair": 90, "Eyes": 85, "Headwear": 80,
+            "UpperBody": 70, "LowerBody": 65, "Feet": 60, "Hands": 55,
+        }
+        return DEFAULT_PRIORITIES.get(zone, 50)
+
     def compose(
         self,
         candidates: list,
@@ -1843,9 +1874,32 @@ class RenderSystem:
             my_natives = {zone: c for (aid, zone), c in natives.items() if aid == human_id}
             my_clothing = [c for c in clothing if c.actor_id == human_id]
 
+            # Collect all identity fragments (Face, Hair, Eyes, Tusks, Ears, etc.)
+            identity_frags = []
+            clothing_frags_from_natives = []
+            for zone, frag in my_natives.items():
+                zone_data = human_obj.get_component(zone)
+                render_group = self._get_render_group(zone, zone_data)
+                if render_group == "identity":
+                    identity_frags.append((zone, frag))
+                elif render_group in ("clothing", "accessory"):
+                    clothing_frags_from_natives.append(frag)
+            
+            # Sort identity fragments by render_priority
+            identity_frags.sort(
+                key=lambda x: self._get_render_priority(x[0], human_obj.get_component(x[0])),
+                reverse=True
+            )
+
+            # Build subject phrase from identity fragments
+            # Keep backward-compatible Face/Hair/Eyes logic as primary path
             face_frag = my_natives.get("Face")
             hair_frag = my_natives.get("Hair")
             eyes_frag = my_natives.get("Eyes")
+
+            # Additional identity fragments (Tusks, Ears, etc.)
+            extra_identity = [(z, f) for z, f in identity_frags 
+                             if z not in ("Face", "Hair", "Eyes")]
 
             _has_multiword_expr = False
             if face_frag:
@@ -1868,6 +1922,9 @@ class RenderSystem:
                 with_parts.append(hair_frag.text)
             if eyes_frag:
                 with_parts.append(eyes_frag.text)
+            # Add extra identity fragments
+            for zone, frag in extra_identity:
+                with_parts.append(frag.text)
 
             if with_parts:
                 if _has_multiword_expr:
@@ -1879,9 +1936,9 @@ class RenderSystem:
                     subject = f"{subject} with {with_parts[0]} and {with_parts[1]}"
 
             # Clothing aggregation ("wearing X, Y and Z")
-            headwear_frag = my_natives.get("Headwear")
-            if headwear_frag:
-                my_clothing.append(headwear_frag)
+            # Merge Headwear and other clothing/accessory natives into my_clothing
+            for frag in clothing_frags_from_natives:
+                my_clothing.append(frag)
 
             if my_clothing:
                 items = [with_article(c.text) if len(my_clothing) == 1 else c.text for c in my_clothing]
