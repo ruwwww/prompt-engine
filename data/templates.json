@@ -136,5 +136,45 @@
     "slots": {
       "location": { "position": "post", "prep": "with", "required": false }
     }
+  },
+  "SuitJacket": {
+    "head": "suit jacket",
+    "slots": {
+      "color": { "position": "pre" },
+      "style": { "position": "pre" }
+    }
+  },
+  "SuitPants": {
+    "head": "suit pants",
+    "plural": { "irregular": "suit pants" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "OxfordShoes": {
+    "head": "oxford shoes",
+    "plural": { "irregular": "oxford shoes" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "PoloShirt": {
+    "head": "polo shirt",
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "TennisSkirt": {
+    "head": "tennis skirt",
+    "slots": {
+      "color": { "position": "pre" }
+    }
+  },
+  "Sneakers": {
+    "head": "sneakers",
+    "plural": { "irregular": "sneakers" },
+    "slots": {
+      "color": { "position": "pre" }
+    }
   }
 }

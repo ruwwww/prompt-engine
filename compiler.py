@@ -165,6 +165,57 @@ class SceneObject:
 
 
 # ---------------------------------------------------------------------------
+# System: WardrobeSystem
+# ---------------------------------------------------------------------------
+
+class WardrobeSystem:
+    """Resolves attire bundles on human SceneObjects."""
+
+    def __init__(self, attires_db: dict):
+        self.attires = attires_db
+
+    def resolve(self, human_obj: SceneObject, scene_objects: dict) -> None:
+        attire_name = human_obj.get_component("attire")
+        if not attire_name or attire_name not in self.attires:
+            return
+
+        attire_data = self.attires[attire_name]
+        for slot, slot_data in attire_data.items():
+            existing_slot = human_obj.get_component(slot)
+            if existing_slot is None:
+                existing_slot = {}
+                human_obj.components[slot] = existing_slot
+            elif not isinstance(existing_slot, dict):
+                continue
+
+            if not existing_slot.get("owned_item_id"):
+                existing_slot["owned_item_id"] = slot_data.get("owned_item_id")
+
+            owned_item_id = existing_slot.get("owned_item_id")
+            if owned_item_id:
+                base = owned_item_id
+                if "_" in base:
+                    parts = base.split("_")
+                    if parts[-1].isdigit():
+                        parts = parts[:-1]
+                    base = "_".join(parts)
+                template_key = "".join(word.capitalize() for word in base.split("_"))
+
+                if owned_item_id not in scene_objects:
+                    default_data = {
+                        "type": "clothing",
+                        "template_key": template_key
+                    }
+                    scene_objects[owned_item_id] = SceneObject(owned_item_id, "clothing", default_data)
+                else:
+                    existing_obj = scene_objects[owned_item_id]
+                    if not existing_obj.type:
+                        existing_obj.type = "clothing"
+                    if "template_key" not in existing_obj.components:
+                        existing_obj.components["template_key"] = template_key
+
+
+# ---------------------------------------------------------------------------
 # System: PersonaSystem
 # ---------------------------------------------------------------------------
 
@@ -888,9 +939,11 @@ class PromptCompiler:
         weather    = self._load("weather.json", {})
         composition = self._load("composition.json", {})
         styles     = self._load("styles.json", {})
+        attires    = self._load("attires.json", {})
 
         self.persona_system      = PersonaSystem(personas)
         self.visibility_system   = VisibilitySystem(poses)
+        self.wardrobe_system     = WardrobeSystem(attires)
         self.attribute_system    = AttributeCollectorSystem(metadata, templates)
         self.relationship_system = RelationshipSystem(actions, spatial, templates)
         self.environment_system  = EnvironmentSystem(envs, lighting, weather, composition, templates)
@@ -926,11 +979,12 @@ class PromptCompiler:
         if strict and hard_errors:
             raise ValueError("\n".join(e.message for e in hard_errors))
 
-        # 3. Resolve personas for all human objects
+        # 3. Resolve personas and attires for all human objects
         humans = []
-        for obj in scene_objects.values():
+        for obj in list(scene_objects.values()):
             if obj.type == "human":
                 self.persona_system.resolve(obj)
+                self.wardrobe_system.resolve(obj, scene_objects)
                 humans.append(obj)
 
         if not humans:

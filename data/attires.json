@@ -1,0 +1,12 @@
+{
+  "business_suit": {
+    "UpperBody": { "owned_item_id": "suit_jacket_1" },
+    "LowerBody": { "owned_item_id": "suit_pants_1" },
+    "Feet": { "owned_item_id": "oxford_shoes_1" }
+  },
+  "tennis_uniform": {
+    "UpperBody": { "owned_item_id": "polo_shirt_1" },
+    "LowerBody": { "owned_item_id": "tennis_skirt_1" },
+    "Feet": { "owned_item_id": "sneakers_1" }
+  }
+}

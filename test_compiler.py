@@ -1133,5 +1133,95 @@ class TestPatterns(unittest.TestCase):
         )
 
 
+class TestCompositionApproach(unittest.TestCase):
+    def setUp(self):
+        self.c = PromptCompiler()
+
+    def test_business_suit_full_resolution(self):
+        # Full resolution of "business_suit" under full_body camera framing.
+        scene = {
+            "camera": {"framing": "full_body"},
+            "tone": "default",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "man",
+                    "attire": "business_suit"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("suit jacket", out)
+        self.assertIn("suit pants", out)
+        self.assertIn("oxford shoes", out)
+
+    def test_attire_with_test_time_overrides(self):
+        # Specific user overrides at test time (e.g. changing suit jacket color to navy and sneakers to red).
+        scene = {
+            "camera": {"framing": "full_body"},
+            "tone": "default",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "attire": "tennis_uniform"
+                },
+                "polo_shirt_1": {
+                    "color": "navy"
+                },
+                "sneakers_1": {
+                    "color": "red"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        self.assertIn("navy polo shirt", out)
+        self.assertIn("tennis skirt", out)
+        self.assertIn("red sneakers", out)
+
+    def test_attire_camera_framing_filtration(self):
+        # Camera framing filtration: close_up hides the business suit, medium only renders the upper suit jacket.
+        
+        # 1. close_up framing
+        scene_close_up = {
+            "camera": {"framing": "close_up"},
+            "tone": "default",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "man",
+                    "attire": "business_suit"
+                }
+            }
+        }
+        out_close_up = self.c.compile_scene(scene_close_up)
+        # In close_up, UpperBody, LowerBody, Feet are hidden (none of these should appear)
+        self.assertNotIn("suit jacket", out_close_up)
+        self.assertNotIn("suit pants", out_close_up)
+        self.assertNotIn("oxford shoes", out_close_up)
+
+        # 2. medium framing
+        scene_medium = {
+            "camera": {"framing": "medium"},
+            "tone": "default",
+            "render_profile": "character_sheet",
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "man",
+                    "attire": "business_suit"
+                }
+            }
+        }
+        out_medium = self.c.compile_scene(scene_medium)
+        # In medium, UpperBody is visible, but LowerBody and Feet are hidden
+        self.assertIn("suit jacket", out_medium)
+        self.assertNotIn("suit pants", out_medium)
+        self.assertNotIn("oxford shoes", out_medium)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
