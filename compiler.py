@@ -919,6 +919,13 @@ class Assembler:
                               if k not in ("type", "id", "subject", "attire") and isinstance(v, dict)}
             components = apply_delta(components, user_overrides)
 
+            # Apply top-level scalar overrides (e.g. gender, morphology) that
+            # apply_delta skips because they are not dicts.  User-supplied
+            # values must always win over subject-preset defaults.
+            for _scalar_key in ("gender", "morphology"):
+                if _scalar_key in obj:
+                    components[_scalar_key] = obj[_scalar_key]
+
             components = resolve_references(components, scene_objects)
 
             visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
