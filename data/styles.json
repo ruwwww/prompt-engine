@@ -13,5 +13,8 @@
   },
   "photorealistic": {
     "template": "photorealistic style, high definition, smooth textures, and a warm color palette"
+  },
+  "cinematic_teal_orange": {
+    "template": "cinematic lighting, high contrast between teal and orange tones, digital art style, sharp focus on the subject with motion blur in the background"
   }
 }

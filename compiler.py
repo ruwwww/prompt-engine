@@ -780,7 +780,7 @@ class RenderSystem:
                 if env_frag:
                     vowels = "aeiou"
                     env_art = "an" if env_frag.text[0].lower() in vowels else "a"
-                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant")):
+                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"
@@ -803,7 +803,7 @@ class RenderSystem:
                     chain = " ".join(r.clause_text for r in my_rels)
                     parts.append(chain)
                 if env_frag:
-                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant")):
+                    if any(k in env_frag.text for k in ("cafe", "office", "room", "restaurant", "tunnel")):
                         prep = "inside"
                     elif "beach" in env_frag.text or "court" in env_frag.text:
                         prep = "on"

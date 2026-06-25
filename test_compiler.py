@@ -1023,6 +1023,50 @@ class TestSlotDescriptors(unittest.TestCase):
         self.assertIn("inside a restaurant interior with warm ambient lighting", out)
         self.assertIn("holds wooden chopsticks holding a sushi roll containing rice, nori, avocado, and crab or fish filling near her eye", out)
 
+    def test_subway_tunnel_scene_recreation(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "tone": "default",
+            "render_profile": "cinematic",
+            "style": "cinematic_teal_orange",
+            "anchors": {
+                "primary": "h1"
+            },
+            "objects": {
+                "h1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "Face": {
+                        "expression": "serious"
+                    },
+                    "Hair": {
+                        "color": "blonde",
+                        "style": "long, wavy"
+                    },
+                    "UpperBody": {
+                        "owned_item_id": "dress_1"
+                    }
+                },
+                "dress_1": {
+                    "type": "clothing",
+                    "template_key": "Dress",
+                    "color": "green",
+                    "style": "sleeveless",
+                    "material": "with white polka dots and a thin belt around her waist"
+                },
+                "env_tunnel": {
+                    "type": "environment",
+                    "template_key": "SubwayTunnel",
+                    "location": "metallic walls and doors on both sides, featuring blurred motion lines suggesting speed or movement"
+                }
+            }
+        }
+        out = self.c.compile_scene(scene)
+        
+        self.assertIn("wearing sleeveless green dress with white polka dots", out)
+        self.assertIn("inside a subway tunnel with metallic walls and doors on both sides", out)
+        self.assertIn("cinematic lighting, high contrast between teal and orange tones", out)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -83,7 +83,9 @@
   "Dress": {
     "head": "dress",
     "slots": {
-      "style": { "position": "pre" }
+      "style": { "position": "pre" },
+      "color": { "position": "pre" },
+      "material": { "position": "post", "prep": "" }
     }
   },
   "Racket": {
@@ -124,6 +126,12 @@
   },
   "RestaurantInterior": {
     "head": "restaurant interior",
+    "slots": {
+      "location": { "position": "post", "prep": "with", "required": false }
+    }
+  },
+  "SubwayTunnel": {
+    "head": "subway tunnel",
     "slots": {
       "location": { "position": "post", "prep": "with", "required": false }
     }
