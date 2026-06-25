@@ -2,105 +2,69 @@
 
 ## Quick Reference
 
-- **Tests**: `pytest` (129 tests, all in `test_compiler.py`)
+- **Tests**: `pytest` (95 active tests passing in `test_compiler.py`, plus 188 tests in `test_assembler_core.py`)
 - **CLI**: `python compile.py <scene.json> [--profile portrait|fashion|cinematic|character_sheet] [--strict]`
 - **Demo**: `python main.py`
-- **No CI, no lint, no typecheck** — pytest is the only verification gate
+- **Verification Gate**: `pytest` is the only verification system.
 
-## Architecture
+---
 
-Everything lives in **`compiler.py`** (~1800 lines). There are no packages or modules — all systems are classes in one file.
+## Clean-Slate Architecture (V2)
 
-**Data flow**: `PromptCompiler.compile_scene(scene)` → systems process `SceneObject` instances → emit `CandidateFragment` objects → `RenderSystem` sorts/filters/assembles into a single prompt string.
+The system has been completely rewritten from the legacy game-style Entity-Component-System (ECS) to a first-principles **Prototypal Inheritance Tree with a Grammar Renderer**. 
 
-| System | Role |
-|--------|------|
-| `WardrobeSystem` | Resolves `attire` bundles (e.g. `"business_suit"`) onto human slots |
-| `SubjectSystem` | Merges named subject presets (from `data/subjects.json`) into humans |
-| `VisibilitySystem` | Computes visible body zones from `camera.framing` + `pose` |
-| `AttributeCollectorSystem` | Walks visible zones, emits clothing/attribute fragments |
-| `HairOntologySystem` | Normalizes and renders hair (supports old flat + new structured format) |
-| `BodyConfigSystem` | Renders detailed pose: head tilt/turn, gaze, arms, legs, torso |
-| `RelationshipSystem` | Handles actor↔object interactions (holding, sitting_on, etc.) |
-| `EnvironmentSystem` | Emits environment + ambient props + composition fragments |
-| `ValidationSystem` | Pre-flight checks (unknown templates, missing actors, etc.) |
-| `RenderSystem` | Sorts by priority, filters by render profile tags, assembles output |
-| `StyleSystem` | Appends style overlay text |
+Everything lives in **`compiler.py`**. There are no custom runtime class wrappers or stateful systems; it utilizes pure pipeline functions passing raw dict state.
+
+```mermaid
+graph TD
+    A[Input: Scene JSON] --> B[resolve_blueprint: Subjects & Attire inheritance]
+    B --> C[apply_delta: User override merges]
+    C --> D[resolve_references: Map owned items to scene entities]
+    D --> E[filter_by_camera: Framing & Pose occlusions]
+    E --> F[render_to_text: Component to templates mapping]
+    F --> G[_assemble_output: Deterministic sorting & language joining]
+    G --> H[Output: Natural Language Prompt]
+```
+
+### The 4 Core Pipeline Layers
+
+| Pipeline Function | Design Pattern | Responsibility |
+|---|---|---|
+| `resolve_blueprint` | **Layer 1: Prototypal Blueprint Store** | Merges static subject presets (`subjects.json`) and attire bundles (`attires.json`) into a flat component blueprint. |
+| `apply_delta` | **Layer 2: User Override Deltas** | Merges user overrides (e.g. `Face.expression`) on top of the resolved blueprint dynamically. |
+| `filter_by_camera` | **Layer 3: Camera Filter** | Filters component lists against `camera_profiles.json` and subtracts occluded zones defined in `poses.json`. |
+| `render_to_text` & `_assemble_output` | **Layer 4: Grammar Catalog & Assembler** | Renders visible component properties through templates (`templates.json`), groups fragments by actor, sorts them by priority (`attribute_metadata.json`), and joins them with prepositions. |
+
+---
 
 ## Critical Rules
 
-1. **Camera framing gates visibility** — any new body zone MUST be added to `VisibilitySystem.CAMERA_ZONES` dict (close_up / medium / full_body). If you forget, the zone is silently invisible.
+1. **Camera framing gates visibility** — any visible zone must be present in the active camera profile (loaded from `data/camera_profiles.json`) and not subtracted by pose occlusions in `data/poses.json`.
 
-2. **Override priority** — user values in `scene["objects"]` ALWAYS win over subject defaults and attire defaults. The merge order is: scene data > attire > subject defaults.
+2. **Override priority** — user values in `scene["objects"]` always win. The merge order resolved by the delta manager is: user scene values > attire slot settings > subject preset defaults.
 
-3. **Template-key coupling** — every `SceneObject` with `type: clothing|item|accessory|prop` needs a `template_key` that exists in `data/templates.json`. Missing keys silently produce empty text.
+3. **Database Lookups are Eager** — databases (e.g., `templates.json`, `subjects.json`, `poses.json`) are loaded eagerly during `Assembler`/`PromptCompiler` instantiation.
 
-4. **Data-driven over hardcoded** — prefer adding to JSON files in `data/` over string literals in Python. Templates, environments, styles, poses, actions all live in `data/`.
+4. **Data-driven over hardcoded** — templates, environments, style cues, actions, and poses live in the `data/` directory. Prefer modifying JSON catalogs over writing inline Python formatting conditions.
 
-5. **ECS consistency** — new features = new System classes or new slots on existing systems. Don't put business logic directly in `compile_scene`.
+5. **`strict=True`** — calling `compile_scene(scene, strict=True)` runs the pipeline-level `validate()` helper, raising `ValueError` on missing actors or unknown templates.
 
-6. **`strict=True`** — calling `compile_scene(scene, strict=True)` raises `ValueError` on validation errors (instead of returning partial output).
+---
 
 ## Data Files (`data/`)
 
-14 JSON files. Key ones:
+- `templates.json` — grammar templates for nouns (clothing, items, etc.).
+- `subjects.json` — named subject blueprints with default attributes.
+- `attires.json` — preset clothing bundle packages.
+- `attribute_metadata.json` — priority ranks and tags (e.g. `emotion`, `clothing`) for sorting and visibility filtering.
+- `render_profiles.json` — tag inclusion lists and max fragment budgets for profiles.
+- `poses.json` — pose descriptions and occluded body zones.
+- `environments.json` — environment configurations and fixture affordances.
+- `actions.json` & `spatial_relationships.json` — relationship types and grammar variants.
+- `styles.json` — style overlay and photographic mood templates.
 
-- `templates.json` — slot descriptors for all renderable nouns (clothing, items, environments, etc.)
-- `subjects.json` — named human presets with default Face/Hair/clothing components
-- `attires.json` — predefined wardrobe bundles (Composition Approach)
-- `attribute_metadata.json` — zone priority + tags for render filtering
-- `render_profiles.json` — which tags each profile includes (portrait excludes clothing, fashion excludes emotion, etc.)
-- `poses.json` — pose definitions + `hidden_zones` for occlusion
-- `environments.json` — environment types + `affordances` for anchor resolution
-- `actions.json` — relationship type definitions (holding, sitting_on, etc.)
-- `styles.json` — style overlay templates (editorial, cinematic_teal_orange, etc.)
+---
 
-## Scene Object Patterns
-
-**Human**: `type: "human"`, optional `subject` (preset name), optional `attire` (bundle name), zone components (`Face`, `Hair`, `UpperBody`, `LowerBody`, `Feet`, `Hands`, `Headwear`, `Eyes`).
-
-**Clothing/Item**: `type: "clothing|item|prop"`, required `template_key`, slot values (`color`, `style`, `material`, `pattern`, etc.).
-
-**Environment**: `type: "environment"`, required `template_key`, optional `lighting`, `weather`, `location`, `geolocation`.
-
-**Fixture**: `type: "fixture"` — auto-created by anchor resolution (e.g. `"balcony.railing"` creates a fixture SceneObject).
-
-## Environment Anchors
-
-Use dot notation in relationships to target parts of an environment:
-```python
-"relationships": [{"type": "leaning_on", "actor": "h1", "target": "balcony.railing"}]
-```
-This auto-creates a fixture `SceneObject` from the environment's affordances in `data/environments.json`.
-
-## Hair Ontology
-
-Hair accepts **two formats** (both work):
-- **Old flat**: `{"color": "brown", "length": "long", "style": "wavy"}`
-- **New structured**: `{"texture": {...}, "color": {...}, "arrangement": {...}, "appearance": {...}, "state": [...], "cultural": {...}}`
-
-Both are normalized internally. Use whichever is simpler for the scene.
-
-## BodyConfig
-
-Fine-grained pose control via `scene["body_config"][object_id]`:
-```python
-"body_config": {
-    "h1": {
-        "head": {"tilt": "slightly_left", "turn": "away_from_camera"},
-        "gaze": {"direction": "toward_target", "target": "phone"},
-        "arms": {"left": "crossed", "right": "crossed"},
-        "legs": {"position": "bent"},
-        "torso": {"lean": "forward"}
-    }
-}
-```
-BodyConfig overrides scene-level `pose`. Also affects visibility (e.g. `arms: behind_back` hides `Hands` zone).
-
-## Gotchas
-
-- `HANDOVER.md` contains useful context but the test count is **stale** (says 55, actual is 129). Always verify with `pytest`.
-- `HairOntologySystem` has duplicate method definitions (lines ~819-827) — dead code, ignore it.
-- `safe_format` handles article adjustment (a→an before vowels) automatically.
-- Render profiles control which fragment **tags** appear. Check `data/render_profiles.json` before assuming what's visible.
-- The `body_surface_features` component (tattoos, scars, etc.) is suppressed when clothing covers that zone — check `attribute_metadata.json` for `covers_body_surface` flag.
+## Legacy Notes (V1 ECS Architecture)
+- The previous implementation used system classes (`WardrobeSystem`, `SubjectSystem`, `VisibilitySystem`, etc.) and a custom `SceneObject` class. This has been retired.
+- If referencing legacy behavior, look at the archived [compiler_legacy.py](file:///C:/Coding3/prompt-engine/compiler_legacy.py).
