@@ -1,0 +1,19 @@
+{
+  "enclosed": {
+    "default": "inside"
+  },
+  "open": {
+    "normal_up": "on",
+    "normal_lateral": "against",
+    "normal_down": "beneath",
+    "default": "in"
+  },
+  "transitional": {
+    "default": "at"
+  },
+  "impossible": {
+    "boundary_hard": "within",
+    "boundary_absent": "adrift in",
+    "default": "within"
+  }
+}

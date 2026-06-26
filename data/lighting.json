@@ -1,29 +1,98 @@
 {
   "warm": {
-    "template": "warm soft-lit"
+    "template": "warm soft-lit",
+    "descriptor_phrase": "bathed in warm amber light",
+    "modifier_adjective": "warmly lit",
+    "color_temperature": "2700K"
   },
   "neon": {
-    "template": "neon-lit"
+    "template": "neon-lit",
+    "descriptor_phrase": "saturated in vivid neon light from signs above",
+    "modifier_adjective": "neon-lit",
+    "color_temperature": "varies"
   },
   "golden_hour": {
-    "template": "golden-hour"
+    "template": "golden-hour",
+    "descriptor_phrase": "washed in long golden-hour light from a low sun",
+    "modifier_adjective": "golden",
+    "color_temperature": "3200K"
   },
   "soft": {
-    "template": "soft diffused"
+    "template": "soft diffused",
+    "descriptor_phrase": "bathed in soft diffused light",
+    "modifier_adjective": "softly lit",
+    "color_temperature": "4000K"
   },
   "studio": {
-    "template": "studio-lit"
+    "template": "studio-lit",
+    "descriptor_phrase": "lit by controlled studio lighting with soft key and fill",
+    "modifier_adjective": "studio-lit",
+    "color_temperature": "5500K"
   },
   "natural": {
-    "template": "naturally lit"
+    "template": "naturally lit",
+    "descriptor_phrase": "lit by natural daylight streaming in",
+    "modifier_adjective": "naturally lit",
+    "color_temperature": "5500K"
   },
   "dark": {
-    "template": "dimly lit"
+    "template": "dimly lit",
+    "descriptor_phrase": "cast in near darkness with only faint ambient light",
+    "modifier_adjective": "dimly lit",
+    "color_temperature": "1200K"
   },
   "harsh": {
-    "template": "harshly lit"
+    "template": "harshly lit",
+    "descriptor_phrase": "lit by harsh overhead light with stark shadows",
+    "modifier_adjective": "harshly lit",
+    "color_temperature": "5000K"
   },
   "moonlight": {
-    "template": "moonlit"
+    "template": "moonlit",
+    "descriptor_phrase": "bathed in cool blue moonlight from above",
+    "modifier_adjective": "moonlit",
+    "color_temperature": "4100K"
+  },
+  "dim": {
+    "template": "dimly lit",
+    "descriptor_phrase": "cast in low dim light with deep shadows",
+    "modifier_adjective": "dimly lit",
+    "color_temperature": "1800K"
+  },
+  "bright": {
+    "template": "brightly lit",
+    "descriptor_phrase": "flooded with bright even daylight",
+    "modifier_adjective": "brightly lit",
+    "color_temperature": "5500K"
+  },
+  "dappled": {
+    "template": "dappled",
+    "descriptor_phrase": "dappled with shifting light filtering through leaves",
+    "modifier_adjective": "dappled",
+    "color_temperature": "4500K"
+  },
+  "cool": {
+    "template": "cool white",
+    "descriptor_phrase": "lit by cool blue-white overhead light",
+    "modifier_adjective": "coolly lit",
+    "color_temperature": "6500K"
+  },
+  "night": {
+    "template": "night-lit",
+    "descriptor_phrase": "lit by scattered artificial lights against a dark sky",
+    "modifier_adjective": "night-lit",
+    "color_temperature": "2200K"
+  },
+  "fluorescent": {
+    "template": "fluorescent-lit",
+    "descriptor_phrase": "lit by buzzing fluorescent ceiling panels",
+    "modifier_adjective": "fluorescent-lit",
+    "color_temperature": "5000K"
+  },
+  "sunlight": {
+    "template": "sunlight",
+    "descriptor_phrase": "filled with bright natural sunlight",
+    "modifier_adjective": "sunlit",
+    "color_temperature": "5500K"
   }
 }

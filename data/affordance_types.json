@@ -1,0 +1,137 @@
+{
+  "lean_on_edge": {
+    "action_id": "lean_on",
+    "body_zones": ["UpperBody", "Arms"],
+    "preposition_hint": "against",
+    "grammatical_role": "object",
+    "clause_head": "leaning",
+    "requires_posture": null,
+    "excludes_posture": ["sitting", "lying"]
+  },
+  "lean_on_surface": {
+    "action_id": "lean_on",
+    "body_zones": ["UpperBody", "Arms"],
+    "preposition_hint": "on",
+    "grammatical_role": "object",
+    "clause_head": "leaning",
+    "requires_posture": null,
+    "excludes_posture": ["sitting", "lying"]
+  },
+  "sit_on_face": {
+    "action_id": "sit_on",
+    "body_zones": ["LowerBody", "Hips"],
+    "preposition_hint": "on",
+    "grammatical_role": "object",
+    "clause_head": "sitting",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "sit_at_face": {
+    "action_id": "sit_at",
+    "body_zones": ["LowerBody", "Hips"],
+    "preposition_hint": "at",
+    "grammatical_role": "object",
+    "clause_head": "sitting",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "sit_in_interior": {
+    "action_id": "sit_in",
+    "body_zones": ["LowerBody", "Hips"],
+    "preposition_hint": "in",
+    "grammatical_role": "object",
+    "clause_head": "sitting",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "stand_on_face": {
+    "action_id": "stand_on",
+    "body_zones": ["FullBody", "Legs"],
+    "preposition_hint": "on",
+    "grammatical_role": "object",
+    "clause_head": "standing",
+    "requires_posture": null,
+    "excludes_posture": ["sitting", "lying"]
+  },
+  "stand_at_edge": {
+    "action_id": "stand_at",
+    "body_zones": ["FullBody"],
+    "preposition_hint": "at the edge of",
+    "grammatical_role": "object",
+    "clause_head": "standing",
+    "requires_posture": null,
+    "excludes_posture": ["sitting", "lying"]
+  },
+  "stand_next_to": {
+    "action_id": "stand_next_to",
+    "body_zones": ["FullBody"],
+    "preposition_hint": "next to",
+    "grammatical_role": "object",
+    "clause_head": "standing",
+    "requires_posture": null,
+    "excludes_posture": []
+  },
+  "rest_arms_on_top": {
+    "action_id": "rest_arms_on",
+    "body_zones": ["Arms", "Hands"],
+    "preposition_hint": "on",
+    "grammatical_role": "object",
+    "clause_head": "resting arms",
+    "requires_posture": null,
+    "excludes_posture": []
+  },
+  "lie_on_face": {
+    "action_id": "lie_on",
+    "body_zones": ["FullBody"],
+    "preposition_hint": "on",
+    "grammatical_role": "object",
+    "clause_head": "lying",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "hold_grip": {
+    "action_id": "holding",
+    "body_zones": ["Hands"],
+    "preposition_hint": null,
+    "grammatical_role": "direct_object",
+    "clause_head": "holding",
+    "requires_posture": null,
+    "excludes_posture": []
+  },
+  "hold_drink": {
+    "action_id": "holding_drink",
+    "body_zones": ["Hands"],
+    "preposition_hint": null,
+    "grammatical_role": "direct_object",
+    "clause_head": "holding a cup of",
+    "requires_posture": null,
+    "excludes_posture": []
+  },
+  "sit_inside_vehicle": {
+    "action_id": "sit_inside",
+    "body_zones": ["FullBody", "LowerBody"],
+    "preposition_hint": "inside",
+    "grammatical_role": "object",
+    "clause_head": "sitting",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "sit_at_edge": {
+    "action_id": "sit_at",
+    "body_zones": ["LowerBody", "Hips"],
+    "preposition_hint": "at the edge of",
+    "grammatical_role": "object",
+    "clause_head": "sitting",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  },
+  "soak_in_interior": {
+    "action_id": "soaking_in",
+    "body_zones": ["FullBody"],
+    "preposition_hint": "in",
+    "grammatical_role": "object",
+    "clause_head": "soaking",
+    "requires_posture": null,
+    "excludes_posture": ["standing"]
+  }
+}

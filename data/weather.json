@@ -1,26 +1,47 @@
 {
   "sunny": {
-    "template": "sunny"
+    "template": "sunny",
+    "descriptor_phrase": "under clear open skies",
+    "modifier_adjective": "sun-lit"
   },
   "rainy": {
-    "template": "rain-soaked"
+    "template": "rain-soaked",
+    "descriptor_phrase": "with rain streaking the windows",
+    "modifier_adjective": "rain-soaked"
   },
   "foggy": {
-    "template": "foggy"
+    "template": "foggy",
+    "descriptor_phrase": "shrouded in dense fog",
+    "modifier_adjective": "fog-filled"
   },
   "cloudy": {
-    "template": "overcast"
+    "template": "overcast",
+    "descriptor_phrase": "under a heavy overcast sky",
+    "modifier_adjective": "overcast"
   },
   "breezy": {
-    "template": "breezy"
+    "template": "breezy",
+    "descriptor_phrase": "with a warm steady breeze moving through the space",
+    "modifier_adjective": "breezy"
   },
   "snowy": {
-    "template": "snowy"
+    "template": "snowy",
+    "descriptor_phrase": "with snow falling softly across the scene",
+    "modifier_adjective": "snow-covered"
   },
   "stormy": {
-    "template": "stormy"
+    "template": "stormy",
+    "descriptor_phrase": "under a churning storm sky with scattered lightning",
+    "modifier_adjective": "storm-lit"
   },
   "windy": {
-    "template": "windy"
+    "template": "windy",
+    "descriptor_phrase": "with strong gusts sweeping across the space",
+    "modifier_adjective": "windswept"
+  },
+  "misty": {
+    "template": "misty",
+    "descriptor_phrase": "wrapped in a low hanging morning mist",
+    "modifier_adjective": "misty"
   }
 }

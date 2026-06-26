@@ -6,6 +6,7 @@ import os
 import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
+import output_formatter
 
 
 # ---------------------------------------------------------------------------
@@ -305,6 +306,8 @@ def apply_relationships(
     templates_db: dict,
     environments_db: dict,
     placements: dict = None,
+    affordance_types_db: dict = None,
+    env_data: dict = None,
 ) -> list:
     """Process relationships and emit text fragments.
     Returns a list of fragment dicts."""
@@ -337,6 +340,36 @@ def apply_relationships(
 
         actor_obj = scene_objects.get(actor_id, {})
         object_obj = scene_objects.get(object_id, {}) if object_id else {}
+
+        # Try affordance query first (new system)
+        if affordance_types_db and env_data and object_id:
+            binding = _resolve_affordance_query(
+                rel_type, object_obj, set(visible_zones),
+                env_data, affordance_types_db
+            )
+            if binding:
+                clause_head = binding.get("clause_head", "")
+                preposition = binding.get("preposition", "")
+                object_phrase = binding.get("object_phrase", "")
+                if preposition:
+                    clause_text = f"{clause_head} {preposition} {object_phrase}"
+                else:
+                    clause_text = f"{clause_head} {object_phrase}"
+                text = clause_text
+                fragments.append({
+                    "zone": "relationship",
+                    "frag_type": "relationship",
+                    "tags": ["action"],
+                    "priority": 88,
+                    "text": text,
+                    "clause_text": clause_text,
+                    "actor_id": actor_id,
+                    "action_id": binding.get("action_id", rel_type),
+                    "chain_order": rel.get("chain_order", 1),
+                })
+                mentioned_ids.add(actor_id)
+                mentioned_ids.add(object_id)
+                continue
 
         valid = True
         for role_name, role_def in roles.items():
@@ -425,6 +458,7 @@ def apply_relationships(
             "text": text,
             "clause_text": clause_text,
             "actor_id": actor_id,
+            "action_id": rel_type,
             "chain_order": chain_order,
         })
 
@@ -476,6 +510,9 @@ def _get_noun_phrase(
     template_key = obj.get("template_key")
     if template_key and template_key in templates_db:
         phrase = safe_format(templates_db[template_key], obj)
+    elif obj_type == "fixture" and template_key:
+        # Use fixture name directly (e.g., "window" → "a window")
+        phrase = template_key.replace("_", " ")
     else:
         # Fallback: material + color + type
         parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
@@ -530,67 +567,31 @@ def apply_environment(
             if db_key not in environments_db and db_key.lower() in environments_db:
                 db_key = db_key.lower()
             env_def = environments_db.get(db_key, {})
-            template = env_def.get("template", "")
-            lighting_key = env_data.get("lighting") or env_def.get("default_lighting", "")
-            weather_key = env_data.get("weather") or env_def.get("default_weather", "")
+            label = env_def.get("label", env_type)
+            article = env_def.get("article", "a")
+
+            # Get lighting and weather from new atmosphere sub-object, fall back to legacy fields
+            atmosphere = env_def.get("atmosphere", {})
+            lighting_key = env_data.get("lighting") or atmosphere.get("lighting_key") or env_def.get("default_lighting", "")
+            weather_key = env_data.get("weather") or atmosphere.get("weather_key") or env_def.get("default_weather", "")
 
             lighting_str = ""
             if lighting_key:
-                lighting_str = lighting_db[lighting_key].get("template", lighting_key) if lighting_key in lighting_db else lighting_key
+                lighting_entry = lighting_db.get(lighting_key, {})
+                if isinstance(lighting_entry, dict):
+                    lighting_str = lighting_entry.get("template", lighting_key)
+                else:
+                    lighting_str = lighting_key
 
             weather_str = ""
             if weather_key:
-                weather_str = weather_db[weather_key].get("template", weather_key) if weather_key in weather_db else weather_key
-
-            ctx = {
-                "type": env_type,
-                "lighting": lighting_str,
-                "weather": weather_str,
-                "location": env_data.get("location", ""),
-                "geolocation": env_data.get("geolocation", ""),
-            }
-            env_text = safe_format(template, ctx)
-
-            # ECS query: find ambient fixtures and furniture
-            owned_item_ids = set()
-            for o_id, o in scene_objects.items():
-                if o.get("type") == "human":
-                    for zone_name, zone_val in o.items():
-                        if isinstance(zone_val, dict) and "owned_item_id" in zone_val:
-                            owned_item_ids.add(zone_val["owned_item_id"])
-
-            relationship_targets = set()
-            for r in scene_data.get("relationships", []):
-                t_id = r.get("object") or r.get("target") or r.get("subject2") or r.get("container")
-                if t_id:
-                    relationship_targets.add(t_id)
-
-            ambient_fixtures = []
-            for o_id, o in scene_objects.items():
-                o_type = o.get("type")
-                if o_type in ("fixture", "furniture") and o_id not in owned_item_ids and o_id not in relationship_targets:
-                    tkey = o.get("template_key")
-                    tpl = templates_db.get(tkey)
-                    if tpl:
-                        phrase = safe_format(tpl, o)
-                    else:
-                        parts = [o.get("material", ""), o.get("color", ""), o_type]
-                        phrase = " ".join(p for p in parts if p).strip()
-                    if phrase:
-                        if not phrase.startswith(("a ", "an ", "the ")):
-                            first_char = phrase[0].lower()
-                            art = "an" if first_char in "aeiou" else "a"
-                            phrase = f"{art} {phrase}"
-                        ambient_fixtures.append(phrase)
-
-            if ambient_fixtures:
-                if len(ambient_fixtures) == 1:
-                    fixtures_str = ambient_fixtures[0]
-                elif len(ambient_fixtures) == 2:
-                    fixtures_str = f"{ambient_fixtures[0]} and {ambient_fixtures[1]}"
+                weather_entry = weather_db.get(weather_key, {})
+                if isinstance(weather_entry, dict):
+                    weather_str = weather_entry.get("template", weather_key)
                 else:
-                    fixtures_str = ", ".join(ambient_fixtures[:-1]) + f", and {ambient_fixtures[-1]}"
-                env_text = f"{env_text} featuring {fixtures_str}"
+                    weather_str = weather_key
+
+            env_text = f"{article} {label}"
 
             fragments.append({
                 "zone": "environment",
@@ -609,7 +610,7 @@ def apply_environment(
                     "text": lighting_str,
                 })
 
-            if weather_str:
+            if weather_str and weather_key:
                 fragments.append({
                     "zone": "weather",
                     "frag_type": "weather",
@@ -822,6 +823,142 @@ def validate(scene_data: dict, templates_db: dict, actions_db: dict,
     return errors
 
 
+def derive_preposition(env_data: dict, spatial_prepositions: dict) -> str:
+    """
+    Derive the correct Subject-in-Environment preposition from structured
+    SpatialFrame data. Reads containment from env_data['volume']['containment']
+    and surface normal from env_data['primary_surface']['normal'].
+    Falls back to 'in' if any key is missing.
+
+    Args:
+        env_data: A SpatialFrame dict as loaded from environments.json.
+        spatial_prepositions: The loaded data/spatial_prepositions.json dict.
+
+    Returns:
+        A preposition string (e.g., 'inside', 'on', 'at', 'in').
+    """
+    volume = env_data.get("volume", {})
+    surface = env_data.get("primary_surface", {})
+    containment = volume.get("containment", "open")
+    normal = surface.get("normal", "up")
+    boundary = volume.get("boundary", "hard")
+
+    containment_rules = spatial_prepositions.get(containment, {})
+
+    if containment == "impossible":
+        boundary_key = f"boundary_{boundary}"
+        if boundary_key in containment_rules:
+            return containment_rules[boundary_key]
+        return containment_rules.get("default", "within")
+
+    if containment == "open":
+        normal_key = f"normal_{normal}"
+        if normal_key in containment_rules:
+            return containment_rules[normal_key]
+        return containment_rules.get("default", "in")
+
+    return containment_rules.get("default", "in")
+
+
+ASSEMBLY_PHASES = {
+    "subject_identity": 1,
+    "attire": 2,
+    "posture": 3,
+    "figure_anchor": 4,
+    "atmosphere": 5,
+    "style": 6,
+}
+
+
+def _to_finite(clause_text: str, action_id: str, action_grammar_db: dict, number: str = "singular") -> str:
+    """
+    Convert a participial clause to finite form using action_grammar.json.
+
+    Args:
+        clause_text: The full clause text beginning with the participle
+                     (e.g., "leaning against the counter").
+        action_id:   The action_id key for lookup in action_grammar_db.
+        action_grammar_db: The loaded data/action_grammar.json dict.
+        number:      "singular" or "plural" — controls 3sg vs pl form.
+
+    Returns:
+        The clause text with the participle replaced by the finite form,
+        or the original clause_text unchanged if no grammar entry exists.
+    """
+    grammar = action_grammar_db.get(action_id)
+    if not grammar:
+        return clause_text
+
+    participle = grammar.get("participle", "")
+    if number == "plural":
+        finite = grammar.get("finite_pl", participle)
+    else:
+        finite = grammar.get("finite_3sg", participle)
+
+    if clause_text.startswith(participle):
+        return finite + clause_text[len(participle):]
+
+    return clause_text
+
+
+def _resolve_affordance_query(
+    action_id: str,
+    target_obj: dict,
+    visible_zones: set,
+    env_data: dict,
+    affordance_types_db: dict,
+) -> dict | None:
+    """
+    Perform an AffordanceQuery for a single relationship.
+
+    Looks up the target fixture in env_data['fixtures'], matches the action_id
+    to an AffordanceRecord, validates body zones against visible_zones.
+
+    Returns a ResolvedBinding dict if valid, or None if invalid/occluded.
+    """
+    fixture_name = target_obj.get("fixture_name") or target_obj.get("template_key", "").lower()
+
+    fixtures = env_data.get("fixtures", {})
+    fixture_def = fixtures.get(fixture_name)
+
+    if fixture_def is None:
+        return None
+
+    matched_affordance = None
+    for aff_ref in fixture_def.get("affordances", []):
+        aff_type_key = aff_ref.get("affordance_type")
+        aff_type = affordance_types_db.get(aff_type_key, {})
+        if aff_type.get("action_id") == action_id:
+            matched_affordance = aff_type
+            break
+
+    if matched_affordance is None:
+        return None
+
+    required_zones = matched_affordance.get("body_zones", [])
+    for zone in required_zones:
+        if zone not in visible_zones:
+            return None
+
+    fixture_article = "a"
+    fixture_label = fixture_name.replace("_", " ")
+    if fixture_label and fixture_label[0].lower() in "aeiou":
+        fixture_article = "an"
+
+    preposition = matched_affordance.get("preposition_hint") or "near"
+    clause_head = matched_affordance.get("clause_head", action_id.replace("_", " "))
+
+    return {
+        "action_id": action_id,
+        "fixture_id": fixture_name,
+        "clause_head": clause_head,
+        "preposition": preposition,
+        "object_phrase": f"{fixture_article} {fixture_label}",
+        "grammatical_role": matched_affordance.get("grammatical_role", "object"),
+        "body_zones": required_zones,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Assembler core
 # ---------------------------------------------------------------------------
@@ -848,6 +985,9 @@ class Assembler:
         self.composition_db = _load_json("composition.json")
         self.styles_db = _load_json("styles.json")
         self.poses_db = _load_json("poses.json")
+        self.spatial_prepositions_db = _load_json("spatial_prepositions.json")
+        self.affordance_types_db = _load_json("affordance_types.json")
+        self.action_grammar_db = _load_json("action_grammar.json")
 
     def inject_camera_descriptor(self, state: dict) -> dict:
         """Inject Camera text based on framing value (if toggle is ON).
@@ -865,7 +1005,7 @@ class Assembler:
         state["_camera_text"] = text
         return state
 
-    def assemble(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True) -> str:
+    def assemble(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True, output_format: str = "legacy") -> str:
         """Assemble a scene into a prompt string.
 
         Args:
@@ -910,7 +1050,7 @@ class Assembler:
         environment_data = scene_data.get("environment", {})
         env_type = environment_data.get("type")
         env_def = self.environments_db.get(env_type, {}) if env_type else {}
-        affordances = env_def.get("affordances", {})
+        env_fixtures = env_def.get("fixtures", env_def.get("affordances", {}))
 
         resolved_relationships = []
         for rel in scene_data.get("relationships", []):
@@ -922,12 +1062,12 @@ class Assembler:
                     parts = val.split(".", 1)
                     if len(parts) == 2:
                         prefix, suffix = parts
-                        if env_type and prefix == env_type and suffix in affordances:
+                        if env_type and prefix == env_type and suffix in env_fixtures:
                             if val not in scene_objects:
                                 scene_objects[val] = {
                                     "id": val,
                                     "type": "fixture",
-                                    "template_key": "Fixture",
+                                    "template_key": suffix,
                                     "anchor": suffix,
                                     "env_type": env_type,
                                 }
@@ -1060,10 +1200,32 @@ class Assembler:
         # (e.g., a bare {"type": "human", "gender": "woman"} can still hold an object).
         all_visible = list(camera_framing_zones)
         placements = scene_data.get("placements", {})
+
+        # Resolve environment data early for affordance queries and preposition derivation
+        env_data = None
+        for obj_id, obj in scene_objects.items():
+            if obj.get("type") == "environment":
+                env_data = obj
+                break
+        if env_data is None:
+            env_data = scene_data.get("environment")
+
+        env_resolved = None
+        env_prep = "in"
+        if env_data:
+            env_type = env_data.get("template_key") or env_data.get("location") or env_data.get("type")
+            if env_type:
+                db_key = env_type
+                if db_key not in self.environments_db and db_key.lower() in self.environments_db:
+                    db_key = db_key.lower()
+                env_resolved = self.environments_db.get(db_key, {})
+                if env_resolved:
+                    env_prep = derive_preposition(env_resolved, self.spatial_prepositions_db)
+
         rel_frags = apply_relationships(
             resolved_relationships, scene_objects, all_visible,
             self.actions_db, self.spatial_db, self.templates_db, self.environments_db,
-            placements
+            placements, self.affordance_types_db, env_resolved
         )
         all_fragments.extend(rel_frags)
 
@@ -1080,10 +1242,38 @@ class Assembler:
         max_frags = render_profile.get("max_fragments", 10)
 
         filtered = [f for f in all_fragments if any(t in include_tags for t in f.get("tags", []))]
-        filtered.sort(key=lambda f: (-f.get("priority", 0), f.get("zone", ""), f.get("text", "")))
+
+        ZONE_TO_PHASE = {
+            "_subject_type": ASSEMBLY_PHASES["subject_identity"],
+            "Face": ASSEMBLY_PHASES["subject_identity"],
+            "Hair": ASSEMBLY_PHASES["attire"],
+            "Eyes": ASSEMBLY_PHASES["attire"],
+            "Clothing": ASSEMBLY_PHASES["attire"],
+            "body_config": ASSEMBLY_PHASES["posture"],
+            "_pose": ASSEMBLY_PHASES["posture"],
+            "pose": ASSEMBLY_PHASES["posture"],
+            "relationship": ASSEMBLY_PHASES["figure_anchor"],
+            "spatial": ASSEMBLY_PHASES["figure_anchor"],
+            "environment": ASSEMBLY_PHASES["atmosphere"],
+            "lighting": ASSEMBLY_PHASES["atmosphere"],
+            "weather": ASSEMBLY_PHASES["atmosphere"],
+            "style": ASSEMBLY_PHASES["style"],
+            "composition": ASSEMBLY_PHASES["style"],
+            "camera": ASSEMBLY_PHASES["style"],
+        }
+        for f in filtered:
+            if "phase" not in f:
+                f["phase"] = ZONE_TO_PHASE.get(f.get("zone", ""), 99)
+
+        filtered.sort(key=lambda f: (
+            f.get("phase", 99),
+            f.get("chain_order", 0),
+            -f.get("priority", 0),
+            f.get("text", ""),
+        ))
         filtered = filtered[:max_frags]
 
-        output = _assemble_output(filtered, physical_ids, render_profile, include_tags)
+        output = _assemble_output(filtered, physical_ids, render_profile, include_tags, self.action_grammar_db, env_prep)
 
         # Inject camera framing text at the beginning if toggle is ON
         inject = scene_data.get("_inject_camera", True)
@@ -1101,6 +1291,70 @@ class Assembler:
                 output = re.sub(r"\bshot of An\b", "shot of an", output)
                 # Capitalize first letter
                 output = output[0].upper() + output[1:]
+
+        if output_format == "labeled":
+            weather_key = None
+            lighting_key = None
+            if env_data and env_resolved:
+                atmosphere = env_resolved.get("atmosphere", {})
+                weather_key = atmosphere.get("weather_key")
+                lighting_key = atmosphere.get("lighting_key")
+
+            identity_texts = [f["text"] for f in filtered if f.get("phase") == 1 and f.get("zone") != "_subject_type"]
+            subject_type = next((f["text"] for f in filtered if f.get("zone") == "_subject_type"), "a person")
+            subject_phrase = f"{subject_type}"
+            if identity_texts:
+                subject_phrase += " with " + ", ".join(identity_texts)
+
+            held_items = []
+            accessories = []
+            clothing_items = []
+            posture_phrase = ""
+            action_clauses = []
+
+            for f in filtered:
+                phase = f.get("phase", 99)
+                if phase == 1:
+                    pass
+                elif phase == 2:
+                    zone = f.get("zone", "")
+                    if zone in ("Jewelry", "Accessories"):
+                        accessories.append(f["text"])
+                    elif zone in ("Clothing",):
+                        clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
+                elif phase == 3:
+                    if f.get("zone") in ("body_config", "_pose", "pose"):
+                        if posture_phrase:
+                            posture_phrase += ", " + f["text"]
+                        else:
+                            posture_phrase = f["text"]
+                elif phase == 4:
+                    clause = f.get("clause_text", f["text"])
+                    action_clauses.append(clause)
+
+            output = output_formatter.render_full_output({
+                "subject_phrase": subject_phrase,
+                "held_items": held_items,
+                "accessories": accessories,
+                "clothing_items": clothing_items,
+                "posture_phrase": posture_phrase,
+                "action_clauses": action_clauses,
+                "env_label": env_resolved.get("label", "") if env_resolved else "",
+                "env_preposition": env_prep,
+                "background_elements": [],
+                "scene_props": [],
+                "lighting_phrase": self.lighting_db.get(lighting_key, {}).get("descriptor_phrase", "") if lighting_key else "",
+                "weather_phrase": self.weather_db.get(weather_key, {}).get("descriptor_phrase", "") if weather_key else "",
+                "shot_type": camera.get("shot_type", ""),
+                "camera_angle": camera.get("angle", ""),
+                "camera_framing": camera.get("framing", ""),
+                "depth_of_field": camera.get("depth_of_field", ""),
+                "aesthetic": render_profile.get("aesthetic", ""),
+                "color_palette": render_profile.get("color_palette", ""),
+                "render_quality": render_profile.get("quality", ""),
+                "mood": scene_data.get("mood", ""),
+                "pronoun": "She",
+            })
 
         return output
 
@@ -1215,6 +1469,8 @@ def _assemble_output(
     physical_ids: list,
     render_profile: dict,
     include_tags: set = None,
+    action_grammar_db: dict = None,
+    env_prep: str = "in",
 ) -> str:
     """Assemble fragments into a natural language prompt string.
 
@@ -1363,18 +1619,9 @@ def _assemble_output(
                 actor_rels.sort(key=lambda f: f.get("chain_order", 99))
                 # Convert the first one to finite verb
                 first_clause = actor_rels[0].get("clause_text", actor_rels[0]["text"])
-                for participle, finite in {
-                    "holding": "holds",
-                    "sitting": "sits",
-                    "hugging": "hugs",
-                    "standing next to": "stands next to",
-                    "sitting inside": "sits inside",
-                    "soaking in": "soaks in",
-                }.items():
-                    if first_clause.startswith(participle):
-                        first_clause = finite + first_clause[len(participle):]
-                        break
-                
+                first_action_id = actor_rels[0].get("action_id", "")
+                first_clause = _to_finite(first_clause, first_action_id, action_grammar_db, "singular")
+
                 parts.append(first_clause)
                 
                 # Append remaining clauses with space
@@ -1445,23 +1692,14 @@ def _assemble_output(
     if env_frags:
         env_text = env_frags[0]["text"] if env_frags else ""
         if env_text:
-            if any(k in env_text.lower() for k in ("cafe", "office", "room", "restaurant", "tunnel")):
-                prep = "inside"
-            elif "beach" in env_text.lower() or "court" in env_text.lower():
-                prep = "on"
-            elif "poolside" in env_text.lower():
-                prep = "at"
-            else:
-                prep = "in"
-            
             if env_text.startswith(("in ", "on ", "at ", "inside ")):
                 result += f" {env_text}"
             elif env_text.startswith(("a ", "an ", "the ")):
-                result += f" {prep} {env_text}"
+                result += f" {env_prep} {env_text}"
             else:
                 vowels = "aeiou"
                 art = "an" if env_text[0].lower() in vowels else "a"
-                result += f" {prep} {art} {env_text}"
+                result += f" {env_prep} {art} {env_text}"
 
     comp_frags = [f for f in other_shared if f.get("frag_type") == "composition"]
     if render_profile.get("narrative_mode") == "scene_description":
@@ -1509,8 +1747,8 @@ class PromptCompiler(Assembler):
         super().__init__(data_dir=data_dir)
         self.render_system = RenderSystemWrapper(self.render_profiles_db)
 
-    def compile_scene(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True) -> str:
-        return self.assemble(scene_data, strict=strict, inject_camera_descriptor=inject_camera_descriptor)
+    def compile_scene(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True, output_format: str = "legacy") -> str:
+        return self.assemble(scene_data, strict=strict, inject_camera_descriptor=inject_camera_descriptor, output_format=output_format)
 
 
 # ---------------------------------------------------------------------------

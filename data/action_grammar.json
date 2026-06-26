@@ -1,0 +1,154 @@
+{
+  "holding": {
+    "participle": "holding",
+    "finite_3sg": "holds",
+    "finite_pl": "hold",
+    "finite_past": "held",
+    "transitivity": "transitive",
+    "reciprocal_form": null
+  },
+  "holding_drink": {
+    "participle": "holding",
+    "finite_3sg": "holds",
+    "finite_pl": "hold",
+    "finite_past": "held",
+    "transitivity": "transitive",
+    "reciprocal_form": null
+  },
+  "lean_on": {
+    "participle": "leaning",
+    "finite_3sg": "leans",
+    "finite_pl": "lean",
+    "finite_past": "leaned",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "sit_on": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "sit_at": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "sit_in": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "sit_inside": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "stand_on": {
+    "participle": "standing",
+    "finite_3sg": "stands",
+    "finite_pl": "stand",
+    "finite_past": "stood",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "stand_at": {
+    "participle": "standing",
+    "finite_3sg": "stands",
+    "finite_pl": "stand",
+    "finite_past": "stood",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "stand_next_to": {
+    "participle": "standing",
+    "finite_3sg": "stands",
+    "finite_pl": "stand",
+    "finite_past": "stood",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "lie_on": {
+    "participle": "lying",
+    "finite_3sg": "lies",
+    "finite_pl": "lie",
+    "finite_past": "lay",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "rest_arms_on": {
+    "participle": "resting",
+    "finite_3sg": "rests",
+    "finite_pl": "rest",
+    "finite_past": "rested",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "soaking_in": {
+    "participle": "soaking",
+    "finite_3sg": "soaks",
+    "finite_pl": "soak",
+    "finite_past": "soaked",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "hugging": {
+    "participle": "hugging",
+    "finite_3sg": "hugs",
+    "finite_pl": "hug",
+    "finite_past": "hugged",
+    "transitivity": "transitive",
+    "reciprocal_form": "hugging each other"
+  },
+  "sitting": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "intransitive",
+    "reciprocal_form": null
+  },
+  "leaning_on": {
+    "participle": "leaning",
+    "finite_3sg": "leans",
+    "finite_pl": "lean",
+    "finite_past": "leaned",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "holding_near_eye": {
+    "participle": "holding",
+    "finite_3sg": "holds",
+    "finite_pl": "hold",
+    "finite_past": "held",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "dangling_feet": {
+    "participle": "dangling",
+    "finite_3sg": "dangles",
+    "finite_pl": "dangle",
+    "finite_past": "dangled",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "looking_at": {
+    "participle": "looking",
+    "finite_3sg": "looks",
+    "finite_pl": "look",
+    "finite_past": "looked",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  }
+}
