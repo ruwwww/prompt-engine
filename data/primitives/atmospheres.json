@@ -1,0 +1,67 @@
+{
+  "romantic_beach": {
+    "ground": "soft sandy shore",
+    "envelope": "romantic golden sunset lighting",
+    "vista": "gentle ocean waves in the distance"
+  },
+  "beach": {
+    "ground": "sandy shore",
+    "envelope": "warm golden sunset lighting",
+    "vista": "gentle ocean waves in the distance"
+  },
+  "cafe": {
+    "ground": "tiled floor",
+    "envelope": "warm ambient lighting",
+    "vista": "cozy cafe interior"
+  },
+  "alley": {
+    "ground": "wet cobblestone street",
+    "envelope": "dim flickering neon light",
+    "vista": "narrow brick alley stretching into darkness"
+  },
+  "bathroom": {
+    "ground": "polished tile floor",
+    "envelope": "soft diffused lighting",
+    "vista": "clean modern bathroom vanity"
+  },
+  "forest": {
+    "ground": "damp mossy forest floor",
+    "envelope": "dappled sunlight through foliage",
+    "vista": "dense green woodland stretching into the distance"
+  },
+  "balcony": {
+    "ground": "smooth concrete balcony floor",
+    "envelope": "breezy golden hour light",
+    "vista": "sweeping cityscape vista"
+  },
+  "bedroom": {
+    "ground": "polished hardwood floor",
+    "envelope": "warm cozy bedroom light",
+    "vista": "softly lit bedroom background"
+  },
+  "office": {
+    "ground": "clean tiled office floor",
+    "envelope": "cool fluorescent lighting",
+    "vista": "modern office space workspace"
+  },
+  "rooftop": {
+    "ground": "rough concrete rooftop floor",
+    "envelope": "windy night atmosphere",
+    "vista": "twinkling city lights under the night sky"
+  },
+  "poolside": {
+    "ground": "smooth concrete pool deck",
+    "envelope": "bright sunny daylight",
+    "vista": "sparkling blue swimming pool water"
+  },
+  "server_room": {
+    "ground": "raised tile floor",
+    "envelope": "cool fluorescent server light",
+    "vista": "rows of glowing server racks"
+  },
+  "car_interior": {
+    "ground": "rubber floor mats",
+    "envelope": "dim dashboard glow",
+    "vista": "rainy highway through the windshield"
+  }
+}

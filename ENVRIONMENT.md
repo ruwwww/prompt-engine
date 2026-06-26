@@ -1,8 +1,8 @@
 # Architectural Specification: Environment, Fixtures, and Spatial Interactions
 
-> **Version:** 1.0 (Final)
+> **Version:** 1.1 (Updated)
 > **Status:** Locked for Implementation
-> **Scope:** Defines the definitive ontological boundary between "Atmosphere" (ambient description) and "Fixtures" (interactable entities) within the Prompt Engine.
+> **Scope:** Defines the definitive ontological boundary between "Atmosphere" (ambient description) and "Fixtures" (interactable entities) within the Prompt Engine, mapped to the **Eight-Field Labeled Output Format**.
 
 ---
 
@@ -98,25 +98,56 @@ This is a multi-actor relationship where a Fixture visually frames one or more S
 
 ---
 
-## 3. The Assembly Order (Rendering Priority)
+## 3. The Eight-Field Labeled Output Format
 
-The final prompt must be assembled in a **strict linguistic order** to sound natural in English.
+The system produces a **structured, labeled output** with exactly eight fields:
 
-| Priority                      | Component                                         | Rationale                                                                                                                                                |
-| :---------------------------- | :------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1. Subject Core**           | Identity, Morphology, Clothing.                   | Identify _who_ is in the scene first.                                                                                                                    |
-| **2. Actions & Interactions** | Relationships (`holding`, `kneeling`, `framing`). | Describe _what_ they are doing immediately after identifying them.                                                                                       |
-| **3. Atmosphere**             | Ground, Envelope, Vista.                          | Place the action _in the space_ last. This avoids the "Yoda" effect (e.g., _"In a cave, a man stands"_ is wrong; _"A man stands in a cave"_ is correct). |
-
-**Jinja2 Assembly Logic (Environment Layer):**
-
-```jinja2
-{{ ground }}, with {{ envelope }}, with a view of {{ vista }}{% if background %}, {{ background }}{% endif %}
 ```
+[Summary Sentence]
+
+Subject: [Detailed subject description]
+Clothing: [Detailed clothing description]
+Action: [Detailed action/pose description]
+Environment: [Detailed environment description]
+Lighting: [Detailed lighting description]
+Camera: [Detailed camera description]
+Style Details: [Detailed style description]
+```
+
+### Mapping: Environment Ontology → Labeled Fields
+
+| Labeled Field     | Source                                                             | Content                                                                   |
+| :---------------- | :----------------------------------------------------------------- | :------------------------------------------------------------------------ |
+| **Environment**   | `environments.json` → `ground` + `vista` (+ optional `background`) | _"A soft sandy shore with a view of gentle ocean waves in the distance."_ |
+| **Lighting**      | `environments.json` → `envelope` (lighting/weather portion only)   | _"Romantic golden sunset lighting."_                                      |
+| **Subject**       | Subject resolution (Morphology + Identity)                         | _"A man kneeling before a woman."_                                        |
+| **Clothing**      | Clothing resolution (Attire + Accessories)                         | _"Wearing a white button-down shirt and beige trousers."_                 |
+| **Action**        | Relationship resolution (Actions + Pose)                           | _"Kneeling, presenting a ring box."_                                      |
+| **Camera**        | Camera resolution                                                  | _"Eye-level medium shot."_                                                |
+| **Style Details** | Style/Profile resolution                                           | _"Photorealistic cinematic style with vibrant red tones."_                |
 
 ---
 
-## 4. The "Vague/Scale" Edge Case (Definitive Rule)
+## 4. The Assembly Order (Rendering Priority)
+
+The final prompt must be assembled in a **strict linguistic order** to sound natural in English.
+
+| Priority                      | Component                   | Labeled Field      | Rationale                              |
+| :---------------------------- | :-------------------------- | :----------------- | :------------------------------------- |
+| **1. Summary Sentence**       | Concise prose overview      | _(First line)_     | Provides immediate context.            |
+| **2. Subject Core**           | Identity, Morphology        | **Subject:**       | Identify _who_ is in the scene.        |
+| **3. Clothing**               | Attire, Accessories         | **Clothing:**      | Describe _what_ they are wearing.      |
+| **4. Actions & Interactions** | Relationships, Pose         | **Action:**        | Describe _what_ they are doing.        |
+| **5. Environment**            | Ground + Vista + Background | **Environment:**   | Describe _where_ they are.             |
+| **6. Lighting**               | Envelope (Lighting/Weather) | **Lighting:**      | Describe the _atmospheric conditions_. |
+| **7. Camera**                 | Framing, Angle, Depth       | **Camera:**        | Describe _how_ it is shot.             |
+| **8. Style Details**          | Profile, Tone, Mood         | **Style Details:** | Describe the _aesthetic treatment_.    |
+
+**Rule:** The **Environment** and **Lighting** fields are separated, as they originate from different keys in the atmosphere catalog (`ground`+`vista` vs `envelope`).
+
+---
+
+## 5. The "Vague/Scale" Edge Case (Definitive Rule)
 
 When does an element become "too big" or "too vague" to be a Fixture?
 
@@ -132,7 +163,7 @@ When does an element become "too big" or "too vague" to be a Fixture?
 
 ---
 
-## 5. End-to-End Examples
+## 6. End-to-End Examples (With Eight-Field Output)
 
 ### Example 1: The Romantic Proposal (Complex)
 
@@ -168,9 +199,17 @@ When does an element become "too big" or "too vague" to be a Fixture?
 }
 ```
 
-**Rendered Output:**
+**Rendered Output (Eight-Field Format):**
 
-> _"A man kneels before a woman, holding a small velvet ring box, while a massive heart-shaped arch made entirely of red roses with glowing 'Happy Valentine Day' text frames the couple. Soft sandy shore, with romantic golden sunset lighting, with a view of gentle ocean waves in the distance."_
+> _"A man kneels before a woman, holding a ring box, framed by a massive rose arch on a romantic beach at sunset."_
+>
+> **Subject:** _A man kneeling before a woman._
+> **Clothing:** _The man wears a white button-down shirt and beige trousers; the woman wears a white floral off-shoulder dress._
+> **Action:** _The man kneels, presenting a ring box, while the woman looks down with a smile._
+> **Environment:** _A soft sandy shore with a view of gentle ocean waves in the distance._
+> **Lighting:** _Romantic golden sunset lighting._
+> **Camera:** _Eye-level medium shot capturing the couple and the rose arch._
+> **Style Details:** _Photorealistic cinematic style with vibrant red tones and a dreamy romantic mood._
 
 ---
 
@@ -207,19 +246,27 @@ When does an element become "too big" or "too vague" to be a Fixture?
 }
 ```
 
-**Rendered Output:**
+**Rendered Output (Eight-Field Format):**
 
-> _"A man leans against a whitewashed stone wall covered in peeling paint and graffiti, on a wet cobblestone floor with dim flickering neon light, with a view of a narrow alley stretching into darkness."_
+> _"A man leans against a graffiti-covered stone wall in a rain-slicked neon alley."_
+>
+> **Subject:** _A man._
+> **Clothing:** _[Resolved from attire]_
+> **Action:** _Leaning against a whitewashed stone wall covered in peeling paint and graffiti._
+> **Environment:** _A wet cobblestone floor with a view of a narrow alley stretching into darkness._
+> **Lighting:** _Dim flickering neon light._
+> **Camera:** _[Resolved from camera profile]_
+> **Style Details:** _[Resolved from style profile]_
 
 ---
 
-## 6. Summary of Golden Rules (The Constitution)
+## 7. Summary of Golden Rules (The Constitution)
 
 1.  **Separation of Concerns:** Atmosphere lives in the Flat Catalog. Fixtures live in the Scene Entities. They must never mix.
 2.  **The Touch Test:** If a Subject can touch it, it must be a Fixture. If not, it must be Atmosphere.
 3.  **The Background Rule:** Non-interactive background characters are just strings in the Atmosphere catalog. They are not Subjects (they lack detailed morphology/actions).
 4.  **Explicit is better than implicit:** Fixtures must be explicitly defined in the scene JSON. The system does not "guess" that a table exists in a cafe.
-5.  **Order matters:** Render Actions and Fixture interactions _before_ rendering the Atmospheric Ground/Envelope/Vista.
+5.  **Order matters (Eight-Field Format):** Render Actions and Fixture interactions _before_ rendering the Atmospheric Ground/Envelope/Vista. The Environment and Lighting fields are distinct and must be populated from separate keys.
 
 ---
 

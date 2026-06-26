@@ -266,8 +266,9 @@ def apply_relationships(
 
         actor_id = rel.get("actor") or rel.get("subject") or rel.get("subject1")
         object_id = rel.get("object") or rel.get("target") or rel.get("subject2") or rel.get("container")
+        subjects_ids = rel.get("subjects")
 
-        if not actor_id:
+        if not actor_id and not subjects_ids:
             continue
 
         # Skip if relationship has target/object/container role but missing value
@@ -276,11 +277,11 @@ def apply_relationships(
         if has_object_role and not object_id:
             continue
 
-        actor_obj = scene_objects.get(actor_id, {})
+        actor_obj = scene_objects.get(actor_id, {}) if actor_id else {}
         object_obj = scene_objects.get(object_id, {}) if object_id else {}
 
         # Try affordance query first (new system)
-        if affordance_types_db and env_data and object_id:
+        if affordance_types_db and env_data and object_id and actor_id:
             binding = _resolve_affordance_query(
                 rel_type, object_obj, set(visible_zones),
                 env_data, affordance_types_db,
@@ -313,19 +314,32 @@ def apply_relationships(
         valid = True
         for role_name, role_def in roles.items():
             allowed = role_def.get("allowed", [])
-            role_id = rel.get(role_name)
-            if role_id and role_id in scene_objects:
-                role_obj = scene_objects[role_id]
-                role_type = role_obj.get("type", "")
-                if allowed and role_type not in allowed:
-                    valid = False
-                    break
+            multiple = role_def.get("multiple", False)
+            if multiple:
+                r_ids = rel.get(role_name, [])
+                if not isinstance(r_ids, list):
+                    r_ids = [r_ids] if r_ids else []
+                for rid in r_ids:
+                    if rid and rid in scene_objects:
+                        role_obj = scene_objects[rid]
+                        role_type = role_obj.get("type", "")
+                        if allowed and role_type not in allowed:
+                            valid = False
+                            break
+            else:
+                role_id = rel.get(role_name)
+                if role_id and role_id in scene_objects:
+                    role_obj = scene_objects[role_id]
+                    role_type = role_obj.get("type", "")
+                    if allowed and role_type not in allowed:
+                        valid = False
+                        break
         if not valid:
             continue
 
         required_zones = definition.get("required_zones", {})
         actor_zone = required_zones.get("actor")
-        if actor_zone and actor_zone not in visible_zones:
+        if actor_id and actor_zone and actor_zone not in visible_zones:
             continue
 
         priority = definition.get("priority", 80)
@@ -353,17 +367,23 @@ def apply_relationships(
                 variant_id = variant.get("variant_id", "")
                 break
 
-        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, placements, jinja2_env)
-        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, placements, jinja2_env)
+        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, placements, jinja2_env) if actor_id else ""
+        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, placements, jinja2_env) if object_id else ""
 
-        # Build gender-aware possessive pronoun for suffix templates
-        actor_gender = actor_obj.get("gender", "person")
-        if actor_gender == "man":
-            possessive = "his"
-        elif actor_gender == "woman":
-            possessive = "her"
-        else:
-            possessive = "their"
+        subjects_phrases = []
+        if isinstance(subjects_ids, list):
+            for sub_id in subjects_ids:
+                sub_phrase = _get_noun_phrase(sub_id, rel, scene_objects, mentioned_ids, placements, jinja2_env)
+                if sub_phrase:
+                    subjects_phrases.append(sub_phrase)
+
+        possessive = "their"
+        if actor_id and actor_obj:
+            actor_gender = actor_obj.get("gender", "person")
+            if actor_gender == "man":
+                possessive = "his"
+            elif actor_gender == "woman":
+                possessive = "her"
 
         ctx = {
             "actor": actor_phrase,
@@ -371,6 +391,7 @@ def apply_relationships(
             "subject": actor_phrase,
             "target": object_phrase,
             "container": object_phrase,
+            "subjects": subjects_phrases,
             "_possessive": possessive,
         }
 
@@ -388,8 +409,13 @@ def apply_relationships(
             except TemplateNotFound:
                 pass
 
-        mentioned_ids.add(actor_id)
-        mentioned_ids.add(object_id)
+        if actor_id:
+            mentioned_ids.add(actor_id)
+        if object_id:
+            mentioned_ids.add(object_id)
+        if isinstance(subjects_ids, list):
+            for sub_id in subjects_ids:
+                mentioned_ids.add(sub_id)
 
         fragments.append({
             "zone": "relationship",
@@ -422,7 +448,8 @@ def _get_noun_phrase(
 
     if obj_type in ("human", "creature"):
         gender = obj.get("gender", "person")
-        if entity_id in mentioned_ids:
+        is_subject_list = isinstance(rel.get("subjects"), list) and entity_id in rel.get("subjects")
+        if entity_id in mentioned_ids and not is_subject_list:
             if gender == "woman":
                 return "she"
             elif gender == "man":
@@ -453,15 +480,22 @@ def _get_noun_phrase(
 
     template_key = obj.get("template_key")
     phrase = None
-    if template_key:
-        if jinja2_env:
-            j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
-            if j2_text:
-                phrase = j2_text
-    if phrase is None:
-        if obj_type == "fixture" and template_key:
-            # Use fixture name directly (e.g., "window" → "a window")
-            phrase = template_key.replace("_", " ")
+    if jinja2_env:
+        t_name = (template_key + ".jinja2") if template_key else None
+        if t_name:
+            try:
+                jinja2_env.get_template(t_name)
+                phrase = _render_jinja2_template(jinja2_env, t_name, obj)
+            except Exception:
+                pass
+        if not phrase and obj_type == "fixture":
+            phrase = _render_jinja2_template(jinja2_env, "Fixture.jinja2", obj)
+
+    if not phrase:
+        if obj.get("label"):
+            phrase = obj["label"]
+        elif obj_type == "fixture":
+            phrase = template_key.replace("_", " ") if template_key else entity_id
         else:
             # Fallback: material + color + type
             parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
@@ -500,17 +534,25 @@ def _natural_join(items: list) -> str:
 def _render_fixture_label(fixture_obj: dict, jinja2_env: object = None) -> str:
     """Render a fixture object into a descriptive noun phrase using its template."""
     template_key = fixture_obj.get("template_key", "")
-    if jinja2_env and template_key:
-        j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", fixture_obj)
-        if j2_text:
-            return j2_text
+    if jinja2_env:
+        t_name = (template_key + ".jinja2") if template_key else "Fixture.jinja2"
+        try:
+            if template_key and hasattr(jinja2_env, "get_template"):
+                jinja2_env.get_template(t_name)
+                j2_text = _render_jinja2_template(jinja2_env, t_name, fixture_obj)
+            else:
+                j2_text = _render_jinja2_template(jinja2_env, "Fixture.jinja2", fixture_obj)
+            if j2_text:
+                return j2_text
+        except Exception:
+            pass
     return fixture_obj.get("label", template_key.lower().replace("_", " ") if template_key else "fixture")
 
 
 def apply_environment(
     scene_data: dict,
     scene_objects: dict,
-    environments_db: dict,
+    atmospheres_db: dict,
     lighting_db: dict,
     weather_db: dict,
     composition_db: dict,
@@ -533,66 +575,72 @@ def apply_environment(
         env_data = scene_data.get("environment")
 
     if env_data:
+        if isinstance(env_data, str):
+            env_data = {"type": env_data}
         env_type = env_data.get("template_key") or env_data.get("location") or env_data.get("type")
         if env_type:
             db_key = env_type
-            if db_key not in environments_db and db_key.lower() in environments_db:
+            if db_key not in atmospheres_db and db_key.lower() in atmospheres_db:
                 db_key = db_key.lower()
-            env_def = environments_db.get(db_key, {})
-            label = env_def.get("label", env_type)
-            article = env_def.get("article", "a")
+            env_def = atmospheres_db.get(db_key, {})
 
-            # Get lighting and weather from new atmosphere sub-object, fall back to legacy fields
-            atmosphere = env_def.get("atmosphere", {})
-            lighting_key = env_data.get("lighting") or atmosphere.get("lighting_key") or env_def.get("default_lighting", "")
-            weather_key = env_data.get("weather") or atmosphere.get("weather_key") or env_def.get("default_weather", "")
+            ground = env_def.get("ground", "")
+            envelope = env_def.get("envelope", "")
+            vista = env_def.get("vista", "")
+            background = env_def.get("background", "")
 
-            lighting_str = ""
-            if lighting_key:
-                lighting_entry = lighting_db.get(lighting_key, {})
-                if isinstance(lighting_entry, dict):
-                    lighting_str = lighting_entry.get("template", lighting_key)
-                else:
-                    lighting_str = lighting_key
+            # Look up weather / lighting overrides
+            user_lighting = env_data.get("lighting")
+            user_weather = env_data.get("weather")
+            if user_lighting or user_weather:
+                lighting_str = ""
+                if user_lighting:
+                    lighting_entry = lighting_db.get(user_lighting, {})
+                    if isinstance(lighting_entry, dict):
+                        lighting_str = lighting_entry.get("template", user_lighting)
+                    else:
+                        lighting_str = user_lighting
 
-            weather_str = ""
-            if weather_key:
-                weather_entry = weather_db.get(weather_key, {})
-                if isinstance(weather_entry, dict):
-                    weather_str = weather_entry.get("template", weather_key)
-                else:
-                    weather_str = weather_key
+                weather_str = ""
+                if user_weather:
+                    weather_entry = weather_db.get(user_weather, {})
+                    if isinstance(weather_entry, dict):
+                        weather_str = weather_entry.get("template", user_weather)
+                    else:
+                        weather_str = user_weather
 
-            # Check atmosphere lexicon for evocative sentence fragment
-            atmosphere_key = f"{weather_key}_{lighting_key}" if weather_key and lighting_key else ""
-            atmosphere_entry = atmosphere_db.get(atmosphere_key, {}) if atmosphere_db and atmosphere_key else {}
-            evocative_fragment = atmosphere_entry.get("sentence_fragment", "")
+                # Combine them to override the envelope
+                if weather_str and lighting_str:
+                    envelope = f"{weather_str} {lighting_str}"
+                elif weather_str:
+                    envelope = f"{weather_str} lighting"
+                elif lighting_str:
+                    envelope = f"{lighting_str} lighting"
 
-            # Build combined environment label with weather and lighting as adjectives
-            combined_label = label
-            if lighting_str:
-                combined_label = f"{lighting_str} {combined_label}"
-            if weather_str:
-                combined_label = f"{weather_str} {combined_label}"
-
-            # Determine article from the first word of the combined label (not the base noun)
-            first_char = combined_label[0].lower()
-            dynamic_article = "an" if first_char in "aeiou" else "a"
-
-            # Phase 1: Try Jinja2 environment template
+            # Render Jinja2 templates
             env_text = ""
             if jinja2_env:
                 env_text = _render_jinja2_template(jinja2_env, "Environment.jinja2", {
-                    "article": dynamic_article, "label": combined_label
+                    "ground": ground,
+                    "envelope": envelope,
+                    "vista": vista,
+                    "background": background,
                 })
             if not env_text:
-                env_text = f"{dynamic_article} {combined_label}"
+                parts = []
+                if ground:
+                    parts.append(ground)
+                if vista:
+                    parts.append(f"with a view of {vista}")
+                env_text = ", ".join(parts)
 
-            # Append location/geolocation
-            location = env_data.get("geolocation") or env_data.get("location")
-            if location:
-                loc_str = location if location.startswith("the ") else location
-                env_text = f"{env_text} in {loc_str}"
+            lighting_text = ""
+            if jinja2_env:
+                lighting_text = _render_jinja2_template(jinja2_env, "Lighting.jinja2", {
+                    "envelope": envelope,
+                })
+            if not lighting_text:
+                lighting_text = envelope
 
             fragments.append({
                 "zone": "environment",
@@ -600,16 +648,19 @@ def apply_environment(
                 "tags": ["environment"],
                 "priority": 65,
                 "text": env_text,
+                "ground": ground,
+                "envelope": envelope,
+                "vista": vista,
+                "background": background,
             })
 
-            # Add evocative atmosphere fragment if available (prefixed with comma for flow)
-            if evocative_fragment:
+            if lighting_text:
                 fragments.append({
-                    "zone": "atmosphere",
-                    "frag_type": "atmosphere",
+                    "zone": "lighting",
+                    "frag_type": "lighting",
                     "tags": ["environment"],
                     "priority": 55,
-                    "text": f", {evocative_fragment}",
+                    "text": lighting_text,
                 })
 
     # Ambient fixture discovery: render fixture/furniture objects not referenced by relationships
@@ -981,14 +1032,27 @@ def _resolve_affordance_query(
     # Use Jinja2 template rendering for scene object fixtures when available
     template_key = target_obj.get("template_key", "")
     obj_phrase = None
-    if jinja2_env and template_key:
-        obj_phrase = _render_jinja2_template(jinja2_env, template_key + ".jinja2", target_obj)
+    if jinja2_env:
+        t_name = (template_key + ".jinja2") if template_key else "Fixture.jinja2"
+        try:
+            if template_key and hasattr(jinja2_env, "get_template"):
+                try:
+                    jinja2_env.get_template(t_name)
+                    obj_phrase = _render_jinja2_template(jinja2_env, t_name, target_obj)
+                except Exception:
+                    obj_phrase = _render_jinja2_template(jinja2_env, "Fixture.jinja2", target_obj)
+            else:
+                obj_phrase = _render_jinja2_template(jinja2_env, "Fixture.jinja2", target_obj)
+        except Exception:
+            pass
+
     if obj_phrase:
+        obj_phrase = obj_phrase.strip()
         first_char = obj_phrase[0].lower()
         obj_article = "an" if first_char in "aeiou" else "a"
         object_phrase = f"{obj_article} {obj_phrase}"
     else:
-        fixture_label = fixture_name.replace("_", " ")
+        fixture_label = target_obj.get("label") or fixture_name.replace("_", " ")
         fixture_article = "a"
         if fixture_label and fixture_label[0].lower() in "aeiou":
             fixture_article = "an"
@@ -1028,6 +1092,7 @@ class Assembler:
         self.actions_db = _load_json("actions.json")
         self.spatial_db = _load_json("spatial_relationships.json")
         self.environments_db = _load_json("environments.json")
+        self.atmospheres_db = _load_json("primitives/atmospheres.json")
         self.lighting_db = _load_json("lighting.json")
         self.weather_db = _load_json("weather.json")
         self.composition_db = _load_json("composition.json")
@@ -1074,6 +1139,8 @@ class Assembler:
             scene_objects[obj_id] = {**obj_data, "id": obj_id}
 
         environment_data = scene_data.get("environment", {})
+        if isinstance(environment_data, str):
+            environment_data = {"type": environment_data}
         env_type = environment_data.get("type")
         env_def = self.environments_db.get(env_type, {}) if env_type else {}
         env_fixtures = env_def.get("fixtures", env_def.get("affordances", {}))
@@ -1215,6 +1282,8 @@ class Assembler:
 
         # Resolve environment anchors
         environment_data = scene_data.get("environment", {})
+        if isinstance(environment_data, str):
+            environment_data = {"type": environment_data}
         env_type = environment_data.get("type")
         env_def = self.environments_db.get(env_type, {}) if env_type else {}
         env_fixtures = env_def.get("fixtures", env_def.get("affordances", {}))
@@ -1226,20 +1295,7 @@ class Assembler:
             for field in ("target", "actor", "subject", "container", "object"):
                 val = rel_copy.get(field)
                 if isinstance(val, str) and "." in val:
-                    parts = val.split(".", 1)
-                    if len(parts) == 2:
-                        prefix, suffix = parts
-                        if env_type and prefix == env_type and suffix in env_fixtures:
-                            if val not in scene_objects:
-                                scene_objects[val] = {
-                                    "id": val,
-                                    "type": "fixture",
-                                    "template_key": suffix,
-                                    "anchor": suffix,
-                                    "env_type": env_type,
-                                }
-                        else:
-                            valid_anchor_rel = False
+                    valid_anchor_rel = False
             if valid_anchor_rel:
                 resolved_relationships.append(rel_copy)
 
@@ -1385,6 +1441,8 @@ class Assembler:
         env_resolved = None
         env_prep = "in"
         if env_data:
+            if isinstance(env_data, str):
+                env_data = {"type": env_data}
             env_type = env_data.get("template_key") or env_data.get("location") or env_data.get("type")
             if env_type:
                 db_key = env_type
@@ -1412,7 +1470,7 @@ class Assembler:
 
         env_frags = apply_environment(
             scene_data, scene_objects,
-            self.environments_db, self.lighting_db,
+            self.atmospheres_db, self.lighting_db,
             self.weather_db, self.composition_db,
             self.jinja2_env,
             relationship_target_ids=relationship_target_ids,
@@ -1479,12 +1537,13 @@ class Assembler:
                 output = output[0].upper() + output[1:]
 
         if output_format == "labeled":
-            weather_key = None
-            lighting_key = None
-            if env_data and env_resolved:
-                atmosphere = env_resolved.get("atmosphere", {})
-                weather_key = atmosphere.get("weather_key")
-                lighting_key = atmosphere.get("lighting_key")
+            env_label = ""
+            lighting_phrase = ""
+            for f in filtered:
+                if f.get("zone") == "environment" and f.get("frag_type") == "environment":
+                    env_label = f["text"]
+                elif f.get("zone") == "lighting" or f.get("frag_type") == "lighting":
+                    lighting_phrase = f["text"]
 
             # Collect categorized fragments for the first physical actor
             held_items = []
@@ -1553,12 +1612,12 @@ class Assembler:
                 "clothing_items": clothing_items,
                 "posture_phrase": posture_phrase,
                 "action_clauses": action_clauses,
-                "env_label": env_resolved.get("label", "") if env_resolved else "",
+                "env_label": env_label,
                 "env_preposition": env_prep,
                 "background_elements": [],
                 "scene_props": [],
-                "lighting_phrase": self.lighting_db.get(lighting_key, {}).get("descriptor_phrase", "") if lighting_key else "",
-                "weather_phrase": self.weather_db.get(weather_key, {}).get("descriptor_phrase", "") if weather_key else "",
+                "lighting_phrase": lighting_phrase,
+                "weather_phrase": "",
                 "shot_type": camera.get("shot_type", ""),
                 "camera_angle": camera.get("angle", ""),
                 "camera_framing": clean_framing,
@@ -1897,30 +1956,17 @@ def _assemble_output(
     # Append ungrouped relationships
     if ungrouped_rels:
         for f in ungrouped_rels:
-            clause = f.get("clause_text", f["text"])
+            clause = f["text"] if not f.get("actor_id") else f.get("clause_text", f["text"])
             if clause:
-                if not result.endswith(","):
-                    result = result.rstrip() + ","
-                result += f" {clause}" if not clause.startswith(" ") else clause
-
-    # Append environment
-    if env_frags:
-        env_text = env_frags[0]["text"] if env_frags else ""
-        if env_text:
-            if env_text.startswith(("in ", "on ", "at ", "inside ")):
-                result += f" {env_text}"
-            elif env_text.startswith(("a ", "an ", "the ")):
-                result += f" {env_prep} {env_text}"
-            else:
-                vowels = "aeiou"
-                art = "an" if env_text[0].lower() in vowels else "a"
-                result += f" {env_prep} {art} {env_text}"
-        # Append supplementary env fragments (e.g., "featuring X")
-        for f in env_frags[1:]:
-            extra = f["text"]
-            if extra:
-                result = result.rstrip(".")
-                result += f" {extra}" if not extra.startswith(" ") else extra
+                if not result:
+                    result = clause[0].upper() + clause[1:]
+                else:
+                    if result.endswith("."):
+                        result += f" {clause[0].upper() + clause[1:]}"
+                    else:
+                        if not result.endswith(","):
+                            result = result.rstrip() + ","
+                        result += f" {clause}" if not clause.startswith(" ") else clause
 
     comp_frags = [f for f in other_shared if f.get("frag_type") == "composition"]
     if render_profile.get("narrative_mode") == "scene_description":
@@ -1947,6 +1993,68 @@ def _assemble_output(
                 if not result.endswith(","):
                     result = result.rstrip() + ","
                 result += f" {text}" if not text.startswith(" ") else text
+
+    # Append environment (VERY LAST)
+    if env_frags:
+        env_f = [f for f in env_frags if f.get("zone") == "environment"][0] if any(f.get("zone") == "environment" for f in env_frags) else None
+        if env_f:
+            g = env_f.get("ground", "")
+            e = env_f.get("envelope", "")
+            v = env_f.get("vista", "")
+            b = env_f.get("background", "")
+
+            # Combine ground, envelope, vista for prose output
+            parts = []
+            if g:
+                parts.append(g)
+            if e:
+                parts.append(f"with {e}")
+            if v:
+                parts.append(f"with a view of {v}")
+            if b:
+                parts.append(b)
+            env_prose = ", ".join(parts)
+
+            if env_prose:
+                if result.endswith("."):
+                    result = result.rstrip(".")
+                
+                if render_profile.get("narrative_mode") == "scene_description":
+                    # For scene_description, environment begins a new sentence if not beginning with preposition
+                    if env_prose.startswith(("in ", "on ", "at ", "inside ", "under ", "above ")):
+                        result += f", {env_prose}"
+                    elif env_prose.startswith(("a ", "an ", "the ")):
+                        result += f", {env_prep} {env_prose}"
+                    else:
+                        capitalized_env = env_prose[0].upper() + env_prose[1:]
+                        # End the previous text with period and start environment sentence
+                        result += f". {capitalized_env}"
+                else:
+                    if env_prose.startswith(("in ", "on ", "at ", "inside ", "under ", "above ")):
+                        if result.endswith(","):
+                            result = result[:-1]
+                        result += f", {env_prose}"
+                    elif env_prose.startswith(("a ", "an ", "the ")):
+                        if result.endswith(","):
+                            result = result[:-1]
+                        result += f", {env_prep} {env_prose}"
+                    else:
+                        if result.endswith(","):
+                            result = result[:-1]
+                        vowels = "aeiou"
+                        art = "an" if env_prose[0].lower() in vowels else "a"
+                        result += f", {env_prep} {art} {env_prose}"
+
+        # Append supplementary environment fragments (e.g. featuring...)
+        for f in env_frags:
+            if f.get("zone") == "environment" and f.get("priority") == 60:
+                extra = f["text"]
+                if extra:
+                    if result.endswith("."):
+                        result = result.rstrip(".")
+                    if result.endswith(","):
+                        result = result[:-1]
+                    result += f", {extra}" if not extra.startswith(" ") else extra
 
     if render_profile.get("narrative_mode") == "scene_description":
         if not result.endswith("."):

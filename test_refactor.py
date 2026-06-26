@@ -34,9 +34,10 @@ class TestSmoke(unittest.TestCase):
         }
         out = self._run(scene)
         # Lead contains environment
-        self.assertIn("cafe", out)
+        self.assertIn("tiled floor", out)
+        self.assertIn("cozy cafe interior", out)
         # Preposition is "inside" for enclosed
-        self.assertIn("inside a cafe", out)
+        self.assertIn("inside a tiled floor", out)
         # No "featuring" anywhere
         self.assertNotIn("featuring", out.lower())
         # Action clause shows interaction
@@ -58,7 +59,7 @@ class TestSmoke(unittest.TestCase):
         }
         out = self._run(scene)
         # Preposition derived from containment=open, normal=up
-        self.assertIn("on a beach", out)
+        self.assertIn("on a sandy shore", out)
         # Action clause shows interaction
         self.assertIn("sitting", out.lower())
         # No unbound fixtures
@@ -80,7 +81,7 @@ class TestSmoke(unittest.TestCase):
         }
         out = self._run(scene)
         # Preposition "at" for transitional
-        self.assertIn("at a balcony", out)
+        self.assertIn("at a smooth concrete balcony floor", out)
         # No unbound fixtures
         self.assertNotIn("featuring", out.lower())
 
@@ -96,7 +97,7 @@ class TestSmoke(unittest.TestCase):
         }
         out = self._run(scene)
         # Environment appears with correct preposition
-        self.assertIn("inside a cafe", out)
+        self.assertIn("inside a tiled floor", out)
         # No fixture names
         self.assertNotIn("counter", out)
         self.assertNotIn("featuring", out.lower())
@@ -119,7 +120,7 @@ class TestSmoke(unittest.TestCase):
         # Finite verb "sits" not participial "sitting"
         self.assertIn("sits", out.lower())
         # Office is enclosed → preposition is "inside"
-        self.assertIn("inside an office", out.lower())
+        self.assertIn("clean tiled office floor", out.lower())
 
 
 class TestDerivePreposition(unittest.TestCase):

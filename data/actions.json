@@ -253,5 +253,13 @@
         ]
       }
     }
+  },
+  "framing": {
+    "tags": ["spatial"],
+    "priority": 85,
+    "roles": {
+      "object": { "allowed": ["fixture"] },
+      "subjects": { "allowed": ["human", "orc", "elf"], "multiple": true }
+    }
   }
 }
