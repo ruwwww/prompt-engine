@@ -1311,19 +1311,6 @@ class Assembler:
             subject_type = "person"
             actor_gender = "person"
 
-            first_physical_id = physical_ids[0] if physical_ids else None
-            if first_physical_id:
-                obj = scene_objects.get(first_physical_id, {})
-                raw_gender = obj.get("gender", "")
-                raw_morph = obj.get("morphology", {})
-                if raw_morph and raw_morph.get("type"):
-                    subject_type = raw_morph["type"]
-                elif raw_gender in ("woman", "man", "person"):
-                    subject_type = raw_gender
-                elif raw_gender:
-                    subject_type = raw_gender
-                actor_gender = subject_type
-
             CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
             ACCESSORY_ZONES = {"Hands", "Jewelry", "Accessories"}
 
@@ -1333,6 +1320,7 @@ class Assembler:
                 tags = f.get("tags", [])
 
                 if zone == "_subject_type":
+                    subject_type = f["text"]
                     continue
                 elif zone == "Hair":
                     hair_phrase = f["text"]
@@ -1362,11 +1350,11 @@ class Assembler:
             if hair_phrase:
                 subject_phrase += " with " + hair_phrase
 
-            # Derive pronoun from gender
+            # Derive pronoun from subject type
             pronoun = "She"
-            if actor_gender == "man":
+            if subject_type == "man":
                 pronoun = "He"
-            elif actor_gender not in ("woman",):
+            elif subject_type not in ("woman",):
                 pronoun = "They"
 
             # Clean camera framing: "full_body" -> "full-body"
@@ -2096,7 +2084,7 @@ def render_hair(ontology: dict) -> str:
         if isinstance(primary, dict):
             arr_type = primary.get("type", "loose")
             if arr_type and arr_type not in ("loose", "down"):
-                base = f"{arr_type} of {base}"
+                base = f"{arr_type.replace('_', ' ')} of {base}"
 
             accessories = arrangement.get("accessories", [])
             if accessories:

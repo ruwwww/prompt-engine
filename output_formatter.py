@@ -41,23 +41,34 @@ def format_subject_field(identity_phrase: str, held_items: list[str],
     return _cap_sentence(" ".join(parts))
 
 
+_PRONOUN_VERB = {
+    "She": ("She", "is", "wears"),
+    "He": ("He", "is", "wears"),
+    "They": ("They", "are", "wear"),
+}
+
+def _pv(pronoun: str) -> tuple:
+    return _PRONOUN_VERB.get(pronoun, ("They", "are", "wear"))
+
 def format_clothing_field(clothing_items: list[dict], pronoun: str = "She") -> str:
     sorted_items = sorted(clothing_items, key=lambda x: x.get("layer_order", 0), reverse=True)
     labels = [item["label"] for item in sorted_items]
     if not labels:
         return ""
-    return f"{pronoun} wears " + _join_list_with_over(labels) + "."
+    subj, _, verb = _pv(pronoun)
+    return f"{subj} {verb} " + _join_list_with_over(labels) + "."
 
 
 def format_action_field(posture_phrase: str, action_clauses: list[str], pronoun: str = "She") -> str:
     parts = []
+    subj, verb, _ = _pv(pronoun)
     if posture_phrase:
-        parts.append(f"{pronoun} is {posture_phrase}")
+        parts.append(f"{subj} {verb} {posture_phrase}")
     for clause in action_clauses:
         if parts:
             parts.append(clause)
         else:
-            parts.append(f"{pronoun} is {clause}")
+            parts.append(f"{subj} {verb} {clause}")
     return _cap_sentence(", ".join(parts))
 
 
@@ -97,9 +108,11 @@ def format_camera_field(shot_type: str, angle: str, framing: str,
     parts = []
     if shot_type:
         parts.append(shot_type)
+    elif framing:
+        parts.append(f"{framing} shot")
     if angle:
         parts.append(f"from {angle}")
-    if framing:
+    if framing and shot_type:
         parts.append(framing)
     sentence = " ".join(parts)
     if depth_of_field:
@@ -178,7 +191,8 @@ def render_full_output(scene_data: dict) -> str:
         lines.append(f"Objects: {objects}")
     lines.append(f"Lighting: {lighting}")
     lines.append(f"Camera: {camera}")
-    lines.append(f"Style Details: {style}")
+    if style:
+        lines.append(f"Style Details: {style}")
 
     return "\n".join(lines)
 
