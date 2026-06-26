@@ -1,7 +1,7 @@
 {
   "lean_on_edge": {
-    "action_id": "lean_on",
-    "body_zones": ["UpperBody", "Arms"],
+    "action_id": "leaning_on",
+    "body_zones": ["UpperBody"],
     "preposition_hint": "against",
     "grammatical_role": "object",
     "clause_head": "leaning",
@@ -9,8 +9,8 @@
     "excludes_posture": ["sitting", "lying"]
   },
   "lean_on_surface": {
-    "action_id": "lean_on",
-    "body_zones": ["UpperBody", "Arms"],
+    "action_id": "leaning_on",
+    "body_zones": ["UpperBody"],
     "preposition_hint": "on",
     "grammatical_role": "object",
     "clause_head": "leaning",
@@ -18,8 +18,8 @@
     "excludes_posture": ["sitting", "lying"]
   },
   "sit_on_face": {
-    "action_id": "sit_on",
-    "body_zones": ["LowerBody", "Hips"],
+    "action_id": "sitting",
+    "body_zones": ["LowerBody"],
     "preposition_hint": "on",
     "grammatical_role": "object",
     "clause_head": "sitting",
@@ -27,8 +27,8 @@
     "excludes_posture": ["standing"]
   },
   "sit_at_face": {
-    "action_id": "sit_at",
-    "body_zones": ["LowerBody", "Hips"],
+    "action_id": "sitting",
+    "body_zones": ["LowerBody"],
     "preposition_hint": "at",
     "grammatical_role": "object",
     "clause_head": "sitting",
@@ -36,8 +36,8 @@
     "excludes_posture": ["standing"]
   },
   "sit_in_interior": {
-    "action_id": "sit_in",
-    "body_zones": ["LowerBody", "Hips"],
+    "action_id": "sitting",
+    "body_zones": ["LowerBody"],
     "preposition_hint": "in",
     "grammatical_role": "object",
     "clause_head": "sitting",
@@ -45,8 +45,8 @@
     "excludes_posture": ["standing"]
   },
   "stand_on_face": {
-    "action_id": "stand_on",
-    "body_zones": ["FullBody", "Legs"],
+    "action_id": "standing_on",
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "on",
     "grammatical_role": "object",
     "clause_head": "standing",
@@ -55,7 +55,7 @@
   },
   "stand_at_edge": {
     "action_id": "stand_at",
-    "body_zones": ["FullBody"],
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "at the edge of",
     "grammatical_role": "object",
     "clause_head": "standing",
@@ -63,8 +63,8 @@
     "excludes_posture": ["sitting", "lying"]
   },
   "stand_next_to": {
-    "action_id": "stand_next_to",
-    "body_zones": ["FullBody"],
+    "action_id": "standing_next_to",
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "next to",
     "grammatical_role": "object",
     "clause_head": "standing",
@@ -73,7 +73,7 @@
   },
   "rest_arms_on_top": {
     "action_id": "rest_arms_on",
-    "body_zones": ["Arms", "Hands"],
+    "body_zones": ["UpperBody", "Hands"],
     "preposition_hint": "on",
     "grammatical_role": "object",
     "clause_head": "resting arms",
@@ -82,7 +82,7 @@
   },
   "lie_on_face": {
     "action_id": "lie_on",
-    "body_zones": ["FullBody"],
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "on",
     "grammatical_role": "object",
     "clause_head": "lying",
@@ -99,7 +99,7 @@
     "excludes_posture": []
   },
   "hold_drink": {
-    "action_id": "holding_drink",
+    "action_id": "holding",
     "body_zones": ["Hands"],
     "preposition_hint": null,
     "grammatical_role": "direct_object",
@@ -108,8 +108,8 @@
     "excludes_posture": []
   },
   "sit_inside_vehicle": {
-    "action_id": "sit_inside",
-    "body_zones": ["FullBody", "LowerBody"],
+    "action_id": "sitting",
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "inside",
     "grammatical_role": "object",
     "clause_head": "sitting",
@@ -117,8 +117,8 @@
     "excludes_posture": ["standing"]
   },
   "sit_at_edge": {
-    "action_id": "sit_at",
-    "body_zones": ["LowerBody", "Hips"],
+    "action_id": "sitting",
+    "body_zones": ["LowerBody"],
     "preposition_hint": "at the edge of",
     "grammatical_role": "object",
     "clause_head": "sitting",
@@ -127,7 +127,7 @@
   },
   "soak_in_interior": {
     "action_id": "soaking_in",
-    "body_zones": ["FullBody"],
+    "body_zones": ["UpperBody", "LowerBody"],
     "preposition_hint": "in",
     "grammatical_role": "object",
     "clause_head": "soaking",
