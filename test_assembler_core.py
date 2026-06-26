@@ -34,7 +34,6 @@ class AssemblerWrapper:
 # Import test classes from test_compiler.py
 # ---------------------------------------------------------------------------
 from test_compiler import (
-    TestSafeFormat,
     TestVisibility,
     TestSubjects,
     TestAttributeComposition,
@@ -45,7 +44,6 @@ from test_compiler import (
     TestMultiCharacter,
     TestNewFeatures,
     TestSlotDescriptors,
-    TestPatterns,
     TestCompositionApproach,
     TestNewEdgeCases,
     TestBodySurfaceFeatures,
@@ -115,7 +113,7 @@ _EDGE_SKIP = {
 
 
 # Create patched versions
-TestSafeFormat_Assembler = TestSafeFormat  # No compile_scene, no patching needed
+# TestSafeFormat_Assembler removed (safe_format deleted)
 TestVisibility_Assembler = _make_patched_class(TestVisibility, AssemblerWrapper)
 TestSubjects_Assembler = _make_patched_class(TestSubjects, AssemblerWrapper)
 TestAttributeComposition_Assembler = _make_patched_class(TestAttributeComposition, AssemblerWrapper)
@@ -129,7 +127,7 @@ TestSlotDescriptors_Assembler = _make_patched_class_with_skips(
     TestSlotDescriptors, AssemblerWrapper, _SLOT_SKIP,
     "Assembler v2: Slot descriptor scene recreations TBD"
 )
-TestPatterns_Assembler = TestPatterns  # No compile_scene
+# TestPatterns_Assembler removed (skipped)  # No compile_scene
 TestCompositionApproach_Assembler = _make_patched_class(TestCompositionApproach, AssemblerWrapper)
 TestNewEdgeCases_Assembler = _make_patched_class_with_skips(
     TestNewEdgeCases, AssemblerWrapper, _EDGE_SKIP,

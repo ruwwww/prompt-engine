@@ -26,81 +26,17 @@
         ]
       }
     },
-    "template": {
-      "head": "holding",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "object": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "holding",
-      "slots": {
-        "object": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
     "variants": [
       {
+        "variant_id": "drink",
         "when": {
           "object_type": "drink"
-        },
-        "template": {
-          "head": "holding a cup of",
-          "slots": {
-            "actor": {
-              "position": "pre",
-              "required": true
-            },
-            "object": {
-              "position": "post",
-              "required": true
-            }
-          }
-        },
-        "clause": {
-          "head": "holding a cup of",
-          "slots": {
-            "object": {
-              "position": "post",
-              "required": true
-            }
-          }
         }
       },
       {
+        "variant_id": "phone",
         "when": {
           "object_type": "phone"
-        },
-        "template": {
-          "head": "using",
-          "slots": {
-            "actor": {
-              "position": "pre",
-              "required": true
-            },
-            "object": {
-              "position": "post",
-              "required": true
-            }
-          }
-        },
-        "clause": {
-          "head": "using",
-          "slots": {
-            "object": {
-              "position": "post",
-              "required": true
-            }
-          }
         }
       }
     ]
@@ -124,17 +60,7 @@
           "creature"
         ]
       }
-    },
-    "template": {
-      "head": "sitting",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        }
-      }
-    },
-    "clause": "sitting"
+    }
   },
   "soaking_in": {
     "tags": [
@@ -160,28 +86,6 @@
           "fixture",
           "furniture"
         ]
-      }
-    },
-    "template": {
-      "head": "soaking in",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "object": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "soaking in",
-      "slots": {
-        "object": {
-          "position": "post",
-          "required": true
-        }
       }
     }
   },
@@ -214,28 +118,6 @@
           "creature"
         ]
       }
-    },
-    "template": {
-      "head": "hugging",
-      "slots": {
-        "subject1": {
-          "position": "pre",
-          "required": true
-        },
-        "subject2": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "hugging",
-      "slots": {
-        "subject2": {
-          "position": "post",
-          "required": true
-        }
-      }
     }
   },
   "holding_near_eye": {
@@ -263,40 +145,6 @@
           "clothing"
         ]
       }
-    },
-    "template": {
-      "head": {
-        "singular": "holds",
-        "plural": "hold",
-        "agreement_with": "actor"
-      },
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "object": {
-          "position": "post",
-          "required": true,
-          "prep": ""
-        }
-      },
-      "suffix": "near {_possessive} eye"
-    },
-    "clause": {
-      "head": {
-        "singular": "holds",
-        "plural": "hold",
-        "agreement_with": "actor"
-      },
-      "slots": {
-        "object": {
-          "position": "post",
-          "required": true,
-          "prep": ""
-        }
-      },
-      "suffix": "near {_possessive} eye"
     }
   },
   "leaning_on": {
@@ -324,28 +172,6 @@
           "fixture",
           "furniture"
         ]
-      }
-    },
-    "template": {
-      "head": "leaning on",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "target": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "leaning on",
-      "slots": {
-        "target": {
-          "position": "post",
-          "required": true
-        }
       }
     }
   },
@@ -375,28 +201,6 @@
           "furniture"
         ]
       }
-    },
-    "template": {
-      "head": "resting {possessive} arms on",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "target": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "resting arms on",
-      "slots": {
-        "target": {
-          "position": "post",
-          "required": true
-        }
-      }
     }
   },
   "dangling_feet": {
@@ -421,28 +225,6 @@
           "fixture",
           "furniture"
         ]
-      }
-    },
-    "template": {
-      "head": "with {_possessive} legs dangling into",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "target": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "with legs dangling into",
-      "slots": {
-        "target": {
-          "position": "post",
-          "required": true
-        }
       }
     }
   },
@@ -469,28 +251,6 @@
           "fixture",
           "furniture"
         ]
-      }
-    },
-    "template": {
-      "head": "looking at",
-      "slots": {
-        "actor": {
-          "position": "pre",
-          "required": true
-        },
-        "target": {
-          "position": "post",
-          "required": true
-        }
-      }
-    },
-    "clause": {
-      "head": "looking at",
-      "slots": {
-        "target": {
-          "position": "post",
-          "required": true
-        }
       }
     }
   }

@@ -24,109 +24,6 @@ CAMERA_FRAMING_MAP = {
 # Shared utility (ported from compiler.py)
 # ---------------------------------------------------------------------------
 
-def safe_format(template_str, context: dict) -> str:
-    """Format a template string or slot descriptor, replacing missing keys with empty string
-    and collapsing any resulting multi-spaces."""
-    tone = context.get("_tone", "default")
-
-    def resolve_tone_value(val):
-        if isinstance(val, dict):
-            if "singular" in val or "plural" in val:
-                return val
-            if any(k in val for k in ("default", "poetic", "vivid", "concise", "technical")):
-                return val.get(tone) or val.get("default") or ""
-        return val
-
-    def adjust_articles(text: str) -> str:
-        text = re.sub(r"\b([aA])\s+([aeiouAEIOU][a-zA-Z]*)", lambda m: m.group(1) + "n " + m.group(2), text)
-        text = re.sub(r"\b([aA])n\s+([^aeiouAEIOU\s][a-zA-Z]*)", lambda m: m.group(1) + " " + m.group(2), text)
-        return text
-
-    STANDARD_RANKS = {
-        "quantity": 1, "opinion": 2, "expression": 2, "fit": 3, "length": 3,
-        "size": 3, "shape": 4, "style": 4, "species": 4, "age": 5, "color": 6,
-        "origin": 7, "pattern": 8, "material": 8
-    }
-
-    template_str = resolve_tone_value(template_str)
-
-    if isinstance(template_str, dict):
-        head = template_str.get("head", "")
-        head = resolve_tone_value(head)
-        # Resolve placeholders in head from context (e.g. "{garment}" -> "hoodie")
-        if isinstance(head, str):
-            head_ph = re.findall(r"\{([a-zA-Z0-9_]+)\}", head)
-            for _p in head_ph:
-                _val = context.get(_p)
-                _val = resolve_tone_value(_val)
-                head = head.replace("{" + _p + "}", str(_val or ""))
-
-        if isinstance(head, dict):
-            agreement_role = head.get("agreement_with", "actor")
-            is_plural = False
-            if agreement_role == "self":
-                is_plural = context.get("_plural_self", False)
-            else:
-                is_plural = context.get(f"_plural_{agreement_role}", False)
-            head_val = head.get("plural" if is_plural else "singular", "")
-            head = resolve_tone_value(head_val)
-        else:
-            if context.get("_plural_self", False) and "plural" in template_str:
-                plural_cfg = template_str["plural"]
-                if "irregular" in plural_cfg:
-                    head = plural_cfg["irregular"]
-                elif "suffix" in plural_cfg:
-                    head = head + plural_cfg["suffix"]
-
-        slots = template_str.get("slots", {})
-        pre_modifiers = []
-        post_modifiers = []
-
-        for slot_name, slot_cfg in slots.items():
-            val = context.get(slot_name)
-            val = resolve_tone_value(val)
-            val_str = str(val).strip() if val is not None else ""
-            if not val_str:
-                continue
-            pos = slot_cfg.get("position", "pre")
-            if pos == "pre":
-                rank = slot_cfg.get("rank")
-                if rank is None:
-                    cat = slot_cfg.get("category")
-                    rank = STANDARD_RANKS.get(cat) if cat else STANDARD_RANKS.get(slot_name, 50)
-                pre_modifiers.append((rank, val_str))
-            elif pos == "post":
-                prep = slot_cfg.get("prep", "")
-                if prep:
-                    post_modifiers.append(f"{prep} {val_str}")
-                else:
-                    post_modifiers.append(val_str)
-
-        pre_modifiers.sort(key=lambda x: x[0])
-        pre_modifier_strings = [x[1] for x in pre_modifiers]
-        parts = pre_modifier_strings + [head] + post_modifiers
-        if "suffix" in template_str:
-            suffix_val = resolve_tone_value(template_str["suffix"])
-            if suffix_val:
-                for k, v in context.items():
-                    if k.startswith("_") and isinstance(v, str):
-                        suffix_val = suffix_val.replace("{" + k + "}", v)
-                parts.append(suffix_val)
-        rendered = " ".join(parts)
-        rendered = re.sub(r"\s+", " ", rendered).strip()
-        return adjust_articles(rendered)
-
-    placeholders = re.findall(r"\{([a-zA-Z0-9_]+)\}", str(template_str))
-    kwargs = {}
-    for p in placeholders:
-        val = context.get(p)
-        val = resolve_tone_value(val)
-        kwargs[p] = str(val or "")
-
-    rendered = str(template_str).format(**kwargs)
-    rendered = re.sub(r"\s+", " ", rendered).strip()
-    return adjust_articles(rendered)
-
 
 # ---------------------------------------------------------------------------
 # Data loading
@@ -432,13 +329,12 @@ def apply_relationships(
         if actor_zone and actor_zone not in visible_zones:
             continue
 
-        template = definition.get("template")
-        clause = definition.get("clause", "")
         priority = definition.get("priority", 80)
         chain_order = definition.get("chain_order", 99)
 
         # Variant resolution — check object type for variant matching
         object_obj_type = object_obj.get("type", "")
+        variant_id = ""
         for variant in definition.get("variants", []):
             when = variant.get("when", {})
             match = True
@@ -455,8 +351,7 @@ def apply_relationships(
                         match = False
                         break
             if match:
-                template = variant.get("template", template)
-                clause = variant.get("clause", clause)
+                variant_id = variant.get("variant_id", "")
                 break
 
         actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, templates_db, placements, jinja2_env)
@@ -480,15 +375,19 @@ def apply_relationships(
             "_possessive": possessive,
         }
 
-        if isinstance(template, dict):
-            text = safe_format(template, ctx)
-        else:
-            text = safe_format(template, ctx) if template else ""
-
-        if isinstance(clause, dict):
-            clause_text = safe_format(clause, ctx)
-        else:
-            clause_text = safe_format(clause, ctx) if clause else ""
+        # Render using Jinja2 action templates
+        text = ""
+        clause_text = ""
+        variant_suffix = f"_{variant_id}" if variant_id else ""
+        if jinja2_env:
+            try:
+                text = jinja2_env.get_template(f"actions/{rel_type}{variant_suffix}.jinja2").render(**ctx)
+            except TemplateNotFound:
+                pass
+            try:
+                clause_text = jinja2_env.get_template(f"actions/{rel_type}{variant_suffix}_clause.jinja2").render(**ctx)
+            except TemplateNotFound:
+                pass
 
         mentioned_ids.add(actor_id)
         mentioned_ids.add(object_id)
@@ -548,8 +447,7 @@ def _get_noun_phrase(
                 j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
                 if j2_text:
                     return j2_text
-            if template_key in templates_db:
-                return safe_format(templates_db[template_key], obj)
+            pass  # Jinja2-only: templates_db removed
         parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
         phrase = " ".join(p for p in parts if p).strip()
         return phrase if phrase else entity_id
@@ -563,8 +461,7 @@ def _get_noun_phrase(
             j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
             if j2_text:
                 phrase = j2_text
-        if phrase is None and template_key in templates_db:
-            phrase = safe_format(templates_db[template_key], obj)
+        pass  # Jinja2-only: templates_db removed
     if phrase is None:
         if obj_type == "fixture" and template_key:
             # Use fixture name directly (e.g., "window" → "a window")
@@ -611,10 +508,6 @@ def _render_fixture_label(fixture_obj: dict, templates_db: dict, jinja2_env: obj
         j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", fixture_obj)
         if j2_text:
             return j2_text
-    template = templates_db.get(template_key) if template_key else None
-    if template:
-        ctx = dict(fixture_obj)
-        return safe_format(template, ctx)
     return fixture_obj.get("label", template_key.lower().replace("_", " ") if template_key else "fixture")
 
 
@@ -880,25 +773,15 @@ def render_to_text(
             if not text:
                 text = _render_jinja2_template(jinja2_env, zone + ".jinja2", zone_data)
 
-        # Phase 2: Fall back to slot/head grammar_db or templates_db
-        if not text:
-            template = None
-            if grammar_db:
-                template = grammar_db.get(zone)
-            if template is None:
-                template = templates_db.get(zone)
+        # Hair uses dedicated renderer (not Jinja2 template)
+        if not text and zone == "Hair":
+            text = render_hair(normalize_hair(zone_data))
 
-            if zone == "Hair":
-                text = render_hair(normalize_hair(zone_data))
-            elif template:
-                ctx = dict(zone_data)
-                ctx["_tone"] = active_tone
-                text = safe_format(template, ctx)
-            elif zone_data.get("type") in ("clothing", "item", "prop"):
-                # Skip clothing/items without templates (matches old compiler behavior)
+        # Fallback for zones without any template
+        if not text:
+            if zone_data.get("type") in ("clothing", "item", "prop"):
                 continue
-            else:
-                text = _render_generic_zone(zone, zone_data)
+            text = _render_generic_zone(zone, zone_data)
 
         if text.strip():
             fragments.append({
@@ -946,18 +829,9 @@ def validate(scene_data: dict, templates_db: dict, actions_db: dict,
     """
     errors = []
 
-    # 1. Unknown template keys
+    # 1. Unknown template keys (handled by Jinja2 at render time)
     for obj_id, obj_data in scene_data.get("objects", {}).items():
-        template_key = obj_data.get("template_key")
-        if template_key and template_key not in templates_db:
-            # Check if zone name is a fallback
-            zone = obj_data.get("zone")
-            if zone and zone in templates_db:
-                continue
-            errors.append({
-                "severity": "error",
-                "message": f"Unknown template_key '{template_key}' for object '{obj_id}'",
-            })
+        pass
 
     # 2. Unknown relationship types
     for rel in scene_data.get("relationships", []):
@@ -1107,8 +981,7 @@ def _resolve_affordance_query(
     obj_phrase = None
     if jinja2_env and template_key:
         obj_phrase = _render_jinja2_template(jinja2_env, template_key + ".jinja2", target_obj)
-    if not obj_phrase and templates_db and template_key in templates_db:
-        obj_phrase = safe_format(templates_db[template_key], target_obj)
+    pass  # Jinja2-only: templates_db removed
     if obj_phrase:
         first_char = obj_phrase[0].lower()
         obj_article = "an" if first_char in "aeiou" else "a"
@@ -1149,7 +1022,6 @@ class Assembler:
             DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
         self.subjects_db = _load_json("subjects.json")
         self.attires_db = _load_json("attires.json")
-        self.templates_db = _load_json("templates.json")
         self.attribute_metadata_db = _load_json("attribute_metadata.json")
         self.render_profiles_db = _load_json("render_profiles.json")
         self.actions_db = _load_json("actions.json")
@@ -1173,19 +1045,6 @@ class Assembler:
             if _data:
                 self.primitives_db.update(_data)
 
-        # --- Merge all grammar catalogs into a single grammar_db ---
-        # NOTE: grammar/clothing.json is NOT merged here; it is replaced by
-        #       Jinja2 templates in data/grammar/templates/
-        self.grammar_db = {}
-        for _gf in ("grammar/body.json", "grammar/items.json",
-                    "grammar/fixtures.json", "grammar/environment.json"):
-            _data = _load_json(_gf)
-            if _data:
-                self.grammar_db.update(_data)
-
-        # --- Load clothing grammar separately (segments superseded by Jinja2) ---
-        self.clothing_grammar_db = _load_json("grammar/clothing.json") or {}
-
         # --- Set up Jinja2 environment for clothing templates ---
         templates_dir = os.path.join(DATA_DIR, "grammar", "templates")
         self.jinja2_env = Environment(
@@ -1197,7 +1056,7 @@ class Assembler:
         """Run the full resolution pipeline and return the resolved component trees
         per actor, plus environment/camera state. Useful for debugging and the
         web demo's 'deep merged' JSON preview."""
-        validate(scene_data, self.templates_db, self.actions_db,
+        validate(scene_data, {}, self.actions_db,
                  self.spatial_db, self.subjects_db, strict=strict)
         camera = scene_data.get("camera", {})
         camera_framing = camera.get("framing", "full_body")
@@ -1295,10 +1154,9 @@ class Assembler:
             text = _render_jinja2_template(self.jinja2_env, "Camera.jinja2", {
                 "framing": mapped_framing
             })
-        # Phase 2: Fall back to templates_db
+        # Phase 2: Plain string fallback
         if not text:
-            template = self.templates_db.get("Camera", "{framing} shot of")
-            text = safe_format(template, {"framing": mapped_framing})
+            text = f"{mapped_framing} shot of"
         state["_camera_text"] = text
         return state
 
@@ -1315,7 +1173,7 @@ class Assembler:
         scene_data = {**scene_data, "_inject_camera": inject_camera_descriptor}
 
         # Pre-flight validation
-        validate(scene_data, self.templates_db, self.actions_db,
+        validate(scene_data, {}, self.actions_db,
                  self.spatial_db, self.subjects_db, strict=strict)
         camera = scene_data.get("camera", {})
         camera_framing = camera.get("framing", "full_body")
@@ -1414,9 +1272,9 @@ class Assembler:
 
             identity_frags = render_to_text(
                 visible, render_profile_name,
-                self.templates_db, self.attribute_metadata_db,
+                {}, self.attribute_metadata_db,
                 self.render_profiles_db, active_tone,
-                self.grammar_db, self.jinja2_env,
+                None, self.jinja2_env,
                 ensemble_key=attire_key,
             )
             for f in identity_frags:
@@ -1526,7 +1384,7 @@ class Assembler:
 
         rel_frags = apply_relationships(
             resolved_relationships, scene_objects, all_visible,
-            self.actions_db, self.spatial_db, self.templates_db, self.environments_db,
+            self.actions_db, self.spatial_db, {}, self.environments_db,
             placements, self.affordance_types_db, env_resolved,
             jinja2_env=self.jinja2_env,
         )
@@ -1543,7 +1401,7 @@ class Assembler:
         env_frags = apply_environment(
             scene_data, scene_objects,
             self.environments_db, self.lighting_db,
-            self.weather_db, self.composition_db, self.templates_db,
+            self.weather_db, self.composition_db, {},
             self.jinja2_env,
             relationship_target_ids=relationship_target_ids,
         )
