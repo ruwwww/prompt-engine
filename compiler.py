@@ -516,6 +516,7 @@ def apply_environment(
     composition_db: dict,
     jinja2_env: object = None,
     relationship_target_ids: set = None,
+    atmosphere_db: dict = None,
 ) -> list:
     """Process environment and emit text fragments.
     Returns a list of fragment dicts."""
@@ -562,6 +563,11 @@ def apply_environment(
                 else:
                     weather_str = weather_key
 
+            # Check atmosphere lexicon for evocative sentence fragment
+            atmosphere_key = f"{weather_key}_{lighting_key}" if weather_key and lighting_key else ""
+            atmosphere_entry = atmosphere_db.get(atmosphere_key, {}) if atmosphere_db and atmosphere_key else {}
+            evocative_fragment = atmosphere_entry.get("sentence_fragment", "")
+
             # Build combined environment label with weather and lighting as adjectives
             combined_label = label
             if lighting_str:
@@ -595,6 +601,16 @@ def apply_environment(
                 "priority": 65,
                 "text": env_text,
             })
+
+            # Add evocative atmosphere fragment if available (prefixed with comma for flow)
+            if evocative_fragment:
+                fragments.append({
+                    "zone": "atmosphere",
+                    "frag_type": "atmosphere",
+                    "tags": ["environment"],
+                    "priority": 55,
+                    "text": f", {evocative_fragment}",
+                })
 
     # Ambient fixture discovery: render fixture/furniture objects not referenced by relationships
     if relationship_target_ids is None:
@@ -1020,6 +1036,7 @@ class Assembler:
         self.spatial_prepositions_db = _load_json("spatial_prepositions.json")
         self.affordance_types_db = _load_json("affordance_types.json")
         self.action_grammar_db = _load_json("action_grammar.json")
+        self.atmosphere_db = _load_json("atmosphere.json")
 
         # --- Merge all primitive catalogs into a single primitives_db ---
         self.primitives_db = {}
@@ -1129,19 +1146,29 @@ class Assembler:
         inject = state.get("_inject_camera", True)
         if not inject:
             return state
+        camera = state.get("camera", {})
         if "Camera" in state.get("scene_data", {}):
             return state
-        framing = state.get("camera", {}).get("framing", "full_body")
+        framing = camera.get("framing", "full_body")
         mapped_framing = CAMERA_FRAMING_MAP.get(framing, "full-body")
-        # Phase 1: Try Jinja2 camera template
+        shot_type = camera.get("shot_type", "")
+        angle = camera.get("angle", "")
+        # Phase 1: Try Jinja2 camera template with richer context
         text = ""
         if self.jinja2_env:
             text = _render_jinja2_template(self.jinja2_env, "Camera.jinja2", {
-                "framing": mapped_framing
+                "framing": mapped_framing,
+                "shot_type": shot_type,
+                "angle": angle,
             })
         # Phase 2: Plain string fallback
         if not text:
-            text = f"{mapped_framing} shot of"
+            if shot_type:
+                text = f"{shot_type} shot of"
+            elif mapped_framing:
+                text = f"{mapped_framing} shot of"
+            else:
+                text = "Shot of"
         state["_camera_text"] = text
         return state
 
@@ -1389,6 +1416,7 @@ class Assembler:
             self.weather_db, self.composition_db,
             self.jinja2_env,
             relationship_target_ids=relationship_target_ids,
+            atmosphere_db=self.atmosphere_db,
         )
         all_fragments.extend(env_frags)
 
@@ -1434,11 +1462,13 @@ class Assembler:
         # Inject camera framing text at the beginning if toggle is ON
         inject = scene_data.get("_inject_camera", True)
         if inject and output:
-            camera_state = self.inject_camera_descriptor({
+            # Pass camera shot_type and framing for richer camera descriptor
+            camera_ctx = {
                 "camera": camera,
                 "_inject_camera": True,
                 "scene_data": scene_data,
-            })
+            }
+            camera_state = self.inject_camera_descriptor(camera_ctx)
             camera_text = camera_state.get("_camera_text")
             if camera_text:
                 output = f"{camera_text} {output}"
@@ -1681,11 +1711,11 @@ def _assemble_output(
             shared_frags.append(f)
 
     # Separate env/style from relationships in shared_frags
-    env_frags = [f for f in shared_frags if f.get("frag_type") in ("environment", "lighting", "weather")]
+    env_frags = [f for f in shared_frags if f.get("frag_type") in ("environment", "lighting", "weather", "atmosphere")]
     style_frags_shared = [f for f in shared_frags if f.get("frag_type") == "style"]
     rel_frags_shared = [f for f in shared_frags if f.get("frag_type") == "relationship"]
     other_shared = [f for f in shared_frags
-                    if f.get("frag_type") not in ("environment", "lighting", "weather", "style", "relationship")]
+                    if f.get("frag_type") not in ("environment", "lighting", "weather", "atmosphere", "style", "relationship")]
 
     def _render_actor(aid: str, frags: list) -> str:
         """Render a single actor's fragments into a natural language string."""
@@ -1774,6 +1804,7 @@ def _assemble_output(
         if clothing_frags:
             clothing_frags.sort(key=lambda f: -f.get("priority", 50))
             clothing_texts = [f["text"] for f in clothing_frags]
+            clothing_verb = "wears" if render_profile.get("narrative_mode") == "scene_description" else "wearing"
             if len(clothing_texts) == 1:
                 text = clothing_texts[0]
                 # Add article for single clothing item
@@ -1781,12 +1812,12 @@ def _assemble_output(
                     first_char = text[0].lower()
                     article = "an" if first_char in "aeiou" else "a"
                     text = f"{article} {text}"
-                parts.append(f"wearing {text}")
+                parts.append(f"{clothing_verb} {text}")
             elif len(clothing_texts) == 2:
-                parts.append(f"wearing {clothing_texts[0]} and {clothing_texts[1]}")
+                parts.append(f"{clothing_verb} {clothing_texts[0]} and {clothing_texts[1]}")
             else:
                 joined = ", ".join(clothing_texts[:-1])
-                parts.append(f"wearing {joined}, and {clothing_texts[-1]}")
+                parts.append(f"{clothing_verb} {joined}, and {clothing_texts[-1]}")
 
         if body_config_frags:
             for f in body_config_frags:

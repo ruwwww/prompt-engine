@@ -1,1 +1,1 @@
-{% if framing %}{{ framing }} shot of{% endif %}
+{%- if shot_type == "action" %}Dynamic action shot of{% elif shot_type == "dramatic" %}Dramatic shot of{% elif shot_type == "close_up" %}Close-up of{% elif shot_type == "establishing" %}Establishing shot of{% elif shot_type == "low_angle" %}Low-angle shot of{% elif shot_type == "over_the_shoulder" %}Over-the-shoulder shot of{% elif framing %}{{ framing }} shot of{% else %}Full-body shot of{% endif -%}
