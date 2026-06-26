@@ -448,45 +448,123 @@
       </div>
     </div>
 
-    <!-- Camera & Pose -->
-    <div class="section">
-      <div class="section-label"><span class="dot"></span>Camera &amp; Pose</div>
-      <div style="display:flex;flex-direction:column;gap:0.6rem;">
-        <div class="field-row">
-          <div class="field">
-            <label>Framing</label>
-            <select id="framing" onchange="rebuild()">
-              <option value="full_body">Full Body</option>
-              <option value="medium">Medium — waist-up (Face, Hair, UpperBody, Hands)</option>
-              <option value="close_up">Close-up — face only (Face, Eyes, Hair, Headwear)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Pose</label>
-            <select id="pose" onchange="rebuild()">
-              <option value="">— none —</option>
-              <option value="standing">Standing</option>
-              <option value="sitting">Sitting</option>
-              <option value="arms_crossed">Arms Crossed</option>
-              <option value="hands_behind_back">Hands Behind Back</option>
-              <option value="reaching">Reaching</option>
-              <option value="leaning">Leaning</option>
-              <option value="kneeling">Kneeling</option>
-              <option value="lying_down">Lying Down</option>
-            </select>
+        <!-- Camera & Pose -->
+        <div class="section">
+          <div class="section-label"><span class="dot"></span>Camera &amp; Pose</div>
+          <div style="display:flex;flex-direction:column;gap:0.6rem;">
+            <div class="field-row">
+              <div class="field">
+                <label>Framing</label>
+                <select id="framing" onchange="rebuild()">
+                  <option value="full_body">Full Body</option>
+                  <option value="medium">Medium — waist-up</option>
+                  <option value="close_up">Close-up — face only</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Pose</label>
+                <select id="pose" onchange="rebuild()">
+                  <option value="">— none —</option>
+                  <option value="standing">Standing</option>
+                  <option value="sitting">Sitting</option>
+                  <option value="arms_crossed">Arms Crossed</option>
+                  <option value="hands_behind_back">Hands Behind Back</option>
+                  <option value="reaching">Reaching</option>
+                  <option value="leaning">Leaning</option>
+                  <option value="kneeling">Kneeling</option>
+                  <option value="lying_down">Lying Down</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label>Render Profile</label>
+              <select id="render-profile" onchange="rebuild()">
+                <option value="character_sheet">Character Sheet — full detail list</option>
+                <option value="cinematic" selected>Cinematic — scene description sentence</option>
+                <option value="fashion">Fashion — clothing &amp; look focused</option>
+                <option value="portrait">Portrait — identity &amp; expression</option>
+              </select>
+            </div>
           </div>
         </div>
-        <div class="field">
-          <label>Render Profile</label>
-          <select id="render-profile" onchange="rebuild()">
-            <option value="character_sheet">Character Sheet — full detail list</option>
-            <option value="cinematic" selected>Cinematic — scene description sentence</option>
-            <option value="fashion">Fashion — clothing &amp; look focused</option>
-            <option value="portrait">Portrait — identity &amp; expression</option>
-          </select>
+
+        <!-- Body Config Overrides -->
+        <div class="section">
+          <div class="section-label"><span class="dot"></span>Body Config Overrides</div>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <div class="field-row">
+              <div class="field">
+                <label>Head Tilt</label>
+                <select id="head-tilt" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="upright">Upright</option>
+                  <option value="forward">Forward</option>
+                  <option value="back">Back</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Head Turn</label>
+                <select id="head-turn" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="toward_camera">Toward Camera</option>
+                  <option value="away_from_camera">Away</option>
+                  <option value="profile_left">Profile Left</option>
+                  <option value="profile_right">Profile Right</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Gaze</label>
+                <select id="gaze" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="toward_camera">Toward Camera</option>
+                  <option value="down">Down</option>
+                  <option value="up">Up</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                  <option value="away">Away</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Arms</label>
+                <select id="arms" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="at_side">At Side</option>
+                  <option value="crossed">Crossed</option>
+                  <option value="behind_back">Behind Back</option>
+                  <option value="on_hips">On Hips</option>
+                  <option value="raised">Raised</option>
+                  <option value="extended">Extended</option>
+                </select>
+              </div>
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label>Legs</label>
+                <select id="legs" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="standing">Standing</option>
+                  <option value="sitting">Sitting</option>
+                  <option value="crossing">Crossed</option>
+                  <option value="apart">Apart</option>
+                </select>
+              </div>
+              <div class="field">
+                <label>Torso</label>
+                <select id="torso" onchange="rebuild()">
+                  <option value="">— preset default —</option>
+                  <option value="upright">Upright</option>
+                  <option value="leaning_forward">Leaning Forward</option>
+                  <option value="leaning_back">Leaning Back</option>
+                  <option value="twisted">Twisted</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
 
     <!-- Environment -->
     <div class="section">
@@ -558,8 +636,14 @@
         <div class="auto-label" id="auto-label">Auto-compiling</div>
       </div>
 
-      <div class="output-label" style="margin-top:0.5rem;">Scene JSON (live preview)</div>
-      <div class="json-preview" id="json-preview">{}</div>
+      <div class="output-label" style="margin-top:0.5rem;">Scene JSON (user input)</div>
+      <div class="json-preview" id="json-preview" style="max-height:160px;">{}</div>
+
+      <div class="output-label" style="margin-top:0.75rem;">
+        Resolved Scene (deep merge)
+        <span style="color:var(--text-3);font-weight:400;font-size:0.7rem;margin-left:6px;">after blueprint + override + camera filter</span>
+      </div>
+      <div class="json-preview" id="resolved-preview" style="max-height:200px;">{}</div>
     </div>
   </div><!-- /mid col -->
 
@@ -749,6 +833,14 @@
     const hairStyle  = document.getElementById('hair-style').value;
     const hairLength = document.getElementById('hair-length').value;
 
+    // Body config
+    const headTilt = document.getElementById('head-tilt').value;
+    const headTurn = document.getElementById('head-turn').value;
+    const gaze     = document.getElementById('gaze').value;
+    const arms     = document.getElementById('arms').value;
+    const legs     = document.getElementById('legs').value;
+    const torso    = document.getElementById('torso').value;
+
     const scene = {
       camera: { framing },
       render_profile: renderProfile,
@@ -760,20 +852,44 @@
     // Build actor object
     const actor = { type: "human" };
     if (currentSubject) actor.subject = currentSubject;
-    // gender always overrides — even when a subject preset is active
     if (gender) actor.gender = gender;
     if (currentAttire) actor.attire = currentAttire;
 
-    // Overrides
+    // Face override
     if (expression) {
       actor.Face = actor.Face || {};
       actor.Face.expression = expression;
     }
+
+    // Hair override
     const hairOverride = {};
     if (hairColor)  hairOverride.color  = hairColor;
     if (hairStyle)  hairOverride.style  = hairStyle;
     if (hairLength) hairOverride.length = hairLength;
     if (Object.keys(hairOverride).length) actor.Hair = hairOverride;
+
+    // Body config override (only send non-empty values)
+    const bodyCfg = {};
+    if (headTilt || headTurn) {
+      bodyCfg.head = {};
+      if (headTilt) bodyCfg.head.tilt = headTilt;
+      if (headTurn) bodyCfg.head.turn = headTurn;
+    }
+    if (gaze) {
+      bodyCfg.gaze = { direction: gaze };
+    }
+    if (arms) {
+      bodyCfg.arms = { left: arms, right: arms };
+    }
+    if (legs) {
+      bodyCfg.legs = { position: legs };
+    }
+    if (torso) {
+      bodyCfg.torso = { position: torso };
+    }
+    if (Object.keys(bodyCfg).length) {
+      actor.body_config = bodyCfg;
+    }
 
     scene.objects = { h1: actor };
 
@@ -830,6 +946,25 @@
     .catch(err => {
       out.className = 'prompt-bubble error';
       out.textContent = 'Server error: ' + err.message;
+    });
+
+    // Fetch resolved (deep merged) scene
+    fetch('/resolve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(scene),
+    })
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById('resolved-preview');
+      if (data.error) {
+        el.textContent = 'Error: ' + data.error;
+      } else {
+        el.textContent = JSON.stringify(data.resolved, null, 2);
+      }
+    })
+    .catch(err => {
+      document.getElementById('resolved-preview').textContent = 'Error: ' + err.message;
     });
   }
 

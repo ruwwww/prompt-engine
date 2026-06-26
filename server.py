@@ -45,6 +45,27 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                 
                 res = json.dumps({"error": str(e)})
                 self.wfile.write(res.encode("utf-8"))
+        elif self.path == "/resolve":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+
+            try:
+                scene_data = json.loads(post_data.decode("utf-8"))
+                resolved = compiler.resolve_scene(scene_data, strict=False)
+
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+
+                res = json.dumps({"resolved": resolved}, default=str)
+                self.wfile.write(res.encode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+
+                res = json.dumps({"error": str(e)})
+                self.wfile.write(res.encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()

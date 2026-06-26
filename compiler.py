@@ -989,6 +989,91 @@ class Assembler:
         self.affordance_types_db = _load_json("affordance_types.json")
         self.action_grammar_db = _load_json("action_grammar.json")
 
+    def resolve_scene(self, scene_data: dict, strict: bool = False) -> dict:
+        """Run the full resolution pipeline and return the resolved component trees
+        per actor, plus environment/camera state. Useful for debugging and the
+        web demo's 'deep merged' JSON preview."""
+        validate(scene_data, self.templates_db, self.actions_db,
+                 self.spatial_db, self.subjects_db, strict=strict)
+        camera = scene_data.get("camera", {})
+        camera_framing = camera.get("framing", "full_body")
+        pose_name = scene_data.get("pose")
+        render_profile_name = scene_data.get("render_profile", "character_sheet")
+
+        camera_profiles_path = os.path.join(DATA_DIR, "camera_profiles.json")
+        with open(camera_profiles_path, "r", encoding="utf-8") as f:
+            camera_profiles = json.load(f)
+
+        scene_objects = {}
+        for obj_id, obj_data in scene_data.get("objects", {}).items():
+            scene_objects[obj_id] = {**obj_data, "id": obj_id}
+
+        environment_data = scene_data.get("environment", {})
+        env_type = environment_data.get("type")
+        env_def = self.environments_db.get(env_type, {}) if env_type else {}
+        env_fixtures = env_def.get("fixtures", env_def.get("affordances", {}))
+
+        for rel in scene_data.get("relationships", []):
+            for field in ("target", "actor", "subject", "container", "object"):
+                val = rel.get(field)
+                if isinstance(val, str) and "." in val:
+                    parts = val.split(".", 1)
+                    if len(parts) == 2:
+                        prefix, suffix = parts
+                        if env_type and prefix == env_type and suffix in env_fixtures:
+                            if val not in scene_objects:
+                                scene_objects[val] = {
+                                    "id": val, "type": "fixture",
+                                    "template_key": suffix, "anchor": suffix,
+                                    "env_type": env_type,
+                                }
+
+        physical_ids = [oid for oid, obj in scene_objects.items() if _is_physical(obj)]
+
+        actors = {}
+        for obj_id in physical_ids:
+            obj = scene_objects[obj_id]
+            components = resolve_blueprint(obj, self.subjects_db, self.attires_db, scene_objects)
+            user_overrides = {k: v for k, v in obj.items()
+                              if k not in ("type", "id", "subject", "attire") and isinstance(v, dict)}
+            components = apply_delta(components, user_overrides)
+            for _scalar_key in ("gender", "morphology"):
+                if _scalar_key in obj:
+                    components[_scalar_key] = obj[_scalar_key]
+            components = resolve_references(components, scene_objects)
+
+            visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
+
+            gender = components.get("gender", obj.get("gender", "person"))
+            subject_name = components.get("subject", obj.get("subject", ""))
+            morphology = components.get("morphology", obj.get("morphology", {}))
+
+            actors[obj_id] = {
+                "components": components,
+                "visible": visible,
+                "gender": gender,
+                "subject_name": subject_name,
+                "morphology": morphology,
+            }
+
+        env_resolved = None
+        env_prep = "in"
+        if env_type:
+            db_key = env_type
+            if db_key not in self.environments_db and db_key.lower() in self.environments_db:
+                db_key = db_key.lower()
+            env_resolved = self.environments_db.get(db_key, {})
+
+        return {
+            "actors": actors,
+            "physical_ids": physical_ids,
+            "camera": camera,
+            "camera_framing_zones": list(camera_profiles.get(camera_framing, [])),
+            "environment_type": env_type,
+            "environment_resolved": env_resolved,
+            "render_profile": render_profile_name,
+        }
+
     def inject_camera_descriptor(self, state: dict) -> dict:
         """Inject Camera text based on framing value (if toggle is ON).
         Returns state with '_camera_text' key containing the camera descriptor string.
