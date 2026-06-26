@@ -2,7 +2,7 @@
 main.py — Prompt Engine demo: all stages + architecture polish
 """
 import json
-from compiler import PromptCompiler
+from compiler import PromptCompiler, validate
 
 DIVIDER = "=" * 80
 
@@ -120,17 +120,17 @@ def main():
     scene_bad = {
         "camera": {"framing": "full_body"},
         "objects": {"h1": {"type": "human", "gender": "woman"}},
-        "anchors": {"primary": "ghost_object"},
         "relationships": [{"type": "teleporting", "actor": "h1"}],
     }
-    errors = c.validation_system.validate(
+    errors = validate(
         scene_bad,
-        {oid: __import__("compiler").SceneObject(oid, od.get("type"), od)
-         for oid, od in scene_bad["objects"].items()}
+        c.actions_db,
+        c.spatial_db,
+        c.subjects_db,
     )
     print()
     for e in errors:
-        print(f"  [{e.severity.upper()}] {e.message}")
+        print(f"  [{e['severity'].upper()}] {e['message']}")
 
     print(f"\n{DIVIDER}\n")
 

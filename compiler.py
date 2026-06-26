@@ -241,7 +241,6 @@ def apply_relationships(
     visible_zones: list,
     actions_db: dict,
     spatial_db: dict,
-    templates_db: dict,
     environments_db: dict,
     placements: dict = None,
     affordance_types_db: dict = None,
@@ -284,7 +283,7 @@ def apply_relationships(
         if affordance_types_db and env_data and object_id:
             binding = _resolve_affordance_query(
                 rel_type, object_obj, set(visible_zones),
-                env_data, affordance_types_db, templates_db,
+                env_data, affordance_types_db,
                 jinja2_env,
             )
             if binding:
@@ -354,8 +353,8 @@ def apply_relationships(
                 variant_id = variant.get("variant_id", "")
                 break
 
-        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, templates_db, placements, jinja2_env)
-        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, templates_db, placements, jinja2_env)
+        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, placements, jinja2_env)
+        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, placements, jinja2_env)
 
         # Build gender-aware possessive pronoun for suffix templates
         actor_gender = actor_obj.get("gender", "person")
@@ -412,7 +411,6 @@ def _get_noun_phrase(
     rel: dict,
     scene_objects: dict,
     mentioned_ids: set,
-    templates_db: dict,
     placements: dict = None,
     jinja2_env: object = None,
 ) -> str:
@@ -447,7 +445,6 @@ def _get_noun_phrase(
                 j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
                 if j2_text:
                     return j2_text
-            pass  # Jinja2-only: templates_db removed
         parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
         phrase = " ".join(p for p in parts if p).strip()
         return phrase if phrase else entity_id
@@ -461,7 +458,6 @@ def _get_noun_phrase(
             j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
             if j2_text:
                 phrase = j2_text
-        pass  # Jinja2-only: templates_db removed
     if phrase is None:
         if obj_type == "fixture" and template_key:
             # Use fixture name directly (e.g., "window" → "a window")
@@ -501,7 +497,7 @@ def _natural_join(items: list) -> str:
     return f"{', '.join(items[:-1])}, and {items[-1]}"
 
 
-def _render_fixture_label(fixture_obj: dict, templates_db: dict, jinja2_env: object = None) -> str:
+def _render_fixture_label(fixture_obj: dict, jinja2_env: object = None) -> str:
     """Render a fixture object into a descriptive noun phrase using its template."""
     template_key = fixture_obj.get("template_key", "")
     if jinja2_env and template_key:
@@ -518,7 +514,6 @@ def apply_environment(
     lighting_db: dict,
     weather_db: dict,
     composition_db: dict,
-    templates_db: dict,
     jinja2_env: object = None,
     relationship_target_ids: set = None,
 ) -> list:
@@ -607,7 +602,7 @@ def apply_environment(
     ambient_fixture_labels = []
     for obj_id, obj in scene_objects.items():
         if obj.get("type") in ("fixture", "furniture") and obj_id not in relationship_target_ids:
-            label = _render_fixture_label(obj, templates_db, jinja2_env)
+            label = _render_fixture_label(obj, jinja2_env)
             if label:
                 first_char = label[0].lower()
                 article = "an" if first_char in "aeiou" else "a"
@@ -717,17 +712,14 @@ def _render_jinja2_template(template_env, template_name: str, component: dict) -
 def render_to_text(
     visible_components: dict,
     render_profile: str,
-    templates_db: dict,
     attribute_metadata_db: dict,
     render_profiles_db: dict,
     active_tone: str = "default",
-    grammar_db: dict = None,
     jinja2_env: object = None,
     ensemble_key: str = None,
 ) -> list:
     """Render visible components into text fragments.
-    Tries Jinja2 templates first (by _primitive_id, then by zone),
-    then falls back to grammar_db or templates_db."""
+    Tries Jinja2 templates first (by _primitive_id, then by zone)."""
     fragments = []
 
     # Phase 0: Try Ensemble-level template (replaces all zone-by-zone rendering)
@@ -818,22 +810,17 @@ def _render_generic_zone(zone: str, zone_data: dict) -> str:
 # Validation
 # ---------------------------------------------------------------------------
 
-def validate(scene_data: dict, templates_db: dict, actions_db: dict,
+def validate(scene_data: dict, actions_db: dict,
              spatial_db: dict, subjects_db: dict, strict: bool = False) -> list:
     """Pre-flight checks. Returns list of {"severity": "error"|"warning", "message": str}.
 
     Checks:
-      1. Unknown template keys (severity: error)
-      2. Unknown relationship types (severity: error)
-      3. Missing subject presets (severity: warning)
+      1. Unknown relationship types (severity: error)
+      2. Missing subject presets (severity: warning)
     """
     errors = []
 
-    # 1. Unknown template keys (handled by Jinja2 at render time)
-    for obj_id, obj_data in scene_data.get("objects", {}).items():
-        pass
-
-    # 2. Unknown relationship types
+    # 1. Unknown relationship types
     for rel in scene_data.get("relationships", []):
         rel_type = rel.get("type", "")
         if rel_type not in actions_db and rel_type not in spatial_db:
@@ -842,7 +829,7 @@ def validate(scene_data: dict, templates_db: dict, actions_db: dict,
                 "message": f"Unknown relationship type '{rel_type}'",
             })
 
-    # 3. Missing subject presets
+    # 2. Missing subject presets
     for obj_id, obj_data in scene_data.get("objects", {}).items():
         subject = obj_data.get("subject")
         if subject and subject not in subjects_db:
@@ -941,7 +928,6 @@ def _resolve_affordance_query(
     visible_zones: set,
     env_data: dict,
     affordance_types_db: dict,
-    templates_db: dict = None,
     jinja2_env: object = None,
 ) -> dict | None:
     """
@@ -981,7 +967,6 @@ def _resolve_affordance_query(
     obj_phrase = None
     if jinja2_env and template_key:
         obj_phrase = _render_jinja2_template(jinja2_env, template_key + ".jinja2", target_obj)
-    pass  # Jinja2-only: templates_db removed
     if obj_phrase:
         first_char = obj_phrase[0].lower()
         obj_article = "an" if first_char in "aeiou" else "a"
@@ -1056,7 +1041,7 @@ class Assembler:
         """Run the full resolution pipeline and return the resolved component trees
         per actor, plus environment/camera state. Useful for debugging and the
         web demo's 'deep merged' JSON preview."""
-        validate(scene_data, {}, self.actions_db,
+        validate(scene_data, self.actions_db,
                  self.spatial_db, self.subjects_db, strict=strict)
         camera = scene_data.get("camera", {})
         camera_framing = camera.get("framing", "full_body")
@@ -1173,7 +1158,7 @@ class Assembler:
         scene_data = {**scene_data, "_inject_camera": inject_camera_descriptor}
 
         # Pre-flight validation
-        validate(scene_data, {}, self.actions_db,
+        validate(scene_data, self.actions_db,
                  self.spatial_db, self.subjects_db, strict=strict)
         camera = scene_data.get("camera", {})
         camera_framing = camera.get("framing", "full_body")
@@ -1272,9 +1257,9 @@ class Assembler:
 
             identity_frags = render_to_text(
                 visible, render_profile_name,
-                {}, self.attribute_metadata_db,
+                self.attribute_metadata_db,
                 self.render_profiles_db, active_tone,
-                None, self.jinja2_env,
+                self.jinja2_env,
                 ensemble_key=attire_key,
             )
             for f in identity_frags:
@@ -1384,7 +1369,7 @@ class Assembler:
 
         rel_frags = apply_relationships(
             resolved_relationships, scene_objects, all_visible,
-            self.actions_db, self.spatial_db, {}, self.environments_db,
+            self.actions_db, self.spatial_db, self.environments_db,
             placements, self.affordance_types_db, env_resolved,
             jinja2_env=self.jinja2_env,
         )
@@ -1401,7 +1386,7 @@ class Assembler:
         env_frags = apply_environment(
             scene_data, scene_objects,
             self.environments_db, self.lighting_db,
-            self.weather_db, self.composition_db, {},
+            self.weather_db, self.composition_db,
             self.jinja2_env,
             relationship_target_ids=relationship_target_ids,
         )

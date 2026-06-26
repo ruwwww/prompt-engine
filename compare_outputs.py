@@ -3,8 +3,7 @@ import json
 import sys
 sys.path.insert(0, ".")
 
-from compiler import PromptCompiler
-from assembler import Assembler
+from compiler import PromptCompiler, Assembler
 
 compiler = PromptCompiler()
 assembler = Assembler()
