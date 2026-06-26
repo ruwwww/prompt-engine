@@ -722,9 +722,8 @@ class TestNarrativeMode(unittest.TestCase):
 
         # Should be a proper sentence ending with period
         self.assertTrue(out.endswith("."), f"Expected sentence ending with '.', got: {out}")
-        # Should start with A/An
-        self.assertTrue(out.startswith("A ") or out.startswith("An "),
-                        f"Expected sentence starting with 'A/An', got: {out}")
+        # Should start with camera framing descriptor
+        self.assertIn("shot of", out, f"Expected camera framing descriptor, got: {out}")
         # Finite verb instead of participle for subject
         self.assertIn("stands next to", out)
 

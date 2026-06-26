@@ -9,6 +9,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 # ---------------------------------------------------------------------------
+# Camera Framing Mapping
+# ---------------------------------------------------------------------------
+
+CAMERA_FRAMING_MAP = {
+    "close_up": "close-up",
+    "medium": "medium",
+    "full_body": "full-body",
+}
+
+# ---------------------------------------------------------------------------
 # Shared utility (ported from compiler.py)
 # ---------------------------------------------------------------------------
 
@@ -319,10 +329,15 @@ def apply_relationships(
         if not actor_id:
             continue
 
+        # Skip if relationship has target/object/container role but missing value
+        roles = definition.get("roles", {})
+        has_object_role = any(r in ("object", "target", "container") for r in roles)
+        if has_object_role and not object_id:
+            continue
+
         actor_obj = scene_objects.get(actor_id, {})
         object_obj = scene_objects.get(object_id, {}) if object_id else {}
 
-        roles = definition.get("roles", {})
         valid = True
         for role_name, role_def in roles.items():
             allowed = role_def.get("allowed", [])
@@ -834,13 +849,34 @@ class Assembler:
         self.styles_db = _load_json("styles.json")
         self.poses_db = _load_json("poses.json")
 
-    def assemble(self, scene_data: dict, strict: bool = False) -> str:
+    def inject_camera_descriptor(self, state: dict) -> dict:
+        """Inject Camera text based on framing value (if toggle is ON).
+        Returns state with '_camera_text' key containing the camera descriptor string.
+        If user has manually defined a Camera key in scene data, does nothing."""
+        inject = state.get("_inject_camera", True)
+        if not inject:
+            return state
+        if "Camera" in state.get("scene_data", {}):
+            return state
+        framing = state.get("camera", {}).get("framing", "full_body")
+        mapped_framing = CAMERA_FRAMING_MAP.get(framing, "full-body")
+        template = self.templates_db.get("Camera", "{framing} shot of")
+        text = safe_format(template, {"framing": mapped_framing})
+        state["_camera_text"] = text
+        return state
+
+    def assemble(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True) -> str:
         """Assemble a scene into a prompt string.
 
         Args:
             scene_data: The scene dictionary.
             strict: If True, raise ValueError on validation errors.
+            inject_camera_descriptor: If True, automatically add camera framing
+                to the prompt. Default True.
         """
+        # Store toggle in state for pipeline steps
+        scene_data = {**scene_data, "_inject_camera": inject_camera_descriptor}
+
         # Pre-flight validation
         validate(scene_data, self.templates_db, self.actions_db,
                  self.spatial_db, self.subjects_db, strict=strict)
@@ -1047,7 +1083,26 @@ class Assembler:
         filtered.sort(key=lambda f: (-f.get("priority", 0), f.get("zone", ""), f.get("text", "")))
         filtered = filtered[:max_frags]
 
-        return _assemble_output(filtered, physical_ids, render_profile, include_tags)
+        output = _assemble_output(filtered, physical_ids, render_profile, include_tags)
+
+        # Inject camera framing text at the beginning if toggle is ON
+        inject = scene_data.get("_inject_camera", True)
+        if inject and output:
+            camera_state = self.inject_camera_descriptor({
+                "camera": camera,
+                "_inject_camera": True,
+                "scene_data": scene_data,
+            })
+            camera_text = camera_state.get("_camera_text")
+            if camera_text:
+                output = f"{camera_text} {output}"
+                # Lowercase article after "shot of" if present (e.g. "A" -> "a")
+                output = re.sub(r"\bshot of A\b", "shot of a", output)
+                output = re.sub(r"\bshot of An\b", "shot of an", output)
+                # Capitalize first letter
+                output = output[0].upper() + output[1:]
+
+        return output
 
 
 def _is_physical(obj: dict) -> bool:
@@ -1454,8 +1509,8 @@ class PromptCompiler(Assembler):
         super().__init__(data_dir=data_dir)
         self.render_system = RenderSystemWrapper(self.render_profiles_db)
 
-    def compile_scene(self, scene_data: dict, strict: bool = False) -> str:
-        return self.assemble(scene_data, strict=strict)
+    def compile_scene(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True) -> str:
+        return self.assemble(scene_data, strict=strict, inject_camera_descriptor=inject_camera_descriptor)
 
 
 # ---------------------------------------------------------------------------

@@ -4,8 +4,8 @@
     "max_fragments": 6
   },
   "fashion": {
-    "include_tags": ["clothing", "accessory", "identity", "action", "style", "body_art", "pose", "body_config", "gaze"],
-    "max_fragments": 9
+    "include_tags": ["clothing", "accessory", "identity", "action", "style", "body_art", "pose", "body_config", "gaze", "environment", "lighting", "weather"],
+    "max_fragments": 12
   },
   "cinematic": {
     "include_tags": ["identity", "emotion", "clothing", "action", "spatial", "environment", "lighting", "weather", "composition", "style", "body_art", "pose", "interaction", "body_config", "gaze"],
@@ -13,7 +13,7 @@
     "narrative_mode": "scene_description"
   },
   "character_sheet": {
-    "include_tags": ["identity", "emotion", "clothing", "accessory", "action", "interaction", "style", "body_art", "pose", "body_config", "gaze"],
-    "max_fragments": 11
+    "include_tags": ["identity", "emotion", "clothing", "accessory", "action", "interaction", "style", "body_art", "pose", "body_config", "gaze", "environment", "lighting", "weather"],
+    "max_fragments": 14
   }
 }

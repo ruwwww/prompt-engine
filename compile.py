@@ -14,6 +14,7 @@ def main():
     parser.add_argument("--mode", choices=["fact_chain", "scene_description"], help="Override the narrative mode")
     parser.add_argument("--validate-only", action="store_true", help="Only run validation and exit")
     parser.add_argument("--strict", action="store_true", help="Enable strict mode to fail compilation on hard errors")
+    parser.add_argument("--no-camera-text", action="store_true", help="Disable automatic injection of camera framing descriptor")
     parser.add_argument("--data-dir", default="data", help="Directory containing configuration JSON files")
 
     args = parser.parse_args()
@@ -77,7 +78,7 @@ def main():
             }
 
     try:
-        prompt = compiler.compile_scene(scene, strict=args.strict)
+        prompt = compiler.compile_scene(scene, strict=args.strict, inject_camera_descriptor=not args.no_camera_text)
         print(prompt)
     except Exception as e:
         print(f"Compilation error: {e}", file=sys.stderr)

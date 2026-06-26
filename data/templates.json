@@ -298,5 +298,6 @@
     "slots": {
       "color": { "position": "pre" }
     }
-  }
+  },
+  "Camera": "{framing} shot of"
 }

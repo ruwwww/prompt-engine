@@ -1,10 +1,10 @@
 """Tests for the Clean Slate Assembler."""
 import unittest
-from assembler import (
+from compiler import (
     Assembler, safe_format, deep_merge,
     resolve_blueprint, apply_delta, resolve_references,
     filter_by_camera, render_to_text, apply_relationships,
-    apply_environment, apply_style_tone,
+    apply_environment, apply_style_tone, CAMERA_FRAMING_MAP,
 )
 
 
@@ -51,7 +51,7 @@ class TestDeepMerge(unittest.TestCase):
 
 class TestResolveBlueprint(unittest.TestCase):
     def setUp(self):
-        from assembler import _load_json
+        from compiler import _load_json
         self.subjects_db = _load_json("subjects.json")
         self.attires_db = _load_json("attires.json")
 
@@ -100,7 +100,7 @@ class TestApplyDelta(unittest.TestCase):
 
 class TestFilterByCamera(unittest.TestCase):
     def setUp(self):
-        from assembler import _load_json
+        from compiler import _load_json
         self.poses_db = _load_json("poses.json")
 
     def test_close_up_excludes_lower(self):
@@ -122,7 +122,7 @@ class TestFilterByCamera(unittest.TestCase):
 
 class TestRenderToText(unittest.TestCase):
     def setUp(self):
-        from assembler import _load_json
+        from compiler import _load_json
         self.templates_db = _load_json("templates.json")
         self.metadata_db = _load_json("attribute_metadata.json")
         self.profiles_db = _load_json("render_profiles.json")
@@ -193,6 +193,69 @@ class TestAssemblerIntegration(unittest.TestCase):
         }
         result = self.assembler.assemble(scene)
         self.assertIn("smiling", result)
+
+
+class TestCameraFraming(unittest.TestCase):
+    def setUp(self):
+        self.assembler = Assembler()
+
+    def test_camera_framing_close_up_injected(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertIn("shot of", result.lower())
+
+    def test_camera_framing_medium_injected(self):
+        scene = {
+            "camera": {"framing": "medium"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertIn("shot of", result.lower())
+
+    def test_camera_framing_full_body_injected(self):
+        scene = {
+            "camera": {"framing": "full_body"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertIn("full-body shot of", result.lower())
+
+    def test_camera_framing_default_injected(self):
+        scene = {
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertIn("full-body shot of", result.lower())
+
+    def test_camera_framing_disabled(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene, inject_camera_descriptor=False)
+        self.assertNotIn("shot of", result)
+
+    def test_camera_framing_user_override_wins(self):
+        scene = {
+            "camera": {"framing": "close_up"},
+            "Camera": {"custom": "custom camera text"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertNotIn("shot of", result)
+
+    def test_camera_framing_still_filters_lower_body(self):
+        """Camera framing gates visibility even when descriptor is ON."""
+        scene = {
+            "camera": {"framing": "close_up"},
+            "objects": {"orc1": {"type": "creature", "subject": "orc_warrior", "Face": {"expression": "snarling"}, "Tusks": {"size": "large"}}}
+        }
+        result = self.assembler.assemble(scene)
+        self.assertIn("shot of", result.lower())
+        self.assertNotIn("boots", result.lower())
 
 
 if __name__ == "__main__":

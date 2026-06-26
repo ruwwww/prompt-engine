@@ -385,70 +385,7 @@
       <p>Build subject, attire, and environment</p>
     </div>
 
-    <!-- Subject -->
-    <div class="section">
-      <div class="section-label"><span class="dot"></span>Subject Preset</div>
-      <div class="subject-cards" id="subject-cards">
-        <div class="subject-card active" data-subject="" onclick="pickSubject(this, '')">
-          <div class="subject-avatar">👤</div>
-          <div class="subject-info">
-            <div class="name">No Preset (Manual)</div>
-            <div class="meta">Set gender &amp; traits below</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="urban_influencer" onclick="pickSubject(this, 'urban_influencer')">
-          <div class="subject-avatar">🌆</div>
-          <div class="subject-info">
-            <div class="name">Urban Influencer</div>
-            <div class="meta">Woman · brown wavy hair · hoodie</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="professional_man" onclick="pickSubject(this, 'professional_man')">
-          <div class="subject-avatar">💼</div>
-          <div class="subject-info">
-            <div class="name">Professional Man</div>
-            <div class="meta">Man · dark neat hair · suit</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="athletic_woman" onclick="pickSubject(this, 'athletic_woman')">
-          <div class="subject-avatar">🎾</div>
-          <div class="subject-info">
-            <div class="name">Athletic Woman</div>
-            <div class="meta">Woman · black ponytail · polo</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="cozy_creative" onclick="pickSubject(this, 'cozy_creative')">
-          <div class="subject-avatar">🎨</div>
-          <div class="subject-info">
-            <div class="name">Cozy Creative</div>
-            <div class="meta">Woman · auburn messy bun · linen</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="artistic_teens" onclick="pickSubject(this, 'artistic_teens')">
-          <div class="subject-avatar">🖌️</div>
-          <div class="subject-info">
-            <div class="name">Artistic Teens</div>
-            <div class="meta">Person · auburn messy · hoodie</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="orc_warrior" onclick="pickSubject(this, 'orc_warrior')">
-          <div class="subject-avatar">⚔️</div>
-          <div class="subject-info">
-            <div class="name">Orc Warrior</div>
-            <div class="meta">Orc · tusks · chainmail</div>
-          </div>
-        </div>
-        <div class="subject-card" data-subject="elf_archer" onclick="pickSubject(this, 'elf_archer')">
-          <div class="subject-avatar">🏹</div>
-          <div class="subject-info">
-            <div class="name">Elf Archer</div>
-            <div class="meta">Elf · silver braided hair · leather vest</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Manual overrides (only visible without subject) -->
+    <!-- Manual overrides -->
     <div class="section" id="manual-overrides">
       <div class="section-label"><span class="dot"></span>Manual Descriptors <span style="color:var(--text-3);font-weight:400;text-transform:none;font-size:0.72rem;margin-left:4px;">(override any preset)</span></div>
       <div style="display:flex;flex-direction:column;gap:0.6rem;">
@@ -507,29 +444,6 @@
             <option value="shoulder-length">Shoulder-length</option>
             <option value="long">Long</option>
           </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Attire -->
-    <div class="section">
-      <div class="section-label"><span class="dot"></span>Attire Bundle</div>
-      <div class="attire-cards">
-        <div class="attire-card active" data-attire="" onclick="pickAttire(this, '')">
-          <div class="attire-card-name">— Subject Default —</div>
-          <div class="attire-card-meta">Use the preset's built-in clothing</div>
-        </div>
-        <div class="attire-card" data-attire="business_suit" onclick="pickAttire(this, 'business_suit')">
-          <div class="attire-card-name">Business Suit</div>
-          <div class="attire-card-meta">Suit jacket · suit pants · oxford shoes</div>
-        </div>
-        <div class="attire-card" data-attire="tennis_uniform" onclick="pickAttire(this, 'tennis_uniform')">
-          <div class="attire-card-name">Tennis Uniform</div>
-          <div class="attire-card-meta">Polo shirt · tennis skirt · sneakers</div>
-        </div>
-        <div class="attire-card" data-attire="cozy_winter" onclick="pickAttire(this, 'cozy_winter')">
-          <div class="attire-card-name">Cozy Winter</div>
-          <div class="attire-card-meta">Knit sweater · high-waist jeans · ankle boots · beanie</div>
         </div>
       </div>
     </div>
@@ -650,85 +564,108 @@
 
 
   <!-- ════════════════════════════════════════
-       RIGHT COLUMN — Reference Docs
+       RIGHT COLUMN — Presets & Bundles
   ═══════════════════════════════════════════ -->
   <div class="right-col col">
     <div class="col-header">
-      <h2>Pipeline Reference</h2>
-      <p>How inputs flow through the compiler</p>
+      <h2>Presets &amp; Bundles</h2>
+      <p>Select subject and attire for the actor</p>
     </div>
 
-    <div class="ref-section">
-      <h3>Pipeline Stages</h3>
-      <div class="pipeline-step">
-        <div class="pipeline-num">1</div>
-        <div class="pipeline-text"><strong>resolve_blueprint</strong>Merges <code>subjects.json</code> preset defaults and <code>attires.json</code> bundle into a flat component map.</div>
-      </div>
-      <div class="pipeline-step">
-        <div class="pipeline-num">2</div>
-        <div class="pipeline-text"><strong>apply_delta</strong>Deep-merges user overrides (Face, Hair, UpperBody…) on top of the resolved blueprint. User values always win.</div>
-      </div>
-      <div class="pipeline-step">
-        <div class="pipeline-num">3</div>
-        <div class="pipeline-text"><strong>filter_by_camera</strong>Hides zones not visible in the chosen framing (close_up hides UpperBody, LowerBody, Feet). Pose occlusions applied here too.</div>
-      </div>
-      <div class="pipeline-step">
-        <div class="pipeline-num">4</div>
-        <div class="pipeline-text"><strong>render_to_text</strong>Renders each visible component via <code>templates.json</code> grammar catalog into individual text fragments.</div>
-      </div>
-      <div class="pipeline-step">
-        <div class="pipeline-num">5</div>
-        <div class="pipeline-text"><strong>_assemble_output</strong>Sorts fragments by priority, joins them into a deterministic natural language string per render profile.</div>
+    <!-- Subject Preset -->
+    <div class="section">
+      <div class="section-label"><span class="dot"></span>Subject Preset</div>
+      <div class="subject-cards" id="subject-cards">
+        <div class="subject-card" data-subject="" onclick="pickSubject(this, '')">
+          <div class="subject-avatar">👤</div>
+          <div class="subject-info">
+            <div class="name">No Preset (Manual)</div>
+            <div class="meta">Set gender &amp; traits in left panel</div>
+          </div>
+        </div>
+        <div class="subject-card active" data-subject="urban_influencer" onclick="pickSubject(this, 'urban_influencer')">
+          <div class="subject-avatar">🌆</div>
+          <div class="subject-info">
+            <div class="name">Urban Influencer</div>
+            <div class="meta">Woman · brown wavy hair · hoodie</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="professional_man" onclick="pickSubject(this, 'professional_man')">
+          <div class="subject-avatar">💼</div>
+          <div class="subject-info">
+            <div class="name">Professional Man</div>
+            <div class="meta">Man · dark neat hair · suit</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="athletic_woman" onclick="pickSubject(this, 'athletic_woman')">
+          <div class="subject-avatar">🎾</div>
+          <div class="subject-info">
+            <div class="name">Athletic Woman</div>
+            <div class="meta">Woman · black ponytail · polo</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="cozy_creative" onclick="pickSubject(this, 'cozy_creative')">
+          <div class="subject-avatar">🎨</div>
+          <div class="subject-info">
+            <div class="name">Cozy Creative</div>
+            <div class="meta">Woman · auburn messy bun · linen</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="artistic_teens" onclick="pickSubject(this, 'artistic_teens')">
+          <div class="subject-avatar">🖌️</div>
+          <div class="subject-info">
+            <div class="name">Artistic Teens</div>
+            <div class="meta">Person · auburn messy · hoodie</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="orc_warrior" onclick="pickSubject(this, 'orc_warrior')">
+          <div class="subject-avatar">⚔️</div>
+          <div class="subject-info">
+            <div class="name">Orc Warrior</div>
+            <div class="meta">Orc · tusks · chainmail</div>
+          </div>
+        </div>
+        <div class="subject-card" data-subject="elf_archer" onclick="pickSubject(this, 'elf_archer')">
+          <div class="subject-avatar">🏹</div>
+          <div class="subject-info">
+            <div class="name">Elf Archer</div>
+            <div class="meta">Elf · silver braided hair · leather vest</div>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="ref-section">
-      <h3>Camera Framing Zones</h3>
+    <!-- Attire Bundle -->
+    <div class="section">
+      <div class="section-label"><span class="dot"></span>Attire Bundle</div>
+      <div class="attire-cards">
+        <div class="attire-card active" data-attire="" onclick="pickAttire(this, '')">
+          <div class="attire-card-name">— Subject Default —</div>
+          <div class="attire-card-meta">Use the preset's built-in clothing</div>
+        </div>
+        <div class="attire-card" data-attire="business_suit" onclick="pickAttire(this, 'business_suit')">
+          <div class="attire-card-name">Business Suit</div>
+          <div class="attire-card-meta">Suit jacket · suit pants · oxford shoes</div>
+        </div>
+        <div class="attire-card" data-attire="tennis_uniform" onclick="pickAttire(this, 'tennis_uniform')">
+          <div class="attire-card-name">Tennis Uniform</div>
+          <div class="attire-card-meta">Polo shirt · tennis skirt · sneakers</div>
+        </div>
+        <div class="attire-card" data-attire="cozy_winter" onclick="pickAttire(this, 'cozy_winter')">
+          <div class="attire-card-name">Cozy Winter</div>
+          <div class="attire-card-meta">Knit sweater · high-waist jeans · ankle boots · beanie</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Render Profile Quick Reference -->
+    <div class="section">
+      <div class="section-label"><span class="dot"></span>Render Profiles</div>
       <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem;color:var(--text-2);">
-        <div><span style="color:var(--teal);font-family:var(--mono);">close_up</span> — Face, Eyes, Hair, Ears, Headwear</div>
-        <div><span style="color:var(--teal);font-family:var(--mono);">medium</span> — + UpperBody, Hands</div>
-        <div><span style="color:var(--teal);font-family:var(--mono);">full_body</span> — + LowerBody, Feet</div>
-      </div>
-    </div>
-
-    <div class="ref-section">
-      <h3>Render Profiles</h3>
-      <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.78rem;color:var(--text-2);">
-        <div><span style="color:var(--amber);font-family:var(--mono);">cinematic</span> — Scene description sentence, environment, lighting, weather</div>
-        <div><span style="color:var(--amber);font-family:var(--mono);">fashion</span> — Clothing &amp; accessories focused, max 9 fragments</div>
-        <div><span style="color:var(--amber);font-family:var(--mono);">character_sheet</span> — Full detail list, identity through interactions</div>
-        <div><span style="color:var(--amber);font-family:var(--mono);">portrait</span> — Identity &amp; emotion only, max 6 fragments</div>
-      </div>
-    </div>
-
-    <div class="ref-section">
-      <h3>Subjects in Catalog</h3>
-      <div class="tag-grid">
-        <span class="tag">urban_influencer</span>
-        <span class="tag">professional_man</span>
-        <span class="tag">athletic_woman</span>
-        <span class="tag">cozy_creative</span>
-        <span class="tag">artistic_teens</span>
-        <span class="tag">orc_warrior</span>
-        <span class="tag">elf_archer</span>
-      </div>
-    </div>
-
-    <div class="ref-section">
-      <h3>Attire Bundles in Catalog</h3>
-      <div class="tag-grid">
-        <span class="tag">business_suit</span>
-        <span class="tag">tennis_uniform</span>
-        <span class="tag">cozy_winter</span>
-      </div>
-    </div>
-
-    <div class="ref-section">
-      <h3>Environment Anchors v2</h3>
-      <div style="font-size:0.78rem;color:var(--text-2);line-height:1.5;">
-        Target any affordance fixture using dot-notation:<br/>
-        <code style="color:var(--teal);">balcony.railing</code>, <code style="color:var(--teal);">cafe.counter</code>, <code style="color:var(--teal);">office.window</code><br/><br/>
-        The compiler validates the suffix against the environment's affordance list and dynamically injects a fixture object — no manual object definition needed.
+        <div><span style="color:var(--amber);font-family:var(--mono);">cinematic</span> — Scene description sentence with environment</div>
+        <div><span style="color:var(--amber);font-family:var(--mono);">character_sheet</span> — Full detail list, identity + clothing + action</div>
+        <div><span style="color:var(--amber);font-family:var(--mono);">fashion</span> — Clothing &amp; environment focused</div>
+        <div><span style="color:var(--amber);font-family:var(--mono);">portrait</span> — Identity &amp; emotion only</div>
       </div>
     </div>
 
@@ -754,7 +691,7 @@
   };
 
   // ── State ────────────────────────────────────────────────────────────────
-  let currentSubject = "";
+  let currentSubject = "urban_influencer";
   let currentAttire  = "";
   let debounceTimer  = null;
 

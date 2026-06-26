@@ -16,7 +16,7 @@
     "chain_order": 1,
     "roles": {
       "subject": { "allowed": ["human", "orc", "elf", "robot", "creature"] },
-      "target": { "allowed": ["human", "orc", "elf", "robot", "creature", "vehicle", "item", "environment_object"] }
+      "target": { "allowed": ["human", "orc", "elf", "robot", "creature", "vehicle", "item", "environment_object", "fixture"] }
     },
     "template": "{subject} standing next to {target}",
     "clause": "standing next to {target}"
