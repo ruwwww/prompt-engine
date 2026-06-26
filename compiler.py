@@ -1300,37 +1300,77 @@ class Assembler:
                 weather_key = atmosphere.get("weather_key")
                 lighting_key = atmosphere.get("lighting_key")
 
-            identity_texts = [f["text"] for f in filtered if f.get("phase") == 1 and f.get("zone") != "_subject_type"]
-            subject_type = next((f["text"] for f in filtered if f.get("zone") == "_subject_type"), "a person")
-            subject_phrase = f"{subject_type}"
-            if identity_texts:
-                subject_phrase += " with " + ", ".join(identity_texts)
-
+            # Collect categorized fragments for the first physical actor
             held_items = []
             accessories = []
             clothing_items = []
             posture_phrase = ""
             action_clauses = []
+            identity_adjectives = []
+            hair_phrase = ""
+            subject_type = "person"
+            actor_gender = "person"
+
+            first_physical_id = physical_ids[0] if physical_ids else None
+            if first_physical_id:
+                obj = scene_objects.get(first_physical_id, {})
+                raw_gender = obj.get("gender", "")
+                raw_morph = obj.get("morphology", {})
+                if raw_morph and raw_morph.get("type"):
+                    subject_type = raw_morph["type"]
+                elif raw_gender in ("woman", "man", "person"):
+                    subject_type = raw_gender
+                elif raw_gender:
+                    subject_type = raw_gender
+                actor_gender = subject_type
+
+            CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
+            ACCESSORY_ZONES = {"Hands", "Jewelry", "Accessories"}
 
             for f in filtered:
-                phase = f.get("phase", 99)
-                if phase == 1:
-                    pass
-                elif phase == 2:
-                    zone = f.get("zone", "")
-                    if zone in ("Jewelry", "Accessories"):
-                        accessories.append(f["text"])
-                    elif zone in ("Clothing",):
-                        clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
-                elif phase == 3:
-                    if f.get("zone") in ("body_config", "_pose", "pose"):
-                        if posture_phrase:
-                            posture_phrase += ", " + f["text"]
-                        else:
-                            posture_phrase = f["text"]
-                elif phase == 4:
+                zone = f.get("zone", "")
+                frag_type = f.get("frag_type", "")
+                tags = f.get("tags", [])
+
+                if zone == "_subject_type":
+                    continue
+                elif zone == "Hair":
+                    hair_phrase = f["text"]
+                elif zone == "Face":
+                    identity_adjectives.append(f["text"])
+                elif zone in CLOTHING_ZONES:
+                    clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
+                elif zone in ACCESSORY_ZONES:
+                    accessories.append(f["text"])
+                elif frag_type == "relationship":
                     clause = f.get("clause_text", f["text"])
-                    action_clauses.append(clause)
+                    if clause not in action_clauses:
+                        action_clauses.append(clause)
+                elif zone in ("body_config", "_pose", "pose"):
+                    if posture_phrase:
+                        posture_phrase += ", " + f["text"]
+                    else:
+                        posture_phrase = f["text"]
+
+            # Build subject phrase: "A [expressions] [subject_type] with [hair]"
+            adj_part = ", ".join(identity_adjectives) if identity_adjectives else ""
+            subject_phrase_parts = []
+            if adj_part:
+                subject_phrase_parts.append(adj_part)
+            subject_phrase_parts.append(subject_type)
+            subject_phrase = " ".join(subject_phrase_parts)
+            if hair_phrase:
+                subject_phrase += " with " + hair_phrase
+
+            # Derive pronoun from gender
+            pronoun = "She"
+            if actor_gender == "man":
+                pronoun = "He"
+            elif actor_gender not in ("woman",):
+                pronoun = "They"
+
+            # Clean camera framing: "full_body" -> "full-body"
+            clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
 
             output = output_formatter.render_full_output({
                 "subject_phrase": subject_phrase,
@@ -1347,13 +1387,13 @@ class Assembler:
                 "weather_phrase": self.weather_db.get(weather_key, {}).get("descriptor_phrase", "") if weather_key else "",
                 "shot_type": camera.get("shot_type", ""),
                 "camera_angle": camera.get("angle", ""),
-                "camera_framing": camera.get("framing", ""),
+                "camera_framing": clean_framing,
                 "depth_of_field": camera.get("depth_of_field", ""),
                 "aesthetic": render_profile.get("aesthetic", ""),
                 "color_palette": render_profile.get("color_palette", ""),
                 "render_quality": render_profile.get("quality", ""),
                 "mood": scene_data.get("mood", ""),
-                "pronoun": "She",
+                "pronoun": pronoun,
             })
 
         return output

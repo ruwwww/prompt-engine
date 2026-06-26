@@ -29,7 +29,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             
             try:
                 scene_data = json.loads(post_data.decode("utf-8"))
-                output_format = scene_data.pop("output_format", "legacy")
+                output_format = scene_data.pop("output_format", "labeled")
                 compiled_prompt = compiler.compile_scene(scene_data, strict=False, output_format=output_format)
                 
                 self.send_response(200)

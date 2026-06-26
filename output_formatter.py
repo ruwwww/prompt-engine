@@ -9,7 +9,12 @@ Depends on: no external libraries beyond standard Python.
 
 def format_lead_sentence(subject_phrase: str, action_clause: str,
                           env_clause: str, atmosphere_detail: str) -> str:
-    parts = [subject_phrase]
+    parts = []
+    if subject_phrase:
+        article = "A"
+        if subject_phrase[0].lower() in "aeiou":
+            article = "An"
+        parts.append(article + " " + subject_phrase)
     if action_clause:
         parts.append(action_clause)
     if env_clause:
@@ -24,7 +29,11 @@ def format_lead_sentence(subject_phrase: str, action_clause: str,
 
 def format_subject_field(identity_phrase: str, held_items: list[str],
                           accessories: list[str]) -> str:
-    parts = [identity_phrase]
+    parts = []
+    article = "A"
+    if identity_phrase and identity_phrase[0].lower() in "aeiou":
+        article = "An"
+    parts.append(article + " " + identity_phrase) if identity_phrase else parts.append("")
     if accessories:
         parts.append("wearing " + _join_list(accessories))
     if held_items:
@@ -32,29 +41,32 @@ def format_subject_field(identity_phrase: str, held_items: list[str],
     return _cap_sentence(" ".join(parts))
 
 
-def format_clothing_field(clothing_items: list[dict]) -> str:
+def format_clothing_field(clothing_items: list[dict], pronoun: str = "She") -> str:
     sorted_items = sorted(clothing_items, key=lambda x: x.get("layer_order", 0), reverse=True)
     labels = [item["label"] for item in sorted_items]
     if not labels:
         return ""
-    return "She wears " + _join_list_with_over(labels) + "."
+    return f"{pronoun} wears " + _join_list_with_over(labels) + "."
 
 
-def format_action_field(posture_phrase: str, action_clauses: list[str]) -> str:
+def format_action_field(posture_phrase: str, action_clauses: list[str], pronoun: str = "She") -> str:
     parts = []
     if posture_phrase:
-        parts.append(f"She is {posture_phrase}")
+        parts.append(f"{pronoun} is {posture_phrase}")
     for clause in action_clauses:
         if parts:
             parts.append(clause)
         else:
-            parts.append(f"She is {clause}")
+            parts.append(f"{pronoun} is {clause}")
     return _cap_sentence(", ".join(parts))
 
 
 def format_environment_field(env_label: str, env_preposition: str,
                               background_elements: list[str]) -> str:
-    parts = [f"A {env_label}"]
+    if not env_label:
+        return ""
+    article = "An" if env_label[0].lower() in "aeiou" else "A"
+    parts = [f"{article} {env_label}"]
     if background_elements:
         parts.append("with " + _join_list(background_elements))
     return _cap_sentence(" ".join(parts))
@@ -69,10 +81,15 @@ def format_objects_field(scene_props: list[str]) -> str | None:
 def format_lighting_field(lighting_phrase: str, weather_phrase: str) -> str:
     parts = []
     if lighting_phrase:
-        parts.append(lighting_phrase)
+        parts.append(lighting_phrase.rstrip(".").strip())
     if weather_phrase:
-        parts.append(weather_phrase)
-    return _cap_sentence(". ".join(parts))
+        parts.append(weather_phrase.rstrip(".").strip())
+    if not parts:
+        return ""
+    joined = ". ".join(parts)
+    sentences = [s.strip() for s in joined.split(". ")]
+    sentences = [s[0].upper() + s[1:] if s else s for s in sentences]
+    return ". ".join(sentences) + "."
 
 
 def format_camera_field(shot_type: str, angle: str, framing: str,
@@ -105,21 +122,29 @@ def format_style_field(aesthetic: str, color_palette: str,
 
 
 def render_full_output(scene_data: dict) -> str:
+    env_label = scene_data.get("env_label", "")
+    env_preposition = scene_data.get("env_preposition", "in")
+    env_clause = ""
+    if env_label:
+        article = "an" if env_label[0].lower() in "aeiou" else "a"
+        env_clause = f"{env_preposition} {article} {env_label}"
     lead = format_lead_sentence(
         scene_data.get("subject_phrase", ""),
         scene_data.get("action_clauses", [""])[0] if scene_data.get("action_clauses") else "",
-        f"{scene_data.get('env_preposition', 'in')} a {scene_data.get('env_label', '')}",
+        env_clause,
         scene_data.get("lighting_phrase", "")
     )
+    pronoun = scene_data.get("pronoun", "She")
     subject = format_subject_field(
         scene_data.get("subject_phrase", ""),
         scene_data.get("held_items", []),
         scene_data.get("accessories", [])
     )
-    clothing = format_clothing_field(scene_data.get("clothing_items", []))
+    clothing = format_clothing_field(scene_data.get("clothing_items", []), pronoun)
     action = format_action_field(
         scene_data.get("posture_phrase", ""),
-        scene_data.get("action_clauses", [])
+        scene_data.get("action_clauses", []),
+        pronoun
     )
     environment = format_environment_field(
         scene_data.get("env_label", ""),
