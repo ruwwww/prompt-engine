@@ -369,7 +369,7 @@ class TestHairOntology(unittest.TestCase):
             }
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("box_braids of waist black hair with gold cuffs", out)
+        self.assertIn("box braids of waist black hair with gold cuffs", out)
 
     def test_hair_cultural_locs(self):
         """Cultural style (locs) renders correctly."""
@@ -509,7 +509,7 @@ class TestSpatialAndScene(unittest.TestCase):
             "relationships": [{"type": "standing_next_to", "subject": "h1", "target": "car_1"}]
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("in a rain-soaked neon-lit alley", out)
+        self.assertIn("on a rain-soaked neon-lit alley", out)
         self.assertIn("stands next to a red car in background", out)
         self.assertIn("shot in cinematic style", out)
 
@@ -917,7 +917,7 @@ class TestNewFeatures(unittest.TestCase):
             }
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("in a foggy sunlight forest in the Pacific Northwest featuring a lush green pine tree", out)
+        self.assertIn("on a foggy sunlight forest in the Pacific Northwest featuring a lush green pine tree", out)
 
 
 @pytest.mark.skip(reason="Assembler v2: Slot descriptor scene recreations TBD")
@@ -2178,7 +2178,7 @@ class TestEnvironmentAnchors(unittest.TestCase):
             ]
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("leaning", out)
+        self.assertIn("leans against", out)
         self.assertIn("railing", out)
 
     def test_anchor_fixture_created(self):
@@ -2271,7 +2271,7 @@ class TestEnvironmentAnchors(unittest.TestCase):
             ]
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("leaning", out)
+        self.assertIn("leans on", out)
         self.assertIn("window", out)
 
 

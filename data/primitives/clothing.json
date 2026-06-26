@@ -27,6 +27,19 @@
   "SuitJacket": { "garment": "suit jacket" },
   "SuitPants": { "garment": "suit pants" },
   "TennisSkirt": { "garment": "tennis skirt" },
-  "Tshirt": { "garment": "t-shirt" }
+  "Tshirt": { "garment": "t-shirt" },
+  "WizardRobe": {
+    "garment": "robe",
+    "coverage": "full-body",
+    "color": "deep purple",
+    "material": "velvet",
+    "length": "floor-length",
+    "sleeve": "flowing"
+  },
+  "SteelHelmet": { "garment": "helmet", "material": "steel", "helmet_style": "closed-face" },
+  "SteelChestplate": { "garment": "chestplate", "material": "steel", "chestplate_style": "articulated" },
+  "SteelGauntlets": { "garment": "gauntlets", "material": "steel" },
+  "SteelGreaves": { "garment": "greaves", "material": "steel" },
+  "SteelSabatons": { "garment": "sabatons", "material": "steel" }
 }
 

@@ -14,5 +14,15 @@
     "LowerBody": { "owned_item_id": "high_waist_jeans_1" },
     "Feet": { "owned_item_id": "ankle_boots_1" },
     "Headwear": { "owned_item_id": "knit_beanie_1" }
+  },
+  "wizard_attire": {
+    "UpperBody": { "owned_item_id": "wizard_robe_1" }
+  },
+  "full_plate_armor": {
+    "Headwear": { "owned_item_id": "steel_helmet_1" },
+    "UpperBody": { "owned_item_id": "steel_chestplate_1" },
+    "Hands": { "owned_item_id": "steel_gauntlets_1" },
+    "LowerBody": { "owned_item_id": "steel_greaves_1" },
+    "Feet": { "owned_item_id": "steel_sabatons_1" }
   }
 }

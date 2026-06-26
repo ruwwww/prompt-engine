@@ -209,7 +209,7 @@ def resolve_blueprint(
                         scene_objects[item_id]["type"] = "clothing"
 
     attire_name = components.get("attire")
-    if attire_name and attire_name in attires_db:
+    if isinstance(attire_name, str) and attire_name in attires_db:
         attire = attires_db[attire_name]
         for zone, slot_data in attire.items():
             if not isinstance(slot_data, dict):
@@ -386,7 +386,7 @@ def apply_relationships(
         if affordance_types_db and env_data and object_id:
             binding = _resolve_affordance_query(
                 rel_type, object_obj, set(visible_zones),
-                env_data, affordance_types_db
+                env_data, affordance_types_db, templates_db
             )
             if binding:
                 clause_head = binding.get("clause_head", "")
@@ -578,6 +578,27 @@ def _get_noun_phrase(
 # Pipeline Step 5: apply_environment
 # ---------------------------------------------------------------------------
 
+def _natural_join(items: list) -> str:
+    """Join a list of strings with commas and 'and' for the last item."""
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _render_fixture_label(fixture_obj: dict, templates_db: dict) -> str:
+    """Render a fixture object into a descriptive noun phrase using its template."""
+    template_key = fixture_obj.get("template_key", "")
+    template = templates_db.get(template_key) if template_key else None
+    if template:
+        ctx = dict(fixture_obj)
+        return safe_format(template, ctx)
+    return fixture_obj.get("label", template_key.lower().replace("_", " ") if template_key else "fixture")
+
+
 def apply_environment(
     scene_data: dict,
     scene_objects: dict,
@@ -587,6 +608,7 @@ def apply_environment(
     composition_db: dict,
     templates_db: dict,
     jinja2_env: object = None,
+    relationship_target_ids: set = None,
 ) -> list:
     """Process environment and emit text fragments.
     Returns a list of fragment dicts."""
@@ -633,14 +655,31 @@ def apply_environment(
                 else:
                     weather_str = weather_key
 
+            # Build combined environment label with weather and lighting as adjectives
+            combined_label = label
+            if lighting_str:
+                combined_label = f"{lighting_str} {combined_label}"
+            if weather_str:
+                combined_label = f"{weather_str} {combined_label}"
+
+            # Determine article from the first word of the combined label (not the base noun)
+            first_char = combined_label[0].lower()
+            dynamic_article = "an" if first_char in "aeiou" else "a"
+
             # Phase 1: Try Jinja2 environment template
             env_text = ""
             if jinja2_env:
                 env_text = _render_jinja2_template(jinja2_env, "Environment.jinja2", {
-                    "article": article, "label": label
+                    "article": dynamic_article, "label": combined_label
                 })
             if not env_text:
-                env_text = f"{article} {label}"
+                env_text = f"{dynamic_article} {combined_label}"
+
+            # Append location/geolocation
+            location = env_data.get("geolocation") or env_data.get("location")
+            if location:
+                loc_str = location if location.startswith("the ") else location
+                env_text = f"{env_text} in {loc_str}"
 
             fragments.append({
                 "zone": "environment",
@@ -650,31 +689,26 @@ def apply_environment(
                 "text": env_text,
             })
 
-            if lighting_str:
-                # Phase 1: Try Jinja2 lighting template
-                l_text = ""
-                if jinja2_env:
-                    l_text = _render_jinja2_template(jinja2_env, "Lighting.jinja2", {
-                        "lighting": lighting_str
-                    })
-                if not l_text:
-                    l_text = lighting_str
-                fragments.append({
-                    "zone": "lighting",
-                    "frag_type": "lighting",
-                    "tags": ["lighting"],
-                    "priority": 55,
-                    "text": l_text,
-                })
+    # Ambient fixture discovery: render fixture/furniture objects not referenced by relationships
+    if relationship_target_ids is None:
+        relationship_target_ids = set()
+    ambient_fixture_labels = []
+    for obj_id, obj in scene_objects.items():
+        if obj.get("type") in ("fixture", "furniture") and obj_id not in relationship_target_ids:
+            label = _render_fixture_label(obj, templates_db)
+            if label:
+                first_char = label[0].lower()
+                article = "an" if first_char in "aeiou" else "a"
+                ambient_fixture_labels.append(f"{article} {label}")
 
-            if weather_str and weather_key:
-                fragments.append({
-                    "zone": "weather",
-                    "frag_type": "weather",
-                    "tags": ["weather"],
-                    "priority": 50,
-                    "text": weather_str,
-                })
+    if ambient_fixture_labels:
+        fragments.append({
+            "zone": "environment",
+            "frag_type": "environment",
+            "tags": ["environment"],
+            "priority": 60,
+            "text": f"featuring {_natural_join(ambient_fixture_labels)}",
+        })
 
     comp_data = scene_data.get("composition")
     if comp_data:
@@ -777,11 +811,29 @@ def render_to_text(
     active_tone: str = "default",
     grammar_db: dict = None,
     jinja2_env: object = None,
+    ensemble_key: str = None,
 ) -> list:
     """Render visible components into text fragments.
     Tries Jinja2 templates first (by _primitive_id, then by zone),
     then falls back to grammar_db or templates_db."""
     fragments = []
+
+    # Phase 0: Try Ensemble-level template (replaces all zone-by-zone rendering)
+    if ensemble_key and jinja2_env:
+        flat_ctx = {}
+        for zone, zone_data in visible_components.items():
+            if isinstance(zone_data, dict):
+                flat_ctx.update(zone_data)
+        ensemble_text = _render_jinja2_template(jinja2_env, ensemble_key + ".jinja2", flat_ctx)
+        if ensemble_text:
+            fragments.append({
+                "zone": "_attire",
+                "frag_type": "native",
+                "tags": ["clothing"],
+                "priority": 60,
+                "text": ensemble_text,
+            })
+            return fragments
 
     for zone, zone_data in visible_components.items():
         if not isinstance(zone_data, dict):
@@ -996,6 +1048,7 @@ def _resolve_affordance_query(
     visible_zones: set,
     env_data: dict,
     affordance_types_db: dict,
+    templates_db: dict = None,
 ) -> dict | None:
     """
     Perform an AffordanceQuery for a single relationship.
@@ -1029,10 +1082,19 @@ def _resolve_affordance_query(
         if zone not in visible_zones:
             return None
 
-    fixture_article = "a"
-    fixture_label = fixture_name.replace("_", " ")
-    if fixture_label and fixture_label[0].lower() in "aeiou":
-        fixture_article = "an"
+    # Use template rendering for scene object fixtures when available
+    template_key = target_obj.get("template_key", "")
+    if templates_db and template_key in templates_db:
+        obj_phrase = safe_format(templates_db[template_key], target_obj)
+        first_char = obj_phrase[0].lower()
+        obj_article = "an" if first_char in "aeiou" else "a"
+        object_phrase = f"{obj_article} {obj_phrase}"
+    else:
+        fixture_label = fixture_name.replace("_", " ")
+        fixture_article = "a"
+        if fixture_label and fixture_label[0].lower() in "aeiou":
+            fixture_article = "an"
+        object_phrase = f"{fixture_article} {fixture_label}"
 
     preposition = matched_affordance.get("preposition_hint") or "near"
     clause_head = matched_affordance.get("clause_head", action_id.replace("_", " "))
@@ -1042,7 +1104,7 @@ def _resolve_affordance_query(
         "fixture_id": fixture_name,
         "clause_head": clause_head,
         "preposition": preposition,
-        "object_phrase": f"{fixture_article} {fixture_label}",
+        "object_phrase": object_phrase,
         "grammatical_role": matched_affordance.get("grammatical_role", "object"),
         "body_zones": required_zones,
     }
@@ -1321,11 +1383,17 @@ class Assembler:
             subject_name = components.get("subject", obj.get("subject", ""))
             morphology = components.get("morphology", obj.get("morphology", {}))
 
+            # Extract ensemble key for template-level attire rendering
+            attire_key = components.get("attire")
+            if not isinstance(attire_key, str):
+                attire_key = None
+
             identity_frags = render_to_text(
                 visible, render_profile_name,
                 self.templates_db, self.attribute_metadata_db,
                 self.render_profiles_db, active_tone,
-                self.grammar_db, self.jinja2_env
+                self.grammar_db, self.jinja2_env,
+                ensemble_key=attire_key,
             )
             for f in identity_frags:
                 f["actor_id"] = obj_id
@@ -1441,11 +1509,20 @@ class Assembler:
         )
         all_fragments.extend(rel_frags)
 
+        # Collect fixture IDs referenced by relationships
+        relationship_target_ids = set()
+        for rel in scene_data.get("relationships", []):
+            for key in ("actor", "subject", "object", "target", "container"):
+                val = rel.get(key)
+                if val and isinstance(val, str):
+                    relationship_target_ids.add(val)
+
         env_frags = apply_environment(
             scene_data, scene_objects,
             self.environments_db, self.lighting_db,
             self.weather_db, self.composition_db, self.templates_db,
-            self.jinja2_env
+            self.jinja2_env,
+            relationship_target_ids=relationship_target_ids,
         )
         all_fragments.extend(env_frags)
 
@@ -1766,7 +1843,7 @@ def _assemble_output(
                 surface_frags.append(f)
             elif zone in ("Face", "Hair", "Eyes", "Tusks", "Ears", "Jaw", "_subject_type"):
                 identity_frags.append(f)
-            elif zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Headwear"):
+            elif zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Headwear", "_attire"):
                 clothing_frags.append(f)
             else:
                 identity_frags.append(f)
@@ -1941,6 +2018,12 @@ def _assemble_output(
                 vowels = "aeiou"
                 art = "an" if env_text[0].lower() in vowels else "a"
                 result += f" {env_prep} {art} {env_text}"
+        # Append supplementary env fragments (e.g., "featuring X")
+        for f in env_frags[1:]:
+            extra = f["text"]
+            if extra:
+                result = result.rstrip(".")
+                result += f" {extra}" if not extra.startswith(" ") else extra
 
     comp_frags = [f for f in other_shared if f.get("frag_type") == "composition"]
     if render_profile.get("narrative_mode") == "scene_description":

@@ -150,5 +150,21 @@
     "finite_past": "looked",
     "transitivity": "prepositional",
     "reciprocal_form": null
+  },
+  "standing_next_to": {
+    "participle": "standing",
+    "finite_3sg": "stands",
+    "finite_pl": "stand",
+    "finite_past": "stood",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
+  },
+  "inside": {
+    "participle": "sitting",
+    "finite_3sg": "sits",
+    "finite_pl": "sit",
+    "finite_past": "sat",
+    "transitivity": "prepositional",
+    "reciprocal_form": null
   }
 }
