@@ -7,7 +7,52 @@ from compiler import PromptCompiler
 PORT = 8000
 compiler = PromptCompiler()
 
+def parse_labeled_prompt(labeled_str: str) -> dict:
+    fields = {
+        "subject": "",
+        "clothing": "",
+        "action": "",
+        "environment": "",
+        "lighting": "",
+        "camera": "",
+        "style": "",
+        "composition": ""
+    }
+    lines = [line.strip() for line in labeled_str.split("\n")]
+    for line in lines:
+        if ":" in line:
+            parts = line.split(":", 1)
+            key = parts[0].strip().lower()
+            val = parts[1].strip()
+            if key == "subject":
+                fields["subject"] = val
+            elif key == "clothing":
+                fields["clothing"] = val
+            elif key == "action":
+                fields["action"] = val
+            elif key == "environment":
+                fields["environment"] = val
+            elif key == "lighting":
+                fields["lighting"] = val
+            elif key == "camera":
+                fields["camera"] = val
+            elif key in ("style details", "style"):
+                fields["style"] = val
+            elif key in ("objects", "composition"):
+                fields["composition"] = val
+    return fields
+
 class DemoRequestHandler(BaseHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        BaseHTTPRequestHandler.end_headers(self)
+
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self.end_headers()
+
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
             self.send_response(200)
@@ -30,13 +75,23 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             try:
                 scene_data = json.loads(post_data.decode("utf-8"))
                 output_format = scene_data.pop("output_format", "labeled")
-                compiled_prompt = compiler.compile_scene(scene_data, strict=False, output_format=output_format)
+                
+                # Make deep copies of scene_data for multiple compilations
+                scene_data_legacy = json.loads(json.dumps(scene_data))
+                scene_data_labeled = json.loads(json.dumps(scene_data))
+                
+                legacy_prompt = compiler.compile_scene(scene_data_legacy, strict=False, output_format="legacy")
+                labeled_prompt = compiler.compile_scene(scene_data_labeled, strict=False, output_format="labeled")
+                eight_field = parse_labeled_prompt(labeled_prompt)
                 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 
-                res = json.dumps({"prompt": compiled_prompt})
+                res = json.dumps({
+                    "prompt": legacy_prompt,
+                    "eightFieldPrompt": eight_field
+                })
                 self.wfile.write(res.encode("utf-8"))
             except Exception as e:
                 self.send_response(400)
