@@ -586,6 +586,7 @@ def apply_environment(
     weather_db: dict,
     composition_db: dict,
     templates_db: dict,
+    jinja2_env: object = None,
 ) -> list:
     """Process environment and emit text fragments.
     Returns a list of fragment dicts."""
@@ -632,7 +633,14 @@ def apply_environment(
                 else:
                     weather_str = weather_key
 
-            env_text = f"{article} {label}"
+            # Phase 1: Try Jinja2 environment template
+            env_text = ""
+            if jinja2_env:
+                env_text = _render_jinja2_template(jinja2_env, "Environment.jinja2", {
+                    "article": article, "label": label
+                })
+            if not env_text:
+                env_text = f"{article} {label}"
 
             fragments.append({
                 "zone": "environment",
@@ -643,12 +651,20 @@ def apply_environment(
             })
 
             if lighting_str:
+                # Phase 1: Try Jinja2 lighting template
+                l_text = ""
+                if jinja2_env:
+                    l_text = _render_jinja2_template(jinja2_env, "Lighting.jinja2", {
+                        "lighting": lighting_str
+                    })
+                if not l_text:
+                    l_text = lighting_str
                 fragments.append({
                     "zone": "lighting",
                     "frag_type": "lighting",
                     "tags": ["lighting"],
                     "priority": 55,
-                    "text": lighting_str,
+                    "text": l_text,
                 })
 
             if weather_str and weather_key:
@@ -1187,8 +1203,16 @@ class Assembler:
             return state
         framing = state.get("camera", {}).get("framing", "full_body")
         mapped_framing = CAMERA_FRAMING_MAP.get(framing, "full-body")
-        template = self.templates_db.get("Camera", "{framing} shot of")
-        text = safe_format(template, {"framing": mapped_framing})
+        # Phase 1: Try Jinja2 camera template
+        text = ""
+        if self.jinja2_env:
+            text = _render_jinja2_template(self.jinja2_env, "Camera.jinja2", {
+                "framing": mapped_framing
+            })
+        # Phase 2: Fall back to templates_db
+        if not text:
+            template = self.templates_db.get("Camera", "{framing} shot of")
+            text = safe_format(template, {"framing": mapped_framing})
         state["_camera_text"] = text
         return state
 
@@ -1420,7 +1444,8 @@ class Assembler:
         env_frags = apply_environment(
             scene_data, scene_objects,
             self.environments_db, self.lighting_db,
-            self.weather_db, self.composition_db, self.templates_db
+            self.weather_db, self.composition_db, self.templates_db,
+            self.jinja2_env
         )
         all_fragments.extend(env_frags)
 
