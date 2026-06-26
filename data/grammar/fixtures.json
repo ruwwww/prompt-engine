@@ -1,0 +1,24 @@
+{
+  "Bathtub": {
+    "head": "bathtub",
+    "slots": {
+      "color": { "position": "pre" },
+      "material": { "position": "pre" },
+      "style": { "position": "pre" }
+    }
+  },
+  "Mirror": {
+    "head": "mirror",
+    "slots": {
+      "style": { "position": "pre" }
+    }
+  },
+  "Tree": {
+    "head": "tree",
+    "slots": {
+      "color": { "position": "pre" },
+      "species": { "position": "pre" }
+    }
+  },
+  "Fixture": "{anchor}"
+}

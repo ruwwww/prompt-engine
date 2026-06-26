@@ -1,0 +1,12 @@
+{
+  "Bathtub": { "garment": "bathtub" },
+  "Mirror": { "garment": "mirror" },
+  "Tree": { "garment": "tree" },
+  "Towel": { "garment": "towel" },
+  "Counter": { "garment": "counter" },
+  "Table": { "garment": "table" },
+  "Chair": { "garment": "chair" },
+  "Booth": { "garment": "booth" },
+  "Railing": { "garment": "railing" },
+  "Sand": { "garment": "sand" }
+}

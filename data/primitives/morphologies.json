@@ -1,0 +1,75 @@
+{
+  "orc_brute": {
+    "species": "orc",
+    "build": "muscular",
+    "frame": "broad",
+    "height": "towering",
+    "skin_tone": "grey-green",
+    "shoulder_width": "broad",
+    "chest": "barrel",
+    "jaw": "protruding",
+    "forehead": "sloped",
+    "hands": "massive"
+  },
+  "elf_archer": {
+    "species": "elf",
+    "build": "lithe",
+    "frame": "slender",
+    "height": "tall",
+    "skin_tone": "alabaster",
+    "shoulder_width": "narrow",
+    "chest": "tapered",
+    "jaw": "delicate",
+    "forehead": "high",
+    "hands": "elegant"
+  },
+  "human_athletic": {
+    "species": "human",
+    "build": "toned",
+    "frame": "balanced",
+    "height": "average",
+    "skin_tone": "olive",
+    "shoulder_width": "moderate",
+    "chest": "defined",
+    "jaw": "angular",
+    "forehead": "smooth",
+    "hands": "strong"
+  },
+  "human_burly": {
+    "species": "human",
+    "build": "burly",
+    "frame": "broad",
+    "height": "tall",
+    "skin_tone": "fair",
+    "shoulder_width": "broad",
+    "chest": "thick",
+    "jaw": "square",
+    "forehead": "wide",
+    "hands": "meaty"
+  },
+  "dwarf_smith": {
+    "species": "dwarf",
+    "build": "stocky",
+    "frame": "wide",
+    "height": "short",
+    "skin_tone": "ruddy",
+    "shoulder_width": "broad",
+    "chest": "barrel",
+    "jaw": "strong",
+    "forehead": "broad",
+    "hands": "thick"
+  },
+  "beast_werewolf": {
+    "species": "werewolf",
+    "build": "feral",
+    "frame": "hulking",
+    "height": "tall",
+    "skin_tone": "dark-furred",
+    "shoulder_width": "massive",
+    "chest": "beastly",
+    "jaw": "muzzled",
+    "forehead": "sloped",
+    "hands": "clawed"
+  }
+}
+

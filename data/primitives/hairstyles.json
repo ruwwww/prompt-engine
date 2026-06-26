@@ -1,0 +1,8 @@
+{
+  "wavy_brown": { "style": "wavy", "color": "brown", "length": "long" },
+  "dark_short_neat": { "style": "neat", "color": "dark", "length": "short" },
+  "black_medium_ponytail": { "style": "ponytail", "color": "black", "length": "medium" },
+  "auburn_shoulder_messy": { "style": "messy", "color": "auburn", "length": "shoulder-length" },
+  "auburn_shoulder_messy_bun": { "style": "messy_bun", "color": "auburn", "length": "shoulder-length" },
+  "silver_long_braided": { "style": "braided", "color": "silver", "length": "long" }
+}

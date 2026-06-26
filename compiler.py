@@ -7,6 +7,7 @@ import json
 import re
 from typing import Any, Dict, List, Optional, Tuple
 import output_formatter
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
 
 # ---------------------------------------------------------------------------
@@ -52,6 +53,13 @@ def safe_format(template_str, context: dict) -> str:
     if isinstance(template_str, dict):
         head = template_str.get("head", "")
         head = resolve_tone_value(head)
+        # Resolve placeholders in head from context (e.g. "{garment}" -> "hoodie")
+        if isinstance(head, str):
+            head_ph = re.findall(r"\{([a-zA-Z0-9_]+)\}", head)
+            for _p in head_ph:
+                _val = context.get(_p)
+                _val = resolve_tone_value(_val)
+                head = head.replace("{" + _p + "}", str(_val or ""))
 
         if isinstance(head, dict):
             agreement_role = head.get("agreement_with", "actor")
@@ -263,8 +271,11 @@ def apply_delta(components: dict, user_overrides: dict) -> dict:
 # Pipeline Step 3: resolve_references
 # ---------------------------------------------------------------------------
 
-def resolve_references(components: dict, scene_objects: dict) -> dict:
+def resolve_references(components: dict, scene_objects: dict,
+                       primitives_db: dict = None) -> dict:
     """Replace owned_item_id references with actual item data.
+    Expands template_key to garment_type from the primitive catalog
+    and strips template_key from resolved components.
     Returns a NEW dict (no mutation of input)."""
     result = json.loads(json.dumps(components))
 
@@ -282,15 +293,45 @@ def resolve_references(components: dict, scene_objects: dict) -> dict:
                         resolved[k] = v
                 if "template_key" not in resolved:
                     resolved["template_key"] = item.get("template_key", zone)
+                _expand_template_key(resolved, primitives_db)
                 result[zone] = resolved
             else:
                 base_name = re.sub(r"_\d+$", "", item_id)
                 template_key = "".join(w.capitalize() for w in base_name.split("_"))
                 resolved = {k: v for k, v in zone_data.items() if k != "owned_item_id"}
                 resolved["template_key"] = template_key
+                _expand_template_key(resolved, primitives_db)
                 result[zone] = resolved
 
+    # Second pass: expand template_key on non-owned_item_id sub-components
+    # (e.g. morphology, or other zones that reference primitives directly)
+    for zone, zone_data in result.items():
+        if isinstance(zone_data, dict) and "template_key" in zone_data:
+            if "owned_item_id" not in zone_data:
+                _expand_template_key(zone_data, primitives_db)
+
     return result
+
+
+def _expand_template_key(component: dict, primitives_db: dict = None) -> None:
+    """In-place: expand template_key by fetching primitive data from primitives_db,
+    deep-merging literal values into the component, then preserving template_key
+    as _primitive_id for Jinja2 template lookup.
+    Keeps template_key only if primitive is not found
+    (e.g. fixtures where template_key IS the data)."""
+    tkey = component.get("template_key")
+    if tkey and primitives_db:
+        prim = primitives_db.get(tkey)
+        if isinstance(prim, dict):
+            for k, v in prim.items():
+                if k not in component:
+                    component[k] = v
+            # Preserve the template_key as _primitive_id before stripping
+            if "_primitive_id" not in component:
+                component["_primitive_id"] = tkey
+            component.pop("template_key", None)
+            component.pop("template", None)
+    component.pop("template", None)
 
 
 # ---------------------------------------------------------------------------
@@ -698,6 +739,19 @@ def filter_by_camera(
 # Pipeline Step 8: render_to_text
 # ---------------------------------------------------------------------------
 
+def _render_jinja2_template(template_env, template_name: str, component: dict) -> str:
+    """Render a Jinja2 template for a clothing/component zone.
+    Returns empty string if template not found."""
+    try:
+        template = template_env.get_template(template_name)
+        rendered = template.render(**component)
+        # Collapse whitespace: newlines, multiple spaces -> single space
+        rendered = re.sub(r'\s+', ' ', rendered).strip()
+        return rendered
+    except TemplateNotFound:
+        return ""
+
+
 def render_to_text(
     visible_components: dict,
     render_profile: str,
@@ -705,15 +759,18 @@ def render_to_text(
     attribute_metadata_db: dict,
     render_profiles_db: dict,
     active_tone: str = "default",
+    grammar_db: dict = None,
+    jinja2_env: object = None,
 ) -> list:
     """Render visible components into text fragments.
-    Returns a list of fragment dicts."""
+    Tries Jinja2 templates first (by _primitive_id, then by zone),
+    then falls back to grammar_db or templates_db."""
     fragments = []
 
     for zone, zone_data in visible_components.items():
         if not isinstance(zone_data, dict):
             continue
-        if zone in ("gender", "subject", "attire", "morphology"):
+        if zone in ("gender", "subject", "attire"):
             continue
 
         metadata_key = zone_data.get("metadata_key")
@@ -726,20 +783,35 @@ def render_to_text(
         priority = attribute_metadata_db.get(metadata_key, {}).get("priority", 50)
         tags = attribute_metadata_db.get(metadata_key, {}).get("tags", ["identity"])
 
-        template_key = zone_data.get("template_key", zone)
-        template = templates_db.get(template_key) or templates_db.get(zone)
+        text = ""
 
-        if zone == "Hair":
-            text = render_hair(normalize_hair(zone_data))
-        elif template:
-            ctx = dict(zone_data)
-            ctx["_tone"] = active_tone
-            text = safe_format(template, ctx)
-        elif zone_data.get("type") in ("clothing", "item", "prop"):
-            # Skip clothing/items without templates (matches old compiler behavior)
-            continue
-        else:
-            text = _render_generic_zone(zone, zone_data)
+        # Phase 1: Try Jinja2 templates (by _primitive_id, then by zone)
+        if jinja2_env:
+            primitive_id = zone_data.get("_primitive_id")
+            if primitive_id:
+                text = _render_jinja2_template(jinja2_env, primitive_id + ".jinja2", zone_data)
+            if not text:
+                text = _render_jinja2_template(jinja2_env, zone + ".jinja2", zone_data)
+
+        # Phase 2: Fall back to slot/head grammar_db or templates_db
+        if not text:
+            template = None
+            if grammar_db:
+                template = grammar_db.get(zone)
+            if template is None:
+                template = templates_db.get(zone)
+
+            if zone == "Hair":
+                text = render_hair(normalize_hair(zone_data))
+            elif template:
+                ctx = dict(zone_data)
+                ctx["_tone"] = active_tone
+                text = safe_format(template, ctx)
+            elif zone_data.get("type") in ("clothing", "item", "prop"):
+                # Skip clothing/items without templates (matches old compiler behavior)
+                continue
+            else:
+                text = _render_generic_zone(zone, zone_data)
 
         if text.strip():
             fragments.append({
@@ -753,9 +825,10 @@ def render_to_text(
     return fragments
 
 
+
 def _render_generic_zone(zone: str, zone_data: dict) -> str:
     """Render a zone without a template as key-value pairs."""
-    skip_keys = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer", "template_key"}
+    skip_keys = {"visibility_tags", "render_priority", "render_group", "metadata_key", "renderer", "template_key", "garment_type", "garment"}
     parts = []
     for key, val in zone_data.items():
         if key in skip_keys:
@@ -989,6 +1062,35 @@ class Assembler:
         self.affordance_types_db = _load_json("affordance_types.json")
         self.action_grammar_db = _load_json("action_grammar.json")
 
+        # --- Merge all primitive catalogs into a single primitives_db ---
+        self.primitives_db = {}
+        for _pf in ("primitives/clothing.json", "primitives/items.json",
+                    "primitives/fixtures.json", "primitives/accessories.json",
+                    "primitives/hairstyles.json", "primitives/morphologies.json"):
+            _data = _load_json(_pf)
+            if _data:
+                self.primitives_db.update(_data)
+
+        # --- Merge all grammar catalogs into a single grammar_db ---
+        # NOTE: grammar/clothing.json is NOT merged here; it is replaced by
+        #       Jinja2 templates in data/grammar/templates/
+        self.grammar_db = {}
+        for _gf in ("grammar/body.json", "grammar/items.json",
+                    "grammar/fixtures.json", "grammar/environment.json"):
+            _data = _load_json(_gf)
+            if _data:
+                self.grammar_db.update(_data)
+
+        # --- Load clothing grammar separately (segments superseded by Jinja2) ---
+        self.clothing_grammar_db = _load_json("grammar/clothing.json") or {}
+
+        # --- Set up Jinja2 environment for clothing templates ---
+        templates_dir = os.path.join(DATA_DIR, "grammar", "templates")
+        self.jinja2_env = Environment(
+            loader=FileSystemLoader(templates_dir),
+            autoescape=False,
+        )
+
     def resolve_scene(self, scene_data: dict, strict: bool = False) -> dict:
         """Run the full resolution pipeline and return the resolved component trees
         per actor, plus environment/camera state. Useful for debugging and the
@@ -1040,7 +1142,7 @@ class Assembler:
             for _scalar_key in ("gender", "morphology"):
                 if _scalar_key in obj:
                     components[_scalar_key] = obj[_scalar_key]
-            components = resolve_references(components, scene_objects)
+            components = resolve_references(components, scene_objects, self.primitives_db)
 
             visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
 
@@ -1187,7 +1289,7 @@ class Assembler:
                 if _scalar_key in obj:
                     components[_scalar_key] = obj[_scalar_key]
 
-            components = resolve_references(components, scene_objects)
+            components = resolve_references(components, scene_objects, self.primitives_db)
 
             visible = filter_by_camera(components, camera_framing, pose_name, self.poses_db)
 
@@ -1198,7 +1300,8 @@ class Assembler:
             identity_frags = render_to_text(
                 visible, render_profile_name,
                 self.templates_db, self.attribute_metadata_db,
-                self.render_profiles_db, active_tone
+                self.render_profiles_db, active_tone,
+                self.grammar_db, self.jinja2_env
             )
             for f in identity_frags:
                 f["actor_id"] = obj_id
