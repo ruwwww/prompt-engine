@@ -507,6 +507,7 @@
             <option value="poolside">Poolside</option>
             <option value="bathroom">Bathroom</option>
             <option value="car_interior">Car Interior</option>
+            <option value="server_room">Server Room</option>
           </select>
         </div>
         <div class="field" id="anchor-field" style="display:none;">
@@ -675,19 +676,20 @@
 <div id="toast" class="toast">Copied to clipboard!</div>
 
 <script>
-  // ── Affordance map (mirrors environments.json) ──────────────────────────
+  // ── Affordance map (mirrors environments.json SpatialFrame fixtures) ─────
   const AFFORDANCES = {
-    balcony:     ["railing","floor","chair","table"],
+    balcony:     ["railing","chair","floor"],
     cafe:        ["counter","chair","table","booth","patio"],
-    alley:       ["wall","fire_escape","dumpster","ground"],
-    beach:       ["sand","water","rock","towel","shore"],
-    bedroom:     ["bed","chair","floor","mirror"],
-    forest:      ["ground","log","rock","branch","trail"],
-    office:      ["desk","chair","whiteboard","window"],
-    rooftop:     ["ledge","railing","floor","chair"],
-    poolside:    ["edge","lounge_chair","water","deck"],
-    bathroom:    ["counter","bathtub","mirror","floor"],
-    car_interior:["seat","dashboard","steering_wheel","window"],
+    alley:       ["wall","dumpster","ground"],
+    beach:       ["shoreline","rock","towel","water"],
+    bedroom:     ["bed","desk","chair","wall"],
+    forest:      ["tree_trunk","log","ground"],
+    office:      ["desk","chair","window","wall"],
+    rooftop:     ["ledge","railing","ground"],
+    poolside:    ["pool_edge","lounger","steps"],
+    bathroom:    ["sink","bathtub","mirror","toilet"],
+    car_interior:["seat","steering_wheel","window","dashboard"],
+    server_room: ["server_rack","floor"],
   };
 
   // ── State ────────────────────────────────────────────────────────────────
