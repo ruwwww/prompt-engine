@@ -96,10 +96,7 @@
       "color": { "position": "pre" }
     }
   },
-  "CoffeeCup": "{material} coffee cup",
-  "Car": "{color} car",
-  "Bathtub": "{color} {material} {style} bathtub",
-  "Mirror": "{style} mirror",
+
   "Beach": {
     "head": "beach",
     "slots": {
@@ -116,7 +113,7 @@
       "location": { "position": "post", "prep": "in", "required": false }
     }
   },
-  "Tree": "{color} {species} tree",
+
   "Earrings": {
     "head": "earrings",
     "plural": { "irregular": "earrings" },
@@ -221,9 +218,9 @@
       "color": { "position": "pre" }
     }
   },
-  "BodySurface": "with {design}",
+
   "Pose": "{pose_text}",
-  "Fixture": "{anchor}",
+
   "BikiniTop": {
     "head": "bikini top",
     "slots": {

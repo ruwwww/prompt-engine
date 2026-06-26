@@ -349,6 +349,7 @@ def apply_relationships(
     placements: dict = None,
     affordance_types_db: dict = None,
     env_data: dict = None,
+    jinja2_env: object = None,
 ) -> list:
     """Process relationships and emit text fragments.
     Returns a list of fragment dicts."""
@@ -386,7 +387,8 @@ def apply_relationships(
         if affordance_types_db and env_data and object_id:
             binding = _resolve_affordance_query(
                 rel_type, object_obj, set(visible_zones),
-                env_data, affordance_types_db, templates_db
+                env_data, affordance_types_db, templates_db,
+                jinja2_env,
             )
             if binding:
                 clause_head = binding.get("clause_head", "")
@@ -457,8 +459,8 @@ def apply_relationships(
                 clause = variant.get("clause", clause)
                 break
 
-        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, templates_db, placements)
-        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, templates_db, placements)
+        actor_phrase = _get_noun_phrase(actor_id, rel, scene_objects, mentioned_ids, templates_db, placements, jinja2_env)
+        object_phrase = _get_noun_phrase(object_id, rel, scene_objects, mentioned_ids, templates_db, placements, jinja2_env)
 
         # Build gender-aware possessive pronoun for suffix templates
         actor_gender = actor_obj.get("gender", "person")
@@ -513,6 +515,7 @@ def _get_noun_phrase(
     mentioned_ids: set,
     templates_db: dict,
     placements: dict = None,
+    jinja2_env: object = None,
 ) -> str:
     """Generate a noun phrase for an entity in a relationship."""
     if not entity_id:
@@ -540,8 +543,13 @@ def _get_noun_phrase(
     if entity_id in mentioned_ids:
         # Reuse previously mentioned entity
         template_key = obj.get("template_key")
-        if template_key and template_key in templates_db:
-            return safe_format(templates_db[template_key], obj)
+        if template_key:
+            if jinja2_env:
+                j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
+                if j2_text:
+                    return j2_text
+            if template_key in templates_db:
+                return safe_format(templates_db[template_key], obj)
         parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
         phrase = " ".join(p for p in parts if p).strip()
         return phrase if phrase else entity_id
@@ -549,17 +557,24 @@ def _get_noun_phrase(
     mentioned_ids.add(entity_id)
 
     template_key = obj.get("template_key")
-    if template_key and template_key in templates_db:
-        phrase = safe_format(templates_db[template_key], obj)
-    elif obj_type == "fixture" and template_key:
-        # Use fixture name directly (e.g., "window" → "a window")
-        phrase = template_key.replace("_", " ")
-    else:
-        # Fallback: material + color + type
-        parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
-        phrase = " ".join(p for p in parts if p).strip()
-        if not phrase:
-            phrase = entity_id
+    phrase = None
+    if template_key:
+        if jinja2_env:
+            j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", obj)
+            if j2_text:
+                phrase = j2_text
+        if phrase is None and template_key in templates_db:
+            phrase = safe_format(templates_db[template_key], obj)
+    if phrase is None:
+        if obj_type == "fixture" and template_key:
+            # Use fixture name directly (e.g., "window" → "a window")
+            phrase = template_key.replace("_", " ")
+        else:
+            # Fallback: material + color + type
+            parts = [obj.get("material", ""), obj.get("color", ""), obj_type]
+            phrase = " ".join(p for p in parts if p).strip()
+            if not phrase:
+                phrase = entity_id
 
     # Add article for non-plural
     if phrase and not phrase.startswith(("a ", "an ", "the ")):
@@ -589,9 +604,13 @@ def _natural_join(items: list) -> str:
     return f"{', '.join(items[:-1])}, and {items[-1]}"
 
 
-def _render_fixture_label(fixture_obj: dict, templates_db: dict) -> str:
+def _render_fixture_label(fixture_obj: dict, templates_db: dict, jinja2_env: object = None) -> str:
     """Render a fixture object into a descriptive noun phrase using its template."""
     template_key = fixture_obj.get("template_key", "")
+    if jinja2_env and template_key:
+        j2_text = _render_jinja2_template(jinja2_env, template_key + ".jinja2", fixture_obj)
+        if j2_text:
+            return j2_text
     template = templates_db.get(template_key) if template_key else None
     if template:
         ctx = dict(fixture_obj)
@@ -695,7 +714,7 @@ def apply_environment(
     ambient_fixture_labels = []
     for obj_id, obj in scene_objects.items():
         if obj.get("type") in ("fixture", "furniture") and obj_id not in relationship_target_ids:
-            label = _render_fixture_label(obj, templates_db)
+            label = _render_fixture_label(obj, templates_db, jinja2_env)
             if label:
                 first_char = label[0].lower()
                 article = "an" if first_char in "aeiou" else "a"
@@ -1049,6 +1068,7 @@ def _resolve_affordance_query(
     env_data: dict,
     affordance_types_db: dict,
     templates_db: dict = None,
+    jinja2_env: object = None,
 ) -> dict | None:
     """
     Perform an AffordanceQuery for a single relationship.
@@ -1082,10 +1102,14 @@ def _resolve_affordance_query(
         if zone not in visible_zones:
             return None
 
-    # Use template rendering for scene object fixtures when available
+    # Use Jinja2 template rendering for scene object fixtures when available
     template_key = target_obj.get("template_key", "")
-    if templates_db and template_key in templates_db:
+    obj_phrase = None
+    if jinja2_env and template_key:
+        obj_phrase = _render_jinja2_template(jinja2_env, template_key + ".jinja2", target_obj)
+    if not obj_phrase and templates_db and template_key in templates_db:
         obj_phrase = safe_format(templates_db[template_key], target_obj)
+    if obj_phrase:
         first_char = obj_phrase[0].lower()
         obj_article = "an" if first_char in "aeiou" else "a"
         object_phrase = f"{obj_article} {obj_phrase}"
@@ -1416,17 +1440,15 @@ class Assembler:
                     continue
                 if loc in covered_zones:
                     continue
-                template = self.templates_db.get("BodySurface")
-                if template:
-                    text = safe_format(template, {**feature, "_tone": active_tone})
-                    all_fragments.append({
-                        "zone": loc,
-                        "frag_type": "body_surface",
-                        "tags": bs_meta.get("tags", []),
-                        "priority": bs_meta.get("priority", 50),
-                        "text": text,
-                        "actor_id": obj_id,
-                    })
+                text = _render_jinja2_template(self.jinja2_env, "BodySurface.jinja2", feature)
+                all_fragments.append({
+                    "zone": loc,
+                    "frag_type": "body_surface",
+                    "tags": bs_meta.get("tags", []),
+                    "priority": bs_meta.get("priority", 50),
+                    "text": text,
+                    "actor_id": obj_id,
+                })
 
             all_fragments.append({
                 "zone": "_subject_type",
@@ -1505,7 +1527,8 @@ class Assembler:
         rel_frags = apply_relationships(
             resolved_relationships, scene_objects, all_visible,
             self.actions_db, self.spatial_db, self.templates_db, self.environments_db,
-            placements, self.affordance_types_db, env_resolved
+            placements, self.affordance_types_db, env_resolved,
+            jinja2_env=self.jinja2_env,
         )
         all_fragments.extend(rel_frags)
 
