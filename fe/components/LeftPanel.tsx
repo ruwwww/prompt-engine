@@ -104,9 +104,16 @@ export function LeftPanel() {
       actorIndex++;
     }
 
+    let actorName = archetype.name;
+    let actorNameIndex = 1;
+    while (scene.actors.some(a => a.name === actorName)) {
+      actorName = `${archetype.name} ${actorNameIndex + 1}`;
+      actorNameIndex++;
+    }
+
     const newActor: ActorState = {
       id: actorId,
-      name: `${archetype.name}_${Date.now().toString().slice(-4)}`,
+      name: actorName,
       archetype: archetypeId,
       gender: preset.gender || (archetypeId.includes('woman') || archetypeId.includes('influencer') ? 'woman' : 'man'),
       face: { expression },
