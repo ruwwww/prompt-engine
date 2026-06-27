@@ -10,31 +10,103 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ActorState, PropState } from '@/lib/types';
 
 export function LeftPanel() {
-  const { scene, ui, setSelection, addActor, addProp } = useScene();
+  const { scene, ui, setSelection, addActor, addProp, updateAtmosphere, catalog } = useScene();
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Dynamically resolve archetypes from backend subjects data
+  const archetypes = catalog?.subjects
+    ? Object.keys(catalog.subjects).map((key) => ({
+        id: key,
+        name: key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        icon: key.includes('orc') ? '👹' : key.includes('elf') ? '🧝' : key.includes('influencer') || key.includes('woman') || key.includes('creative') ? '👩' : '👨',
+      }))
+    : mockArchetypes;
+
+  // Dynamically resolve atmospheres from backend environments data
+  const atmospheres = catalog?.environments
+    ? Object.keys(catalog.environments).map((key) => {
+        const env = catalog.environments[key];
+        return {
+          id: key,
+          name: env.label ? env.label.replace(/\b\w/g, (c: string) => c.toUpperCase()) : key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+          icon: key.includes('beach') ? '🏖️' : key.includes('cafe') ? '☕' : key.includes('alley') ? '🌆' : key.includes('forest') ? '🌳' : '🌍',
+          preset: key,
+          ground: env.primary_surface?.material || 'surface',
+          envelope: env.default_lighting || 'natural light',
+          vista: env.default_weather || '',
+          background: '',
+        };
+      })
+    : mockAtmospheres;
+
   const handleAddArchetype = (archetypeId: string) => {
-    const archetype = mockArchetypes.find((a) => a.id === archetypeId);
+    const archetype = archetypes.find((a) => a.id === archetypeId);
     if (!archetype) return;
+
+    const preset = catalog?.subjects?.[archetypeId] || {};
+    
+    // Parse face expression
+    const expression = preset.Face?.expression 
+      ? preset.Face.expression.charAt(0).toUpperCase() + preset.Face.expression.slice(1)
+      : 'Neutral';
+
+    // Parse hair style, color, length
+    const hairStyle = preset.Hair?.style 
+      ? preset.Hair.style.charAt(0).toUpperCase() + preset.Hair.style.slice(1)
+      : 'Straight';
+    const hairColor = preset.Hair?.color 
+      ? preset.Hair.color.charAt(0).toUpperCase() + preset.Hair.color.slice(1)
+      : 'Brown';
+    const hairLength = preset.Hair?.length 
+      ? preset.Hair.length.charAt(0).toUpperCase() + preset.Hair.length.slice(1)
+      : 'Medium';
+
+    // Parse clothing zones from preset owned items
+    const clothing: any[] = [];
+    const zones = [
+      { key: 'UpperBody', type: 'upper_body', defaultGarment: 'Shirt', defaultColor: 'White' },
+      { key: 'LowerBody', type: 'lower_body', defaultGarment: 'Pants', defaultColor: 'Blue' },
+      { key: 'Feet', type: 'feet', defaultGarment: 'Shoes', defaultColor: 'Black' },
+      { key: 'Hands', type: 'hands', defaultGarment: '', defaultColor: '' },
+      { key: 'Headwear', type: 'headwear', defaultGarment: '', defaultColor: '' }
+    ];
+
+    zones.forEach(z => {
+      if (preset[z.key]) {
+        const itemId = preset[z.key].owned_item_id || '';
+        // Clean up "hoodie_1" -> "Hoodie"
+        let garmentName = itemId.split('_')[0];
+        if (garmentName) {
+          garmentName = garmentName.charAt(0).toUpperCase() + garmentName.slice(1);
+        }
+        clothing.push({
+          id: `${z.type}-${Date.now()}-${Math.random().toString().slice(-4)}`,
+          type: z.type,
+          garment: garmentName || z.defaultGarment,
+          color: z.defaultColor || 'Neutral'
+        });
+      } else {
+        clothing.push({
+          id: `${z.type}-${Date.now()}-${Math.random().toString().slice(-4)}`,
+          type: z.type,
+          garment: '',
+          color: ''
+        });
+      }
+    });
 
     const newActor: ActorState = {
       id: `actor-${Date.now()}`,
       name: `${archetype.name}_${Date.now().toString().slice(-4)}`,
       archetype: archetypeId,
-      gender: archetypeId.includes('woman') ? 'woman' : 'man',
-      face: { expression: 'Neutral' },
+      gender: preset.gender || (archetypeId.includes('woman') || archetypeId.includes('influencer') ? 'woman' : 'man'),
+      face: { expression },
       hair: {
-        style: 'Straight',
-        color: 'Brown',
-        length: 'Medium',
+        style: hairStyle,
+        color: hairColor,
+        length: hairLength,
       },
-      clothing: [
-        { id: `upper-${Date.now()}`, type: 'upper_body', garment: 'Shirt', color: 'White' },
-        { id: `lower-${Date.now()}`, type: 'lower_body', garment: 'Pants', color: 'Blue' },
-        { id: `feet-${Date.now()}`, type: 'feet', garment: 'Shoes', color: 'Black' },
-        { id: `hands-${Date.now()}`, type: 'hands', garment: '', color: '' },
-        { id: `headwear-${Date.now()}`, type: 'headwear', garment: '', color: '' },
-      ],
+      clothing,
       pose: {
         posture: 'Standing',
         gaze: 'Toward Camera',
@@ -59,11 +131,11 @@ export function LeftPanel() {
     addProp(newProp);
   };
 
-  const filteredArchetypes = mockArchetypes.filter(a => 
+  const filteredArchetypes = archetypes.filter(a => 
     a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredAtmospheres = mockAtmospheres.filter(a => 
+  const filteredAtmospheres = atmospheres.filter(a => 
     a.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -237,8 +309,14 @@ export function LeftPanel() {
                     <Button
                       size="sm"
                       variant="outline"
-                      className="w-full text-xs h-6 py-0"
                       onClick={() => {
+                        updateAtmosphere({
+                          preset: atm.preset,
+                          ground: atm.ground,
+                          envelope: atm.envelope,
+                          vista: atm.vista,
+                          background: atm.background,
+                        });
                         setSelection('atmosphere', scene.atmosphere.id);
                       }}
                     >

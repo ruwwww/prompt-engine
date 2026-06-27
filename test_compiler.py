@@ -2629,3 +2629,40 @@ class TestNonHumanSubjects(unittest.TestCase):
         out = self.c.compile_scene(scene)
         self.assertIn("a massive heart-shaped arch made entirely of red roses with glowing 'Happy Valentine Day' text frames a man and a woman", out)
         self.assertIn("Soft sandy shore", out)
+
+    def test_professional_woman_with_objects(self):
+        """Verify that objects (silver laptop, glass of water) and fixtures are compiled and formatted into labeled output correctly."""
+        scene = {
+            "environment": "modern_office",
+            "camera": {"framing": "full_body"},
+            "render_profile": "character_sheet",
+            "objects": {
+                "woman_1": { "type": "human", "subject": "professional_woman" },
+                "blazer_1": {
+                    "type": "clothing",
+                    "template_key": "SuitJacket",
+                    "color": "tailored black",
+                    "garment": "blazer",
+                    "priority": 90
+                },
+                "top_1": {
+                    "type": "clothing",
+                    "template_key": "LinenTop",
+                    "color": "black",
+                    "material": "satin",
+                    "garment": "top",
+                    "priority": 80
+                },
+                "laptop_1": { "type": "object", "label": "silver laptop" },
+                "water_glass_1": { "type": "object", "label": "glass of water" },
+                "desk_1": { "type": "fixture", "label": "transparent glass desk" }
+            },
+            "relationships": [
+                { "type": "sitting_at", "actor": "woman_1", "target": "desk_1" }
+            ]
+        }
+        out = self.c.compile_scene(scene, output_format="labeled")
+        self.assertIn("Objects: A silver laptop and a glass of water arranged in the scene.", out)
+        self.assertIn("Action: She is looking toward the camera, arms at side, seated comfortably at a transparent glass desk.", out)
+        self.assertIn("Clothing: She wears tailored black blazer over black top.", out)
+        self.assertIn("Environment: A bright, modern office with floor-to-ceiling windows, with a view of green trees outside.", out)

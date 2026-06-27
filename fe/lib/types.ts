@@ -70,6 +70,7 @@ export interface EightFieldPrompt {
   clothing: string;
   action: string;
   environment: string;
+  objects?: string;
   lighting: string;
   camera: string;
   style: string;

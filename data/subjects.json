@@ -23,6 +23,30 @@
       "arms": {"left": "at_side", "right": "at_side"}
     }
   },
+  "professional_woman": {
+    "gender": "woman",
+    "Face": {
+      "expression": "smiling"
+    },
+    "Hair": {
+      "color": "black",
+      "length": "long",
+      "style": "wavy"
+    },
+    "morphology": {
+      "skin_tone": "warm"
+    },
+    "UpperBody": {
+      "owned_item_id": "blazer_1"
+    },
+    "LowerBody": {
+      "owned_item_id": "top_1"
+    },
+    "body_config": {
+      "gaze": {"direction": "toward_camera"},
+      "arms": {"left": "at_side", "right": "at_side"}
+    }
+  },
   "professional_man": {
     "gender": "man",
     "Face": {

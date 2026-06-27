@@ -63,5 +63,10 @@
     "ground": "rubber floor mats",
     "envelope": "dim dashboard glow",
     "vista": "rainy highway through the windshield"
+  },
+  "modern_office": {
+    "ground": "bright, modern office with floor-to-ceiling windows",
+    "envelope": "bright natural daylight floods the room",
+    "vista": "green trees outside"
   }
 }

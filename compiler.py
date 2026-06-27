@@ -488,13 +488,18 @@ def _get_noun_phrase(
                 phrase = _render_jinja2_template(jinja2_env, t_name, obj)
             except Exception:
                 pass
-        if not phrase and obj_type == "fixture":
-            phrase = _render_jinja2_template(jinja2_env, "Fixture.jinja2", obj)
+        if not phrase:
+            if obj_type == "fixture":
+                phrase = _render_jinja2_template(jinja2_env, "Fixture.jinja2", obj)
+            elif obj_type in ("object", "drink", "item"):
+                phrase = _render_jinja2_template(jinja2_env, "Object.jinja2", obj)
 
     if not phrase:
         if obj.get("label"):
             phrase = obj["label"]
         elif obj_type == "fixture":
+            phrase = template_key.replace("_", " ") if template_key else entity_id
+        elif obj_type in ("object", "drink", "item"):
             phrase = template_key.replace("_", " ") if template_key else entity_id
         else:
             # Fallback: material + color + type
@@ -1206,6 +1211,37 @@ class Assembler:
             "render_profile": render_profile_name,
         }
 
+    def _render_object(self, obj: dict) -> str:
+        """Render an object into a descriptive noun phrase using its template or fallback."""
+        template_key = obj.get("template_key", "")
+        phrase = ""
+        if self.jinja2_env:
+            t_name = (template_key + ".jinja2") if template_key else "Object.jinja2"
+            try:
+                if template_key:
+                    self.jinja2_env.get_template(t_name)
+                    phrase = _render_jinja2_template(self.jinja2_env, t_name, obj)
+                else:
+                    phrase = _render_jinja2_template(self.jinja2_env, "Object.jinja2", obj)
+            except Exception:
+                pass
+        
+        if not phrase:
+            label = obj.get("label")
+            if label:
+                phrase = label
+            else:
+                parts = [obj.get("material", ""), obj.get("color", ""), template_key.lower().replace("_", " ") if template_key else obj.get("type", "object")]
+                phrase = " ".join(p for p in parts if p).strip()
+                if not phrase:
+                    phrase = "object"
+        
+        if phrase and not phrase.startswith(("a ", "an ", "the ")):
+            first_char = phrase[0].lower()
+            article = "an" if first_char in "aeiou" else "a"
+            phrase = f"{article} {phrase}"
+        return phrase
+
     def inject_camera_descriptor(self, state: dict) -> dict:
         """Inject Camera text based on framing value (if toggle is ON).
         Returns state with '_camera_text' key containing the camera descriptor string.
@@ -1605,6 +1641,24 @@ class Assembler:
             # Clean camera framing: "full_body" -> "full-body"
             clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
 
+            # Gather non-interacted objects
+            prop_phrases = []
+            for obj_id, obj in scene_objects.items():
+                if obj.get("type") in ("object", "drink", "item"):
+                    is_targeted = any(
+                        rel.get("object") == obj_id or rel.get("target") == obj_id or rel.get("container") == obj_id
+                        for rel in scene_data.get("relationships", [])
+                    )
+                    if not is_targeted:
+                        prop_phrases.append(self._render_object(obj))
+
+            # Gather background noise elements
+            background_noise_phrases = []
+            for obj_id, obj in scene_objects.items():
+                if obj.get("type") == "background_noise":
+                    label = obj.get("label") or obj.get("template_key") or obj_id
+                    background_noise_phrases.append(label)
+
             output = output_formatter.render_full_output({
                 "subject_phrase": subject_phrase,
                 "held_items": held_items,
@@ -1614,8 +1668,8 @@ class Assembler:
                 "action_clauses": action_clauses,
                 "env_label": env_label,
                 "env_preposition": env_prep,
-                "background_elements": [],
-                "scene_props": [],
+                "background_elements": background_noise_phrases,
+                "scene_props": prop_phrases,
                 "lighting_phrase": lighting_phrase,
                 "weather_phrase": "",
                 "shot_type": camera.get("shot_type", ""),

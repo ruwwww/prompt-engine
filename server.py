@@ -1,11 +1,22 @@
 import argparse
 import json
 import os
+import socket
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from compiler import PromptCompiler
 
 PORT = 8000
 compiler = PromptCompiler()
+
+class SafeHTTPServer(HTTPServer):
+    def handle_error(self, request, client_address):
+        import sys
+        exc_type, exc_value, _ = sys.exc_info()
+        if exc_type is not None and issubclass(exc_type, (ConnectionError, socket.error)):
+            # Cleanly ignore client disconnection errors
+            pass
+        else:
+            super().handle_error(request, client_address)
 
 def parse_labeled_prompt(labeled_str: str) -> dict:
     fields = {
@@ -13,6 +24,7 @@ def parse_labeled_prompt(labeled_str: str) -> dict:
         "clothing": "",
         "action": "",
         "environment": "",
+        "objects": "",
         "lighting": "",
         "camera": "",
         "style": "",
@@ -32,17 +44,25 @@ def parse_labeled_prompt(labeled_str: str) -> dict:
                 fields["action"] = val
             elif key == "environment":
                 fields["environment"] = val
+            elif key == "objects":
+                fields["objects"] = val
             elif key == "lighting":
                 fields["lighting"] = val
             elif key == "camera":
                 fields["camera"] = val
             elif key in ("style details", "style"):
                 fields["style"] = val
-            elif key in ("objects", "composition"):
+            elif key == "composition":
                 fields["composition"] = val
     return fields
 
 class DemoRequestHandler(BaseHTTPRequestHandler):
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, socket.error):
+            pass
+
     def end_headers(self):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -56,13 +76,28 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/" or self.path == "/index.html":
             self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            res = json.dumps({"status": "active", "message": "Prompt Engine API Server is running. Access the studio frontend in the /fe directory."})
+            self.wfile.write(res.encode("utf-8"))
+        elif self.path == "/bootstrap":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
             self.end_headers()
             try:
-                with open(os.path.join(os.path.dirname(__file__), "index.html"), "rb") as f:
-                    self.wfile.write(f.read())
+                bootstrap_data = {
+                    "subjects": compiler.subjects_db,
+                    "environments": compiler.environments_db,
+                    "poses": compiler.poses_db,
+                    "attires": compiler.attires_db,
+                    "actions": compiler.actions_db,
+                    "spatial_relationships": compiler.spatial_db,
+                }
+                res = json.dumps(bootstrap_data, default=str)
+                self.wfile.write(res.encode("utf-8"))
             except Exception as e:
-                self.wfile.write(f"Error loading index.html: {e}".encode())
+                res = json.dumps({"error": str(e)})
+                self.wfile.write(res.encode("utf-8"))
         else:
             self.send_response(404)
             self.end_headers()
@@ -132,7 +167,7 @@ def run():
     port = args.port
 
     server_address = ("", port)
-    httpd = HTTPServer(server_address, DemoRequestHandler)
+    httpd = SafeHTTPServer(server_address, DemoRequestHandler)
     print(f"\n========================================================")
     print(f"  Prompt Engine Demo Server running at http://localhost:{port}")
     print(f"  Press Ctrl+C to terminate.")

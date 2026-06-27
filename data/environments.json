@@ -466,6 +466,42 @@
       "lighting_key": "cool"
     }
   },
+  "modern_office": {
+    "label": "bright, modern office with floor-to-ceiling windows",
+    "article": "a",
+    "template_key": "StandardEnvironment",
+    "default_lighting": "bright",
+    "default_weather": "sunny",
+    "volume": {
+      "containment": "enclosed",
+      "orientation": "horizontal",
+      "boundary": "hard",
+      "scale": "room-scale",
+      "entry_axis": "door"
+    },
+    "primary_surface": {
+      "material": "tile",
+      "texture": "smooth",
+      "normal": "up",
+      "afforded_postures": ["stand_on", "sit_on"]
+    },
+    "fixtures": {
+      "desk": {
+        "fixture_type": "furnishing",
+        "spatial_role": "anchor",
+        "contact_geometry": "top",
+        "affordances": [
+          { "affordance_type": "sit_at_face" },
+          { "affordance_type": "rest_arms_on_top" },
+          { "affordance_type": "lean_on_surface" }
+        ]
+      }
+    },
+    "atmosphere": {
+      "weather_key": "sunny",
+      "lighting_key": "bright"
+    }
+  },
   "rooftop": {
     "label": "rooftop",
     "article": "a",

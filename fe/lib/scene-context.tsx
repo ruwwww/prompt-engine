@@ -23,6 +23,14 @@ interface SceneContextType {
   importScene: (scene: SceneState) => void;
   savedScenesList: { id: string; name: string }[];
   deleteSceneFromStore: (id: string) => void;
+  catalog: {
+    subjects: Record<string, any>;
+    environments: Record<string, any>;
+    poses: Record<string, any>;
+    attires: Record<string, any>;
+    actions: Record<string, any>;
+    spatial_relationships: any[];
+  } | null;
   setAutoCompile: (enabled: boolean) => void;
   compileScene: (currentState?: SceneState) => void;
   resetScene: () => void;
@@ -37,30 +45,31 @@ const defaultScene: SceneState = {
   props: [],
   atmosphere: {
     id: 'atm-1',
-    preset: 'beach',
-    ground: 'Soft sandy shore',
-    envelope: 'Golden sunset',
-    vista: 'Ocean waves',
-    background: 'Seabirds gliding',
+    preset: '',
+    ground: '',
+    envelope: '',
+    vista: '',
+    background: '',
   },
   camera: {
     id: 'cam-1',
-    framing: 'Medium',
-    angle: 'Eye-level',
-    lens: '50mm',
-    depthOfField: 'Shallow',
-    renderProfile: 'Cinematic',
-    mood: 'Neutral',
+    framing: '',
+    angle: '',
+    lens: '',
+    depthOfField: '',
+    renderProfile: '',
+    mood: '',
   },
   promptOutput: 'Your prompt will appear here...',
   eightFieldPrompt: {
-    subject: 'An empty scene waiting to be composed...',
+    subject: 'Empty scene (no actors)',
     clothing: '',
     action: '',
-    environment: 'On a soft sandy shore with ocean waves in the distance.',
-    lighting: 'Golden sunset lighting.',
-    camera: 'Medium shot.',
-    style: 'Cinematic style.',
+    environment: '',
+    objects: '',
+    lighting: '',
+    camera: '',
+    style: '',
     composition: '',
   },
   promptViewMode: 'labeled',
@@ -360,6 +369,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
           clothing: '',
           action: '',
           environment: '',
+          objects: '',
           lighting: '',
           camera: '',
           style: '',
@@ -406,8 +416,9 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
   }, [scene.actors, scene.atmosphere, scene.camera, scene.autoCompile]);
 
   const [savedScenesList, setSavedScenesList] = useState<{ id: string; name: string }[]>([]);
+  const [catalog, setCatalog] = useState<SceneContextType['catalog']>(null);
 
-  // Load index of saved scenes on mount
+  // Load index of saved scenes and bootstrap data on mount
   React.useEffect(() => {
     try {
       const indexStr = localStorage.getItem('prompt_engine_scenes_index') || '[]';
@@ -415,6 +426,20 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       console.error("Failed to load saved scenes index", e);
     }
+
+    fetch("http://localhost:8000/bootstrap")
+      .then((res) => {
+        if (!res.ok) throw new Error("Bootstrap endpoint error");
+        return res.json();
+      })
+      .then((data) => {
+        if (data.subjects && data.environments) {
+          setCatalog(data);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load backend bootstrap catalog, using local defaults:", err);
+      });
   }, []);
 
   const updateSceneName = useCallback((name: string) => {
@@ -504,6 +529,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
         importScene,
         savedScenesList,
         deleteSceneFromStore,
+        catalog,
         setAutoCompile,
         compileScene,
         resetScene,
