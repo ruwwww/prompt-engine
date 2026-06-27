@@ -10,6 +10,11 @@ import output_formatter
 from collections import defaultdict
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 
+from field_compilers import (
+    SubjectCompiler,
+    ClothingCompiler,
+)
+
 
 # ---------------------------------------------------------------------------
 # Camera Framing Mapping
@@ -1152,6 +1157,11 @@ class Assembler:
             autoescape=False,
         )
 
+
+        # --- Instantiate field compilers ---
+        self.subject_compiler = SubjectCompiler()
+        self.clothing_compiler = ClothingCompiler()
+
     def resolve_scene(self, scene_data: dict, strict: bool = False) -> dict:
         """Run the full resolution pipeline and return the resolved component trees
         per actor, plus environment/camera state. Useful for debugging and the
@@ -2174,8 +2184,26 @@ class Assembler:
                     lead = lead + suffix + "."
             
             lines = [lead, ""]
-            lines.append(f"Subject: {output_formatter._cap_sentence(combined['subject_phrase'])}")
-            lines.append(f"Clothing: {combined['clothing_phrase']}")
+
+            # Use SubjectCompiler for individual identity
+            _subject_text = self.subject_compiler.process(
+                fragments_by_actor=actor_frags,
+                groups=scene_data.get("groups", []),
+                scene_objects=scene_objects,
+            )
+            if not _subject_text:
+                _subject_text = output_formatter._cap_sentence(combined['subject_phrase'])
+            lines.append(f"Subject: {_subject_text}")
+
+            # Use ClothingCompiler for matching detection
+            _clothing_text = self.clothing_compiler.process(
+                fragments_by_actor=actor_frags,
+                groups=scene_data.get("groups", []),
+                scene_objects=scene_objects,
+            )
+            if not _clothing_text:
+                _clothing_text = combined['clothing_phrase']
+            lines.append(f"Clothing: {_clothing_text}")
             lines.append(f"Action: {combined['action_phrase']}")
             
             environment = output_formatter.format_environment_field(
@@ -2335,7 +2363,22 @@ class Assembler:
                 label = obj.get("label") or obj.get("template_key") or obj_id
                 background_noise_phrases.append(label)
 
+        # Use SubjectCompiler and ClothingCompiler for single-actor path
+        _frags_by_actor = {primary_actor_id: filtered}
+        _subject_text = self.subject_compiler.process(
+            fragments_by_actor=_frags_by_actor,
+            groups=scene_data.get("groups", []),
+            scene_objects=scene_objects,
+        )
+        _clothing_text = self.clothing_compiler.process(
+            fragments_by_actor=_frags_by_actor,
+            groups=scene_data.get("groups", []),
+            scene_objects=scene_objects,
+        )
+
         return output_formatter.render_full_output({
+            "_subject_text": _subject_text,
+            "_clothing_text": _clothing_text,
             "subject_phrase": subject_phrase,
             "held_items": held_items,
             "accessories": accessories,

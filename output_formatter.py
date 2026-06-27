@@ -171,12 +171,17 @@ def render_full_output(scene_data: dict) -> str:
         else:
             lead = lead + suffix + "."
     pronoun = scene_data.get("pronoun", "She")
-    subject = format_subject_field(
+    
+    # Use pre-rendered values from field compilers if provided
+    _subject_text = scene_data.get("_subject_text", "")
+    _clothing_text = scene_data.get("_clothing_text", "")
+    
+    subject = _subject_text if _subject_text else format_subject_field(
         scene_data.get("subject_phrase", ""),
         scene_data.get("held_items", []),
         scene_data.get("accessories", [])
     )
-    clothing = format_clothing_field(scene_data.get("clothing_items", []), pronoun)
+    clothing = _clothing_text if _clothing_text else format_clothing_field(scene_data.get("clothing_items", []), pronoun)
     action = format_action_field(
         scene_data.get("posture_phrase", ""),
         scene_data.get("action_clauses", []),

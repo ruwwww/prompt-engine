@@ -129,7 +129,7 @@ class TestAttributeComposition(unittest.TestCase):
             }
         }
         out = self.c.compile_scene(scene)
-        self.assertIn("wearing", out)
+        self.assertIn("wears", out)
         self.assertIn("hoodie", out)
         self.assertIn("cargo pants", out)
 
@@ -805,7 +805,7 @@ class TestNewFeatures(unittest.TestCase):
             }
         }
         out_native = self.c.compile_scene(scene_native)
-        self.assertIn("wearing a black baseball cap", out_native)
+        self.assertIn("wears a black baseball cap", out_native)
 
     def test_composable_bathroom_ecs(self):
         # 1. Test ambient bathroom compilation (ECS Queries)
