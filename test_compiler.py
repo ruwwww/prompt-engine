@@ -2666,3 +2666,77 @@ class TestNonHumanSubjects(unittest.TestCase):
         self.assertIn("Action: She is looking toward the camera, arms at side, seated comfortably at a transparent glass desk.", out)
         self.assertIn("Clothing: She wears tailored black blazer over black top.", out)
         self.assertIn("Environment: A bright, modern office with floor-to-ceiling windows, with a view of green trees outside.", out)
+
+    def test_objects_enhancements(self):
+        # Test Couple by the Lake scene verifying possession, deduplication, spatial context, camera framing, and active interaction exclusions.
+        scene = {
+            "camera": {
+                "framing": "full_body" # includes LowerBody/Feet/etc.
+            },
+            "environment": {
+                "type": "lake"
+            },
+            "objects": {
+                "man_1": {
+                    "type": "human",
+                    "gender": "man",
+                    "subject": "man"
+                },
+                "woman_1": {
+                    "type": "human",
+                    "gender": "woman",
+                    "subject": "woman"
+                },
+                "suitcase_1": {
+                    "type": "object",
+                    "label": "silver ribbed suitcase",
+                    "owner": "man_1" # P0 Possession: should be "his silver ribbed suitcase"
+                },
+                "suitcase_2": {
+                    "type": "object",
+                    "label": "silver ribbed suitcase",
+                    "owner": "man_1" # P1 Deduplication: two identical labels -> "2 silver ribbed suitcases"
+                },
+                "coffee_cup_1": {
+                    "type": "object",
+                    "label": "paper coffee cup",
+                    "location": "table_1" # P2 Spatial context: -> "a paper coffee cup on the wooden table"
+                },
+                "table_1": {
+                    "type": "fixture",
+                    "label": "wooden table"
+                },
+                "sunglasses_1": {
+                    "type": "object",
+                    "label": "designer sunglasses",
+                    "zone": "Face" # P3 Camera Framing: should be visible in full_body (which includes Face)
+                },
+                "boots_1": {
+                    "type": "object",
+                    "label": "leather boots",
+                    "zone": "Feet"
+                },
+                "backpack_1": {
+                    "type": "object",
+                    "label": "canvas backpack" # P4 Interaction Exclusion: actively held/used -> excluded from Objects
+                }
+            },
+            "relationships": [
+                { "type": "holding", "actor": "woman_1", "object": "backpack_1" }, # active interaction -> backpack_1 excluded
+                { "type": "standing_next_to", "actor": "man_1", "target": "table_1" } # passive interaction -> table_1 remains
+            ]
+        }
+        out = self.c.compile_scene(scene)
+        # Verify deduplication of suitcase (2 silver ribbed suitcases)
+        self.assertIn("2 silver ribbed suitcases", out)
+        # Verify spatial context (paper coffee cup on the wooden table)
+        self.assertIn("a paper coffee cup on the wooden table", out)
+        # Verify designer sunglasses are visible (zone Face is in full_body)
+        self.assertIn("designer sunglasses", out)
+        # Verify actively held backpack is excluded from Objects section
+        # Look for the line starting with "Objects: "
+        objects_line = [line for line in out.splitlines() if line.startswith("Objects:")]
+        self.assertTrue(len(objects_line) > 0)
+        self.assertNotIn("backpack", objects_line[0])
+
+

@@ -1239,8 +1239,8 @@ class Assembler:
             "render_profile": render_profile_name,
         }
 
-    def _render_object(self, obj: dict) -> str:
-        """Render an object into a descriptive noun phrase using its template or fallback."""
+    def _render_object_label(self, obj: dict) -> str:
+        """Render the base noun phrase of an object without articles or possession."""
         template_key = obj.get("template_key", "")
         phrase = ""
         if self.jinja2_env:
@@ -1263,12 +1263,127 @@ class Assembler:
                 phrase = " ".join(p for p in parts if p).strip()
                 if not phrase:
                     phrase = "object"
-        
-        if phrase and not phrase.startswith(("a ", "an ", "the ")):
-            first_char = phrase[0].lower()
-            article = "an" if first_char in "aeiou" else "a"
-            phrase = f"{article} {phrase}"
         return phrase
+
+    def _render_object(self, obj: dict, scene_objects: dict = None) -> str:
+        """Render an object into a descriptive noun phrase using its template or fallback,
+        taking possession (owner) and spatial context (location) into account."""
+        if scene_objects is None:
+            scene_objects = {}
+        
+        label = self._render_object_label(obj)
+        
+        # Check possession/ownership
+        owner_id = obj.get("owner")
+        phrase = ""
+        if owner_id:
+            owner = scene_objects.get(owner_id)
+            if owner:
+                gender = owner.get("gender", "neutral")
+                possessive = "his" if gender == "man" else "her" if gender == "woman" else "their"
+                phrase = f"{possessive} {label}"
+        
+        if not phrase:
+            if label and not label.startswith(("a ", "an ", "the ")):
+                first_char = label[0].lower()
+                article = "an" if first_char in "aeiou" else "a"
+                phrase = f"{article} {label}"
+            else:
+                phrase = label
+
+        # Check spatial context (location)
+        location_id = obj.get("location")
+        if location_id:
+            location = scene_objects.get(location_id)
+            if location:
+                location_label = location.get("label", location_id)
+                # Keep compatibility with both fixture labels/templates
+                phrase = f"{phrase} on the {location_label}"
+        
+        return phrase
+
+    def _is_object_visible(self, obj: dict, visible_zones: set) -> bool:
+        """Check if an object is visible based on camera framing zones."""
+        # Default to LowerBody for floor / environment objects if zone is not explicitly provided.
+        obj_zone = obj.get("zone", "LowerBody")
+        return obj_zone in visible_zones
+
+    def _is_excluded_by_relationship(self, obj_id: str, relationships: list) -> bool:
+        """Only exclude objects that are actively target of interaction like 'holding' or 'using'."""
+        for rel in relationships:
+            rel_type = rel.get("type", "")
+            if rel.get("object") == obj_id and rel_type in ("holding", "using"):
+                return True
+            if rel.get("target") == obj_id and rel_type in ("holding", "using"):
+                return True
+        return False
+
+    def _collect_objects(self, scene_objects: dict, relationships: list, visible_zones: set) -> list:
+        """Collect and deduplicate visible and non-interaction-excluded objects, rendering them with counts and ownership/context."""
+        label_counts = {}
+        # Keep track of the first raw object of each label to copy properties like owner and location
+        label_to_obj = {}
+
+        for obj_id, obj in scene_objects.items():
+            if obj.get("type") in ("object", "drink", "item"):
+                if not self._is_object_visible(obj, visible_zones):
+                    continue
+                if self._is_excluded_by_relationship(obj_id, relationships):
+                    continue
+
+                label = self._render_object_label(obj)
+                if not label:
+                    continue
+                
+                label_counts[label] = label_counts.get(label, 0) + 1
+                if label not in label_to_obj:
+                    label_to_obj[label] = obj
+
+        prop_phrases = []
+        for label, count in label_counts.items():
+            obj = label_to_obj[label]
+            # Support pluralization
+            rendered_label = label
+            if count > 1:
+                # Basic pluralization: add 's' unless it already ends with 's' or is irregular
+                if label.endswith("s"):
+                    rendered_label = f"{count} {label}"
+                else:
+                    rendered_label = f"{count} {label}s"
+            
+            # Now build the full phrase with possession (owner)
+            owner_id = obj.get("owner")
+            phrase = ""
+            if owner_id and count == 1: # Possession usually applies to singular or is prepended
+                owner = scene_objects.get(owner_id)
+                if owner:
+                    gender = owner.get("gender", "neutral")
+                    possessive = "his" if gender == "man" else "her" if gender == "woman" else "their"
+                    phrase = f"{possessive} {rendered_label}"
+            
+            if not phrase:
+                if count > 1:
+                    phrase = rendered_label
+                elif rendered_label and not rendered_label.startswith(("a ", "an ", "the ")):
+                    first_char = rendered_label[0].lower()
+                    article = "an" if first_char in "aeiou" else "a"
+                    phrase = f"{article} {rendered_label}"
+                else:
+                    phrase = rendered_label
+
+            # Check spatial context (location)
+            location_id = obj.get("location")
+            if location_id:
+                location = scene_objects.get(location_id)
+                if location:
+                    location_label = location.get("label", location_id)
+                    phrase = f"{phrase} on the {location_label}"
+            
+            prop_phrases.append(phrase)
+
+        return prop_phrases
+
+
 
     def inject_camera_descriptor(self, state: dict) -> dict:
         """Inject Camera text based on framing value (if toggle is ON).
@@ -1996,20 +2111,12 @@ class Assembler:
                     combined["action_phrase"] += ", " + ", ".join(global_clauses)
                 else:
                     combined["action_phrase"] = ", ".join(global_clauses)
-            
             clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
             
             # Gather non-interacted objects
-            prop_phrases = []
-            for obj_id, obj in scene_objects.items():
-                if obj.get("type") in ("object", "drink", "item"):
-                    is_targeted = any(
-                        rel.get("object") == obj_id or rel.get("target") == obj_id or rel.get("container") == obj_id
-                        for rel in scene_data.get("relationships", [])
-                    )
-                    if not is_targeted:
-                        prop_phrases.append(self._render_object(obj))
-
+            prop_phrases = self._collect_objects(scene_objects, scene_data.get("relationships", []), camera_framing_zones)
+            
+            # Rest of the multi-actor flow:
             # Gather background noise elements
             background_noise_phrases = []
             for obj_id, obj in scene_objects.items():
@@ -2219,15 +2326,7 @@ class Assembler:
         clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
 
         # Gather non-interacted objects
-        prop_phrases = []
-        for obj_id, obj in scene_objects.items():
-            if obj.get("type") in ("object", "drink", "item"):
-                is_targeted = any(
-                    rel.get("object") == obj_id or rel.get("target") == obj_id or rel.get("container") == obj_id
-                    for rel in scene_data.get("relationships", [])
-                )
-                if not is_targeted:
-                    prop_phrases.append(self._render_object(obj))
+        prop_phrases = self._collect_objects(scene_objects, scene_data.get("relationships", []), camera_framing_zones)
 
         # Gather background noise elements
         background_noise_phrases = []
