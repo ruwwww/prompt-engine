@@ -26,8 +26,8 @@ class AssemblerWrapper:
     def __init__(self):
         self.asm = Assembler()
 
-    def compile_scene(self, scene: dict, strict: bool = False, output_format: str = "legacy") -> str:
-        return self.asm.assemble(scene, strict=strict, output_format=output_format)
+    def compile_scene(self, scene: dict, strict: bool = False) -> str:
+        return self.asm.assemble(scene, strict=strict)
 
 
 # ---------------------------------------------------------------------------

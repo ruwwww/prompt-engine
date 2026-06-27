@@ -1551,139 +1551,115 @@ class Assembler:
         ))
         filtered = filtered[:max_frags]
 
-        output = _assemble_output(filtered, physical_ids, render_profile, include_tags, self.action_grammar_db, env_prep)
+        env_label = ""
+        lighting_phrase = ""
+        for f in filtered:
+            if f.get("zone") == "environment" and f.get("frag_type") == "environment":
+                env_label = f["text"]
+            elif f.get("zone") == "lighting" or f.get("frag_type") == "lighting":
+                lighting_phrase = f["text"]
 
-        # Inject camera framing text at the beginning if toggle is ON
-        inject = scene_data.get("_inject_camera", True)
-        if inject and output:
-            # Pass camera shot_type and framing for richer camera descriptor
-            camera_ctx = {
-                "camera": camera,
-                "_inject_camera": True,
-                "scene_data": scene_data,
-            }
-            camera_state = self.inject_camera_descriptor(camera_ctx)
-            camera_text = camera_state.get("_camera_text")
-            if camera_text:
-                output = f"{camera_text} {output}"
-                # Lowercase article after "shot of" if present (e.g. "A" -> "a")
-                output = re.sub(r"\bshot of A\b", "shot of a", output)
-                output = re.sub(r"\bshot of An\b", "shot of an", output)
-                # Capitalize first letter
-                output = output[0].upper() + output[1:]
+        # Collect categorized fragments for the first physical actor
+        held_items = []
+        accessories = []
+        clothing_items = []
+        posture_phrase = ""
+        action_clauses = []
+        identity_adjectives = []
+        hair_phrase = ""
+        subject_type = "person"
+        actor_gender = "person"
 
-        if output_format == "labeled":
-            env_label = ""
-            lighting_phrase = ""
-            for f in filtered:
-                if f.get("zone") == "environment" and f.get("frag_type") == "environment":
-                    env_label = f["text"]
-                elif f.get("zone") == "lighting" or f.get("frag_type") == "lighting":
-                    lighting_phrase = f["text"]
+        CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
+        ACCESSORY_ZONES = {"Hands", "Jewelry", "Accessories"}
 
-            # Collect categorized fragments for the first physical actor
-            held_items = []
-            accessories = []
-            clothing_items = []
-            posture_phrase = ""
-            action_clauses = []
-            identity_adjectives = []
-            hair_phrase = ""
-            subject_type = "person"
-            actor_gender = "person"
+        for f in filtered:
+            zone = f.get("zone", "")
+            frag_type = f.get("frag_type", "")
+            tags = f.get("tags", [])
 
-            CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet", "Headwear"}
-            ACCESSORY_ZONES = {"Hands", "Jewelry", "Accessories"}
+            if zone == "_subject_type":
+                subject_type = f["text"]
+                continue
+            elif zone == "Hair":
+                hair_phrase = f["text"]
+            elif zone == "Face":
+                identity_adjectives.append(f["text"])
+            elif zone in CLOTHING_ZONES:
+                clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
+            elif zone in ACCESSORY_ZONES:
+                accessories.append(f["text"])
+            elif frag_type == "relationship":
+                clause = f.get("clause_text", f["text"])
+                if clause not in action_clauses:
+                    action_clauses.append(clause)
+            elif zone in ("body_config", "_pose", "pose"):
+                if posture_phrase:
+                    posture_phrase += ", " + f["text"]
+                else:
+                    posture_phrase = f["text"]
 
-            for f in filtered:
-                zone = f.get("zone", "")
-                frag_type = f.get("frag_type", "")
-                tags = f.get("tags", [])
+        # Build subject phrase: "A [expressions] [subject_type] with [hair]"
+        adj_part = ", ".join(identity_adjectives) if identity_adjectives else ""
+        subject_phrase_parts = []
+        if adj_part:
+            subject_phrase_parts.append(adj_part)
+        subject_phrase_parts.append(subject_type)
+        subject_phrase = " ".join(subject_phrase_parts)
+        if hair_phrase:
+            subject_phrase += " with " + hair_phrase
 
-                if zone == "_subject_type":
-                    subject_type = f["text"]
-                    continue
-                elif zone == "Hair":
-                    hair_phrase = f["text"]
-                elif zone == "Face":
-                    identity_adjectives.append(f["text"])
-                elif zone in CLOTHING_ZONES:
-                    clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
-                elif zone in ACCESSORY_ZONES:
-                    accessories.append(f["text"])
-                elif frag_type == "relationship":
-                    clause = f.get("clause_text", f["text"])
-                    if clause not in action_clauses:
-                        action_clauses.append(clause)
-                elif zone in ("body_config", "_pose", "pose"):
-                    if posture_phrase:
-                        posture_phrase += ", " + f["text"]
-                    else:
-                        posture_phrase = f["text"]
+        # Derive pronoun from subject type
+        pronoun = "She"
+        if subject_type == "man":
+            pronoun = "He"
+        elif subject_type not in ("woman",):
+            pronoun = "They"
 
-            # Build subject phrase: "A [expressions] [subject_type] with [hair]"
-            adj_part = ", ".join(identity_adjectives) if identity_adjectives else ""
-            subject_phrase_parts = []
-            if adj_part:
-                subject_phrase_parts.append(adj_part)
-            subject_phrase_parts.append(subject_type)
-            subject_phrase = " ".join(subject_phrase_parts)
-            if hair_phrase:
-                subject_phrase += " with " + hair_phrase
+        # Clean camera framing: "full_body" -> "full-body"
+        clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
 
-            # Derive pronoun from subject type
-            pronoun = "She"
-            if subject_type == "man":
-                pronoun = "He"
-            elif subject_type not in ("woman",):
-                pronoun = "They"
+        # Gather non-interacted objects
+        prop_phrases = []
+        for obj_id, obj in scene_objects.items():
+            if obj.get("type") in ("object", "drink", "item"):
+                is_targeted = any(
+                    rel.get("object") == obj_id or rel.get("target") == obj_id or rel.get("container") == obj_id
+                    for rel in scene_data.get("relationships", [])
+                )
+                if not is_targeted:
+                    prop_phrases.append(self._render_object(obj))
 
-            # Clean camera framing: "full_body" -> "full-body"
-            clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
+        # Gather background noise elements
+        background_noise_phrases = []
+        for obj_id, obj in scene_objects.items():
+            if obj.get("type") == "background_noise":
+                label = obj.get("label") or obj.get("template_key") or obj_id
+                background_noise_phrases.append(label)
 
-            # Gather non-interacted objects
-            prop_phrases = []
-            for obj_id, obj in scene_objects.items():
-                if obj.get("type") in ("object", "drink", "item"):
-                    is_targeted = any(
-                        rel.get("object") == obj_id or rel.get("target") == obj_id or rel.get("container") == obj_id
-                        for rel in scene_data.get("relationships", [])
-                    )
-                    if not is_targeted:
-                        prop_phrases.append(self._render_object(obj))
-
-            # Gather background noise elements
-            background_noise_phrases = []
-            for obj_id, obj in scene_objects.items():
-                if obj.get("type") == "background_noise":
-                    label = obj.get("label") or obj.get("template_key") or obj_id
-                    background_noise_phrases.append(label)
-
-            output = output_formatter.render_full_output({
-                "subject_phrase": subject_phrase,
-                "held_items": held_items,
-                "accessories": accessories,
-                "clothing_items": clothing_items,
-                "posture_phrase": posture_phrase,
-                "action_clauses": action_clauses,
-                "env_label": env_label,
-                "env_preposition": env_prep,
-                "background_elements": background_noise_phrases,
-                "scene_props": prop_phrases,
-                "lighting_phrase": lighting_phrase,
-                "weather_phrase": "",
-                "shot_type": camera.get("shot_type", ""),
-                "camera_angle": camera.get("angle", ""),
-                "camera_framing": clean_framing,
-                "depth_of_field": camera.get("depth_of_field", ""),
-                "aesthetic": render_profile.get("aesthetic", ""),
-                "color_palette": render_profile.get("color_palette", ""),
-                "render_quality": render_profile.get("quality", ""),
-                "mood": scene_data.get("mood", ""),
-                "pronoun": pronoun,
-            })
-
-        return output
+        return output_formatter.render_full_output({
+            "subject_phrase": subject_phrase,
+            "held_items": held_items,
+            "accessories": accessories,
+            "clothing_items": clothing_items,
+            "posture_phrase": posture_phrase,
+            "action_clauses": action_clauses,
+            "env_label": env_label,
+            "env_preposition": env_prep,
+            "background_elements": background_noise_phrases,
+            "scene_props": prop_phrases,
+            "lighting_phrase": lighting_phrase,
+            "weather_phrase": "",
+            "shot_type": camera.get("shot_type", ""),
+            "camera_angle": camera.get("angle", ""),
+            "camera_framing": clean_framing,
+            "depth_of_field": camera.get("depth_of_field", ""),
+            "aesthetic": render_profile.get("aesthetic", ""),
+            "color_palette": render_profile.get("color_palette", ""),
+            "render_quality": render_profile.get("quality", ""),
+            "mood": scene_data.get("mood", ""),
+            "pronoun": pronoun,
+        })
 
 
 def _is_physical(obj: dict) -> bool:
@@ -1791,333 +1767,7 @@ def _render_body_config(body_config: dict, obj_id: str) -> list:
     return fragments
 
 
-def _assemble_output(
-    fragments: list,
-    physical_ids: list,
-    render_profile: dict,
-    include_tags: set = None,
-    action_grammar_db: dict = None,
-    env_prep: str = "in",
-) -> str:
-    """Assemble fragments into a natural language prompt string.
 
-    Groups fragments by actor_id so multi-character scenes render each
-    character separately, then joins them with commas.
-    """
-    if not fragments:
-        return ""
-    if include_tags is None:
-        include_tags = set(render_profile.get("include_tags", []))
-
-    # Group fragments by actor_id, preserving physical_ids ordering
-    # Fragments without actor_id (env, style) go into a shared pool
-    actor_frags: dict = {aid: [] for aid in physical_ids}
-    shared_frags: list = []
-
-    for f in fragments:
-        if f.get("frag_type") == "relationship":
-            continue
-        aid = f.get("actor_id")
-        if aid and aid in actor_frags:
-            actor_frags[aid].append(f)
-        else:
-            shared_frags.append(f)
-
-    # Separate env/style from relationships in shared_frags
-    env_frags = [f for f in shared_frags if f.get("frag_type") in ("environment", "lighting", "weather", "atmosphere")]
-    style_frags_shared = [f for f in shared_frags if f.get("frag_type") == "style"]
-    rel_frags_shared = [f for f in shared_frags if f.get("frag_type") == "relationship"]
-    other_shared = [f for f in shared_frags
-                    if f.get("frag_type") not in ("environment", "lighting", "weather", "atmosphere", "style", "relationship")]
-
-    def _render_actor(aid: str, frags: list) -> str:
-        """Render a single actor's fragments into a natural language string."""
-        identity_frags = []
-        clothing_frags = []
-        body_config_frags = []
-        pose_frags = []
-        rel_frags_actor = []
-        surface_frags = []
-
-        for f in frags:
-            zone = f.get("zone", "")
-            frag_type = f.get("frag_type", "")
-            if frag_type == "relationship":
-                rel_frags_actor.append(f)
-            elif frag_type in ("body_config",):
-                body_config_frags.append(f)
-            elif frag_type == "pose":
-                pose_frags.append(f)
-            elif frag_type == "body_surface":
-                surface_frags.append(f)
-            elif zone in ("Face", "Hair", "Eyes", "Tusks", "Ears", "Jaw", "_subject_type"):
-                identity_frags.append(f)
-            elif zone in ("UpperBody", "LowerBody", "Feet", "Hands", "Headwear", "_attire"):
-                clothing_frags.append(f)
-            else:
-                identity_frags.append(f)
-
-        identity_frags.sort(key=lambda f: -f.get("priority", 0))
-
-        parts = []
-
-        subject_type = ""
-        # Only include face expression if "emotion" tag is in the include_tags
-        face_expr = "" if "emotion" not in include_tags else ""
-        face_expr_raw = ""
-        hair_frag = None
-        eyes_frag = None
-        other_identity = []
-        for frag in identity_frags:
-            if frag.get("zone") == "_subject_type":
-                subject_type = frag["text"]
-            elif frag.get("zone") == "Face":
-                face_expr_raw = frag["text"]
-            elif frag.get("zone") == "Hair":
-                hair_frag = frag
-            elif frag.get("zone") == "Eyes":
-                eyes_frag = frag
-            else:
-                other_identity.append(frag["text"])
-
-        # Only show face expression if emotion tag is allowed by render profile
-        face_expr = face_expr_raw if "emotion" in include_tags else ""
-
-        if face_expr and subject_type:
-            parts.append(f"{face_expr} {subject_type}")
-        elif subject_type:
-            parts.append(subject_type)
-        elif face_expr:
-            parts.append(face_expr)
-
-        with_parts = []
-        if hair_frag:
-            with_parts.append(hair_frag["text"])
-        if eyes_frag:
-            with_parts.append(eyes_frag["text"])
-        for text in other_identity:
-            with_parts.append(text)
-        # Body surface features shown in "with" section
-        for sf in surface_frags:
-            with_parts.append(sf["text"])
-
-        if with_parts:
-            if len(with_parts) == 1:
-                if parts:
-                    parts[0] = f"{parts[0]} with {with_parts[0]}"
-                else:
-                    parts.append(with_parts[0])
-            else:
-                joined = ", ".join(with_parts[:-1]) + (f", and {with_parts[-1]}" if len(with_parts) > 1 else "")
-                if parts:
-                    parts[0] = f"{parts[0]} with {joined}"
-                else:
-                    parts.append(joined)
-
-        if clothing_frags:
-            clothing_frags.sort(key=lambda f: -f.get("priority", 50))
-            clothing_texts = [f["text"] for f in clothing_frags]
-            clothing_verb = "wears" if render_profile.get("narrative_mode") == "scene_description" else "wearing"
-            if len(clothing_texts) == 1:
-                text = clothing_texts[0]
-                # Add article for single clothing item
-                if text and not text.startswith(("a ", "an ", "the ")):
-                    first_char = text[0].lower()
-                    article = "an" if first_char in "aeiou" else "a"
-                    text = f"{article} {text}"
-                parts.append(f"{clothing_verb} {text}")
-            elif len(clothing_texts) == 2:
-                parts.append(f"{clothing_verb} {clothing_texts[0]} and {clothing_texts[1]}")
-            else:
-                joined = ", ".join(clothing_texts[:-1])
-                parts.append(f"{clothing_verb} {joined}, and {clothing_texts[-1]}")
-
-        if body_config_frags:
-            for f in body_config_frags:
-                parts.append(f["text"])
-
-        if pose_frags:
-            for f in pose_frags:
-                parts.append(f["text"])
-
-        # Attach actor-specific relationship fragments
-        actor_rels = [f for f in rel_frags_actor]
-        if actor_rels:
-            if render_profile.get("narrative_mode") == "scene_description":
-                actor_rels.sort(key=lambda f: f.get("chain_order", 99))
-                # Convert the first one to finite verb
-                first_clause = actor_rels[0].get("clause_text", actor_rels[0]["text"])
-                first_action_id = actor_rels[0].get("action_id", "")
-                first_clause = _to_finite(first_clause, first_action_id, action_grammar_db, "singular")
-
-                parts.append(first_clause)
-                
-                # Append remaining clauses with space
-                for f in actor_rels[1:]:
-                    c = f.get("clause_text", f["text"])
-                    if c:
-                        parts.append(c)
-            else:
-                for f in actor_rels:
-                    clause = f.get("clause_text", f["text"])
-                    if clause:
-                        if parts and not parts[-1].endswith(","):
-                            parts[-1] = parts[-1].rstrip() + ","
-                        parts.append(f" {clause}" if not clause.startswith(" ") else clause)
-
-        if not parts:
-            return ""
-
-        result = " ".join(parts)
-        result = re.sub(r"\s+", " ", result).strip()
-        result = re.sub(r",\s*looking toward", " looking toward", result)
-        return result
-
-    # Build relationship lookup per actor
-    rel_by_actor: dict = {aid: [] for aid in physical_ids}
-    ungrouped_rels = []
-    for f in fragments:
-        if f.get("frag_type") == "relationship":
-            aid = f.get("actor_id")
-            if aid and aid in rel_by_actor:
-                rel_by_actor[aid].append(f)
-            else:
-                ungrouped_rels.append(f)
-
-    # Render each actor
-    actor_parts = []
-    for aid in physical_ids:
-        frags_for_actor = actor_frags[aid] + rel_by_actor[aid]
-        rendered = _render_actor(aid, frags_for_actor)
-        if rendered:
-            if render_profile.get("narrative_mode") == "scene_description":
-                if rendered.lower().startswith(("a ", "an ", "the ")):
-                    rendered = rendered[0].upper() + rendered[1:]
-                else:
-                    first_char = rendered[0].lower()
-                    article = "An" if first_char in "aeiou" else "A"
-                    rendered = f"{article} {rendered}"
-            actor_parts.append(rendered)
-
-    if not actor_parts:
-        return ""
-
-    if render_profile.get("narrative_mode") == "scene_description":
-        result = ". ".join(actor_parts)
-    else:
-        result = ", ".join(actor_parts)
-
-    # Append ungrouped relationships
-    if ungrouped_rels:
-        for f in ungrouped_rels:
-            clause = f["text"] if not f.get("actor_id") else f.get("clause_text", f["text"])
-            if clause:
-                if not result:
-                    result = clause[0].upper() + clause[1:]
-                else:
-                    if result.endswith("."):
-                        result += f" {clause[0].upper() + clause[1:]}"
-                    else:
-                        if not result.endswith(","):
-                            result = result.rstrip() + ","
-                        result += f" {clause}" if not clause.startswith(" ") else clause
-
-    comp_frags = [f for f in other_shared if f.get("frag_type") == "composition"]
-    if render_profile.get("narrative_mode") == "scene_description":
-        other_shared = [f for f in other_shared if f.get("frag_type") != "composition"]
-
-    if render_profile.get("narrative_mode") == "scene_description" and comp_frags:
-        comp_text = comp_frags[0]["text"]
-        if "cinematic" in comp_text:
-            suffix = ", shot in cinematic style"
-        elif "over-the-shoulder" in comp_text:
-            suffix = ", shot in an over-the-shoulder style"
-        else:
-            suffix = f", shot in {comp_text} style"
-        result += suffix
-
-    # Append style/atmospheric
-    for f in style_frags_shared + other_shared:
-        text = f["text"]
-        if text:
-            if render_profile.get("narrative_mode") == "scene_description":
-                result = result.rstrip(".")
-                result += f" {text}" if not text.startswith(" ") else text
-            else:
-                if not result.endswith(","):
-                    result = result.rstrip() + ","
-                result += f" {text}" if not text.startswith(" ") else text
-
-    # Append environment (VERY LAST)
-    if env_frags:
-        env_f = [f for f in env_frags if f.get("zone") == "environment"][0] if any(f.get("zone") == "environment" for f in env_frags) else None
-        if env_f:
-            g = env_f.get("ground", "")
-            e = env_f.get("envelope", "")
-            v = env_f.get("vista", "")
-            b = env_f.get("background", "")
-
-            # Combine ground, envelope, vista for prose output
-            parts = []
-            if g:
-                parts.append(g)
-            if e:
-                parts.append(f"with {e}")
-            if v:
-                parts.append(f"with a view of {v}")
-            if b:
-                parts.append(b)
-            env_prose = ", ".join(parts)
-
-            if env_prose:
-                if result.endswith("."):
-                    result = result.rstrip(".")
-                
-                if render_profile.get("narrative_mode") == "scene_description":
-                    # For scene_description, environment begins a new sentence if not beginning with preposition
-                    if env_prose.startswith(("in ", "on ", "at ", "inside ", "under ", "above ")):
-                        result += f", {env_prose}"
-                    elif env_prose.startswith(("a ", "an ", "the ")):
-                        result += f", {env_prep} {env_prose}"
-                    else:
-                        capitalized_env = env_prose[0].upper() + env_prose[1:]
-                        # End the previous text with period and start environment sentence
-                        result += f". {capitalized_env}"
-                else:
-                    if env_prose.startswith(("in ", "on ", "at ", "inside ", "under ", "above ")):
-                        if result.endswith(","):
-                            result = result[:-1]
-                        result += f", {env_prose}"
-                    elif env_prose.startswith(("a ", "an ", "the ")):
-                        if result.endswith(","):
-                            result = result[:-1]
-                        result += f", {env_prep} {env_prose}"
-                    else:
-                        if result.endswith(","):
-                            result = result[:-1]
-                        vowels = "aeiou"
-                        art = "an" if env_prose[0].lower() in vowels else "a"
-                        result += f", {env_prep} {art} {env_prose}"
-
-        # Append supplementary environment fragments (e.g. featuring...)
-        for f in env_frags:
-            if f.get("zone") == "environment" and f.get("priority") == 60:
-                extra = f["text"]
-                if extra:
-                    if result.endswith("."):
-                        result = result.rstrip(".")
-                    if result.endswith(","):
-                        result = result[:-1]
-                    result += f", {extra}" if not extra.startswith(" ") else extra
-
-    if render_profile.get("narrative_mode") == "scene_description":
-        if not result.endswith("."):
-            result += "."
-
-    result = re.sub(r"\s+", " ", result).strip()
-    result = re.sub(r",\s*looking toward", " looking toward", result)
-
-    return result
 
 
 class RenderSystemWrapper:
@@ -2130,7 +1780,8 @@ class PromptCompiler(Assembler):
         super().__init__(data_dir=data_dir)
         self.render_system = RenderSystemWrapper(self.render_profiles_db)
 
-    def compile_scene(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True, output_format: str = "legacy") -> str:
+    def compile_scene(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True) -> str:
+        output_format = scene_data.get("output_format", "labeled")
         return self.assemble(scene_data, strict=strict, inject_camera_descriptor=inject_camera_descriptor, output_format=output_format)
 
 

@@ -208,6 +208,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
 
     const objects: Record<string, any> = {};
     const relationships: any[] = [];
+    const body_config_payload: Record<string, any> = {};
 
     // Helper to format garment to template key
     const toTemplateKey = (garment: string, defaultKey: string) => {
@@ -253,6 +254,8 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
         accessory: actor.hair.accessory?.toLowerCase(),
       } : undefined;
 
+      const morphology = actor.morphology?.skin_tone ? { skin_tone: actor.morphology.skin_tone.toLowerCase() } : undefined;
+
       const actorObj: any = {
         type: "human",
         subject: subjectPreset,
@@ -261,6 +264,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
       if (face) actorObj.Face = face;
       if (hair) actorObj.Hair = hair;
       if (actor.gender) actorObj.gender = actor.gender.toLowerCase();
+      if (morphology) actorObj.morphology = morphology;
 
       if (actor.clothing && actor.clothing.length > 0) {
         actor.clothing.forEach((zone) => {
@@ -300,17 +304,55 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
 
       objects[actorId] = actorObj;
 
+      const armsVal = (actor.pose?.arms || "at_side").toLowerCase().replace(" ", "_");
+      const legsVal = (actor.pose?.legs || "standing").toLowerCase().replace(" ", "_");
+      const gazeVal = (actor.pose?.gaze || "toward_camera").toLowerCase().replace(" ", "_");
+
+      body_config_payload[actorId] = {
+        gaze: { direction: gazeVal },
+        arms: { left: armsVal, right: armsVal },
+        legs: { position: legsVal }
+      };
+
       if (actor.relationships && actor.relationships.length > 0) {
         actor.relationships.forEach((rel) => {
-          const type = rel.type === "proposal" ? "proposing_to" : rel.type;
-          const relationshipObj: any = {
-            type: type,
-            subject: actorId,
-          };
-          if (rel.targetPropId) {
-            relationshipObj.target = rel.targetPropId;
+          if (rel.type === "holding") {
+            relationships.push({
+              type: "holding",
+              actor: actorId,
+              object: rel.targetPropId
+            });
+          } else if (rel.type === "leaning_on") {
+            relationships.push({
+              type: "leaning_on",
+              actor: actorId,
+              target: rel.targetPropId
+            });
+          } else if (rel.type === "sitting_at") {
+            relationships.push({
+              type: "sitting_at",
+              actor: actorId,
+              target: rel.targetPropId
+            });
+          } else if (rel.type === "standing_next_to") {
+            relationships.push({
+              type: "standing_next_to",
+              subject: actorId,
+              target: rel.targetPropId
+            });
+          } else if (rel.type === "kneeling_before") {
+            relationships.push({
+              type: "kneeling_before",
+              subject1: actorId,
+              subject2: rel.targetPropId
+            });
+          } else if (rel.type === "framing") {
+            relationships.push({
+              type: "framing",
+              object: rel.targetPropId,
+              subjects: rel.subjects || []
+            });
           }
-          relationships.push(relationshipObj);
         });
       }
     });
@@ -334,6 +376,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
       environment,
       objects,
       relationships,
+      body_config: body_config_payload,
     };
 
     if (activeScene.actors.length > 0 && activeScene.actors[0].pose?.posture) {

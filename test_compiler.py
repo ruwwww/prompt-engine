@@ -2661,7 +2661,7 @@ class TestNonHumanSubjects(unittest.TestCase):
                 { "type": "sitting_at", "actor": "woman_1", "target": "desk_1" }
             ]
         }
-        out = self.c.compile_scene(scene, output_format="labeled")
+        out = self.c.compile_scene(scene)
         self.assertIn("Objects: A silver laptop and a glass of water arranged in the scene.", out)
         self.assertIn("Action: She is looking toward the camera, arms at side, seated comfortably at a transparent glass desk.", out)
         self.assertIn("Clothing: She wears tailored black blazer over black top.", out)

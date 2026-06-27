@@ -43,6 +43,7 @@ function buildScenePayload(activeScene: any) {
 
   const objects: Record<string, any> = {};
   const relationships: any[] = [];
+  const body_config_payload: Record<string, any> = {};
 
   activeScene.actors.forEach((actor: any, index: number) => {
     const actorId = actor.id || `actor_${index + 1}`;
@@ -71,6 +72,8 @@ function buildScenePayload(activeScene: any) {
       accessory: actor.hair.accessory?.toLowerCase(),
     } : undefined;
 
+    const morphology = actor.morphology?.skin_tone ? { skin_tone: actor.morphology.skin_tone.toLowerCase() } : undefined;
+
     const actorObj: any = {
       type: "human",
       subject: subjectPreset,
@@ -79,6 +82,7 @@ function buildScenePayload(activeScene: any) {
     if (face) actorObj.Face = face;
     if (hair) actorObj.Hair = hair;
     if (actor.gender) actorObj.gender = actor.gender.toLowerCase();
+    if (morphology) actorObj.morphology = morphology;
 
     if (actor.clothing && actor.clothing.length > 0) {
       actor.clothing.forEach((zone: any) => {
@@ -118,17 +122,55 @@ function buildScenePayload(activeScene: any) {
 
     objects[actorId] = actorObj;
 
+    const armsVal = (actor.pose?.arms || "at_side").toLowerCase().replace(" ", "_");
+    const legsVal = (actor.pose?.legs || "standing").toLowerCase().replace(" ", "_");
+    const gazeVal = (actor.pose?.gaze || "toward_camera").toLowerCase().replace(" ", "_");
+
+    body_config_payload[actorId] = {
+      gaze: { direction: gazeVal },
+      arms: { left: armsVal, right: armsVal },
+      legs: { position: legsVal }
+    };
+
     if (actor.relationships && actor.relationships.length > 0) {
       actor.relationships.forEach((rel: any) => {
-        const type = rel.type === "proposal" ? "proposing_to" : rel.type;
-        const relationshipObj: any = {
-          type: type,
-          subject: actorId,
-        };
-        if (rel.targetPropId) {
-          relationshipObj.target = rel.targetPropId;
+        if (rel.type === "holding") {
+          relationships.push({
+            type: "holding",
+            actor: actorId,
+            object: rel.targetPropId
+          });
+        } else if (rel.type === "leaning_on") {
+          relationships.push({
+            type: "leaning_on",
+            actor: actorId,
+            target: rel.targetPropId
+          });
+        } else if (rel.type === "sitting_at") {
+          relationships.push({
+            type: "sitting_at",
+            actor: actorId,
+            target: rel.targetPropId
+          });
+        } else if (rel.type === "standing_next_to") {
+          relationships.push({
+            type: "standing_next_to",
+            subject: actorId,
+            target: rel.targetPropId
+          });
+        } else if (rel.type === "kneeling_before") {
+          relationships.push({
+            type: "kneeling_before",
+            subject1: actorId,
+            subject2: rel.targetPropId
+          });
+        } else if (rel.type === "framing") {
+          relationships.push({
+            type: "framing",
+            object: rel.targetPropId,
+            subjects: rel.subjects || []
+          });
         }
-        relationships.push(relationshipObj);
       });
     }
   });
@@ -152,6 +194,7 @@ function buildScenePayload(activeScene: any) {
     environment,
     objects,
     relationships,
+    body_config: body_config_payload,
   };
 
   if (activeScene.actors.length > 0 && activeScene.actors[0].pose?.posture) {
@@ -168,6 +211,42 @@ export function CenterPanel() {
   const [copiedResolved, setCopiedResolved] = useState(false);
   const [viewMode, setViewMode] = useState<'breakdown' | 'json'>('breakdown');
   const [resolvedJson, setResolvedJson] = useState<string>('{}');
+  const [validationResult, setValidationResult] = useState<{
+    show: boolean;
+    valid: boolean;
+    errors: { field: string; msg: string; value: any }[];
+    message: string;
+  } | null>(null);
+
+  const handleValidate = () => {
+    fetch("http://localhost:8000/validate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Validation API error");
+        return res.json();
+      })
+      .then((data) => {
+        setValidationResult({
+          show: true,
+          valid: data.valid,
+          errors: data.errors || [],
+          message: data.message,
+        });
+      })
+      .catch((err) => {
+        setValidationResult({
+          show: true,
+          valid: false,
+          errors: [],
+          message: "⚠️ Validation service unavailable. Is the backend running?",
+        });
+      });
+  };
 
   const payload = buildScenePayload(scene);
 
@@ -249,6 +328,34 @@ export function CenterPanel() {
           ⚡
         </Toggle>
       </div>
+
+      {/* Validation Result Alert Banner */}
+      {validationResult?.show && (
+        <div className={`p-2.5 border-b text-xs flex flex-col gap-1 transition-all ${
+          validationResult.valid 
+            ? 'bg-green-500/10 border-green-500/20 text-green-400' 
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
+          <div className="flex items-center justify-between font-semibold">
+            <span>{validationResult.message}</span>
+            <button 
+              onClick={() => setValidationResult(null)} 
+              className="text-[10px] opacity-70 hover:opacity-100 px-1 py-0.5 rounded bg-muted/20 hover:bg-muted/40"
+            >
+              Close
+            </button>
+          </div>
+          {validationResult.errors.length > 0 && (
+            <ul className="list-disc list-inside space-y-0.5 mt-1 font-mono text-[10px] max-h-32 overflow-y-auto bg-black/10 p-1.5 rounded">
+              {validationResult.errors.map((err, i) => (
+                <li key={i}>
+                  <span className="font-bold text-foreground">{err.field}</span>: {err.msg} {err.value !== undefined && err.value !== null && <span className="opacity-60">(got: {JSON.stringify(err.value)})</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* Content: 8-Field breakdown or Side-by-side JSON Debug viewer */}
       {viewMode === 'breakdown' ? (
@@ -334,6 +441,14 @@ export function CenterPanel() {
           {wordCount} words • {scene.actors.length} actors
         </div>
         <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-7 gap-1"
+            onClick={handleValidate}
+          >
+            🔍 Validate JSON
+          </Button>
           <Button
             size="sm"
             variant="outline"

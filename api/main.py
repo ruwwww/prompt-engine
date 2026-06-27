@@ -108,7 +108,6 @@ async def compile_scene(payload: Dict[str, Any]):
         prompt = compiler.compile_scene(
             scene_data,
             strict=False,
-            output_format=output_format,
         )
         return {"prompt": prompt}
     except (ValueError, KeyError, TypeError) as e:

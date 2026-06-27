@@ -9,8 +9,8 @@ export interface ClothingZone {
 
 export interface ActorRelationship {
   id: string;
-  type: 'holding' | 'sitting' | 'leaning' | 'proposal' | 'fighting' | 'framing';
-  targetPropId?: string; // For holding, leaning, etc.
+  type: 'holding' | 'sitting_at' | 'leaning_on' | 'standing_next_to' | 'framing' | 'kneeling_before';
+  targetPropId?: string; // For holding, leaning, sitting, kneeling, next_to
   subjects?: string[]; // For framing: array of actor IDs
   details?: string;
 }
@@ -20,6 +20,9 @@ export interface ActorState {
   name: string;
   archetype: string;
   gender?: string;
+  morphology?: {
+    skin_tone?: string;
+  };
   face?: {
     expression?: string;
   };

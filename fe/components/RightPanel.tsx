@@ -128,6 +128,50 @@ export function RightPanel() {
                       ))}
                     </SelectContent>
                   </Select>
+
+                  <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-border/50">
+                    {/* Gender Selector */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground font-bold uppercase">Gender</label>
+                      <Select
+                        value={actor.gender || 'woman'}
+                        onValueChange={(value) => updateActor(actor.id, { gender: value })}
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="man">Man</SelectItem>
+                          <SelectItem value="woman">Woman</SelectItem>
+                          <SelectItem value="non-binary">Non-binary</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Skin Tone Selector */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-muted-foreground font-bold uppercase">Skin Tone</label>
+                      <Select
+                        value={actor.morphology?.skin_tone || 'olive'}
+                        onValueChange={(value) =>
+                          updateActor(actor.id, {
+                            morphology: { ...actor.morphology, skin_tone: value }
+                          })
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fair">Fair</SelectItem>
+                          <SelectItem value="olive">Olive</SelectItem>
+                          <SelectItem value="dark">Dark</SelectItem>
+                          <SelectItem value="alabaster">Alabaster</SelectItem>
+                          <SelectItem value="warm">Warm</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -321,6 +365,54 @@ export function RightPanel() {
                               </SelectContent>
                             </Select>
                           )}
+
+                          {/* Material and Fit Selector */}
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <Select
+                              value={zone.material || ''}
+                              onValueChange={(material) =>
+                                updateActor(actor.id, {
+                                  clothing: actor.clothing?.map((z) =>
+                                    z.id === zone.id ? { ...z, material: material || undefined } : z
+                                  ),
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-[11px] px-2 w-full">
+                                <SelectValue placeholder="Material" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="cotton">Cotton</SelectItem>
+                                <SelectItem value="leather">Leather</SelectItem>
+                                <SelectItem value="denim">Denim</SelectItem>
+                                <SelectItem value="silk">Silk</SelectItem>
+                                <SelectItem value="wool">Wool</SelectItem>
+                                <SelectItem value="polyester">Polyester</SelectItem>
+                              </SelectContent>
+                            </Select>
+
+                            <Select
+                              value={zone.fit || ''}
+                              onValueChange={(fit) =>
+                                updateActor(actor.id, {
+                                  clothing: actor.clothing?.map((z) =>
+                                    z.id === zone.id ? { ...z, fit: fit || undefined } : z
+                                  ),
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-7 text-[11px] px-2 w-full">
+                                <SelectValue placeholder="Fit" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="regular">Regular</SelectItem>
+                                <SelectItem value="tailored">Tailored</SelectItem>
+                                <SelectItem value="oversized">Oversized</SelectItem>
+                                <SelectItem value="slim">Slim</SelectItem>
+                                <SelectItem value="loose">Loose</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                       );
                     })}
@@ -378,6 +470,44 @@ export function RightPanel() {
                         <SelectItem value="Up">Up</SelectItem>
                       </SelectContent>
                     </Select>
+
+                    <Select
+                      value={actor.pose?.arms || ''}
+                      onValueChange={(value) =>
+                        updateActor(actor.id, {
+                          pose: { ...actor.pose, arms: value || undefined },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="Arm position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="at_side">At side</SelectItem>
+                        <SelectItem value="crossed">Crossed</SelectItem>
+                        <SelectItem value="raised">Raised</SelectItem>
+                        <SelectItem value="behind_back">Behind back</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={actor.pose?.legs || ''}
+                      onValueChange={(value) =>
+                        updateActor(actor.id, {
+                          pose: { ...actor.pose, legs: value || undefined },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="Leg position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standing">Standing</SelectItem>
+                        <SelectItem value="apart">Apart</SelectItem>
+                        <SelectItem value="crossed">Crossed</SelectItem>
+                        <SelectItem value="bent">Bent</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               )}
@@ -395,22 +525,164 @@ export function RightPanel() {
               {expandedSections.relationships && (
                 <div className="p-3 border-t border-border space-y-2">
                   {actor.relationships && actor.relationships.length > 0 ? (
-                    <div className="space-y-1.5 text-xs">
-                      {actor.relationships.map((rel) => (
-                        <div key={rel.id} className="p-2 bg-muted/50 rounded border border-border">
-                          <div className="font-medium">{rel.type}</div>
-                          {rel.targetPropId && (
-                            <div className="text-muted-foreground text-xs">Target: {rel.targetPropId}</div>
-                          )}
-                        </div>
-                      ))}
+                    <div className="space-y-3">
+                      {actor.relationships.map((rel) => {
+                        // Filter targets based on type
+                        let allowedTargets: { id: string; name: string }[] = [];
+                        if (rel.type === "holding" || rel.type === "leaning_on" || rel.type === "sitting_at" || rel.type === "framing") {
+                          allowedTargets = scene.props.map(p => ({ id: p.id, name: p.label }));
+                        } else if (rel.type === "kneeling_before") {
+                          allowedTargets = scene.actors.filter(a => a.id !== actor.id).map(a => ({ id: a.id, name: a.name }));
+                        } else if (rel.type === "standing_next_to") {
+                          allowedTargets = [
+                            ...scene.actors.filter(a => a.id !== actor.id).map(a => ({ id: a.id, name: a.name })),
+                            ...scene.props.map(p => ({ id: p.id, name: p.label }))
+                          ];
+                        }
+
+                        return (
+                          <div key={rel.id} className="p-2 bg-muted/40 rounded border border-border space-y-2 relative">
+                            {/* Remove button */}
+                            <button
+                              onClick={() => {
+                                const updatedRels = (actor.relationships || []).filter((r) => r.id !== rel.id);
+                                updateActor(actor.id, { relationships: updatedRels });
+                              }}
+                              className="absolute top-1 right-1 text-muted-foreground hover:text-destructive text-xs font-bold w-4 h-4 flex items-center justify-center rounded-full hover:bg-muted"
+                            >
+                              ✕
+                            </button>
+
+                            {/* Relationship Type */}
+                            <div className="space-y-1 pr-4">
+                              <label className="text-[10px] text-muted-foreground font-bold uppercase">Type</label>
+                              <Select
+                                value={rel.type}
+                                onValueChange={(val: any) => {
+                                  let newTarget = "";
+                                  if (val === "holding" || val === "leaning_on" || val === "sitting_at" || val === "framing") {
+                                    newTarget = scene.props[0]?.id || "";
+                                  } else {
+                                    newTarget = scene.actors.find(a => a.id !== actor.id)?.id || "";
+                                  }
+                                  const updatedRels = (actor.relationships || []).map((r) =>
+                                    r.id === rel.id ? { ...r, type: val, targetPropId: newTarget, subjects: val === "framing" ? [actor.id] : undefined } : r
+                                  );
+                                  updateActor(actor.id, { relationships: updatedRels });
+                                }}
+                              >
+                                <SelectTrigger className="h-7 text-xs w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="holding">Holding</SelectItem>
+                                  <SelectItem value="leaning_on">Leaning On</SelectItem>
+                                  <SelectItem value="sitting_at">Sitting At</SelectItem>
+                                  <SelectItem value="standing_next_to">Standing Next To</SelectItem>
+                                  <SelectItem value="framing">Framing</SelectItem>
+                                  <SelectItem value="kneeling_before">Kneeling Before</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            {/* Target Dropdown */}
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-muted-foreground font-bold uppercase">Target</label>
+                              {allowedTargets.length > 0 ? (
+                                <Select
+                                  value={rel.targetPropId || ""}
+                                  onValueChange={(val) => {
+                                    const updatedRels = (actor.relationships || []).map((r) =>
+                                      r.id === rel.id ? { ...r, targetPropId: val } : r
+                                    );
+                                    updateActor(actor.id, { relationships: updatedRels });
+                                  }}
+                                >
+                                  <SelectTrigger className="h-7 text-xs w-full">
+                                    <SelectValue placeholder="Select target" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {allowedTargets.map((t) => (
+                                      <SelectItem key={t.id} value={t.id}>
+                                        {t.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <div className="text-xs text-muted-foreground italic py-1">
+                                  No valid targets available. Add entities first.
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Extra UI for framing (multi-select of subjects) */}
+                            {rel.type === "framing" && (
+                              <div className="space-y-1.5 pt-1 border-t border-border/50">
+                                <label className="text-[10px] text-muted-foreground font-bold uppercase font-semibold">Framed Subjects</label>
+                                <div className="space-y-1 max-h-24 overflow-y-auto p-1.5 bg-background rounded border border-border/50">
+                                  {scene.actors.map((act) => {
+                                    const isChecked = rel.subjects?.includes(act.id) || false;
+                                    return (
+                                      <label key={act.id} className="flex items-center gap-1.5 text-[11px] font-medium text-foreground cursor-pointer select-none">
+                                        <input
+                                          type="checkbox"
+                                          checked={isChecked}
+                                          onChange={(e) => {
+                                            const currentSubjects = rel.subjects || [];
+                                            const updatedSubjects = e.target.checked
+                                              ? [...currentSubjects, act.id]
+                                              : currentSubjects.filter(sid => sid !== act.id);
+                                            const updatedRels = (actor.relationships || []).map((r) =>
+                                              r.id === rel.id ? { ...r, subjects: updatedSubjects } : r
+                                            );
+                                            updateActor(actor.id, { relationships: updatedRels });
+                                          }}
+                                          className="rounded border-gray-300 text-primary focus:ring-primary h-3 w-3"
+                                        />
+                                        {act.name}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-xs text-muted-foreground text-center py-2">No active relationships</div>
                   )}
-                  <Button size="sm" variant="outline" className="w-full text-xs h-7">
-                    + Add Interaction
-                  </Button>
+
+                  {/* Add Button & Help text */}
+                  <div className="space-y-1 pt-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full text-xs h-7"
+                      onClick={() => {
+                        const defaultTarget = scene.props[0]?.id || scene.actors.find(a => a.id !== actor.id)?.id || "";
+                        const newRel = {
+                          id: `rel-${Date.now()}`,
+                          type: 'holding' as const,
+                          targetPropId: defaultTarget,
+                          subjects: ['holding'].includes('framing') ? [actor.id] : undefined
+                        };
+                        updateActor(actor.id, {
+                          relationships: [...(actor.relationships || []), newRel]
+                        });
+                      }}
+                      disabled={scene.props.length === 0 && scene.actors.length <= 1}
+                    >
+                      ➕ Add Interaction
+                    </Button>
+                    {scene.props.length === 0 && scene.actors.length <= 1 && (
+                      <p className="text-[10px] text-muted-foreground text-center italic">
+                        Add fixtures or objects to target interactions.
+                      </p>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -663,6 +935,24 @@ export function RightPanel() {
                 <SelectItem value="Low-angle">Low-angle</SelectItem>
                 <SelectItem value="High-angle">High-angle</SelectItem>
                 <SelectItem value="Dutch">Dutch</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Depth of Field */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">DEPTH OF FIELD</label>
+            <Select
+              value={cam.depthOfField || 'Shallow'}
+              onValueChange={(value) => updateCamera({ depthOfField: value || undefined })}
+            >
+              <SelectTrigger className="h-8 text-xs w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Shallow">Shallow</SelectItem>
+                <SelectItem value="Medium">Medium</SelectItem>
+                <SelectItem value="Deep">Deep</SelectItem>
               </SelectContent>
             </Select>
           </div>

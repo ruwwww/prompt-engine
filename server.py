@@ -115,8 +115,8 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                 scene_data_legacy = json.loads(json.dumps(scene_data))
                 scene_data_labeled = json.loads(json.dumps(scene_data))
                 
-                legacy_prompt = compiler.compile_scene(scene_data_legacy, strict=False, output_format="legacy")
-                labeled_prompt = compiler.compile_scene(scene_data_labeled, strict=False, output_format="labeled")
+                legacy_prompt = compiler.compile_scene(scene_data_legacy, strict=False)
+                labeled_prompt = compiler.compile_scene(scene_data_labeled, strict=False)
                 eight_field = parse_labeled_prompt(labeled_prompt)
                 
                 self.send_response(200)
@@ -133,6 +133,50 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
                 
+                res = json.dumps({"error": str(e)})
+                self.wfile.write(res.encode("utf-8"))
+        elif self.path == "/validate":
+            content_length = int(self.headers.get("Content-Length", 0))
+            post_data = self.rfile.read(content_length)
+
+            try:
+                from schemas.scene import SceneInput
+                from pydantic import ValidationError
+
+                scene_data = json.loads(post_data.decode("utf-8"))
+                try:
+                    SceneInput.model_validate(scene_data)
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    res = json.dumps({
+                        "valid": True,
+                        "errors": [],
+                        "message": "✅ Scene JSON is valid."
+                    })
+                    self.wfile.write(res.encode("utf-8"))
+                except ValidationError as e:
+                    errors = []
+                    for error in e.errors():
+                        field_path = ".".join(str(loc) for loc in error["loc"])
+                        errors.append({
+                            "field": field_path,
+                            "msg": error["msg"],
+                            "value": error.get("input", None)
+                        })
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    res = json.dumps({
+                        "valid": False,
+                        "errors": errors,
+                        "message": f"❌ Validation failed: {len(errors)} error(s) found."
+                    })
+                    self.wfile.write(res.encode("utf-8"))
+            except Exception as e:
+                self.send_response(400)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
                 res = json.dumps({"error": str(e)})
                 self.wfile.write(res.encode("utf-8"))
         elif self.path == "/resolve":

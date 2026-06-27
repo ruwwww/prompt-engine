@@ -16,7 +16,7 @@ class TestSmoke(unittest.TestCase):
         self.c = PromptCompiler()
 
     def _run(self, scene: dict) -> str:
-        return self.c.assemble(scene, output_format="legacy")
+        return self.c.assemble(scene)
 
     def test_enclosed_environment_single_subject_with_interaction(self):
         """Test Case 1: Enclosed environment, single subject with fixture interaction."""
