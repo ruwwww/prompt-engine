@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { ActorState, PropState } from '@/lib/types';
 
 export function LeftPanel() {
-  const { scene, ui, setSelection, addActor, addProp, updateAtmosphere, catalog } = useScene();
+  const { scene, ui, setSelection, addActor, addProp, addGroup, updateAtmosphere, catalog } = useScene();
   const [searchQuery, setSearchQuery] = useState('');
 
   // Dynamically resolve archetypes from backend subjects data
@@ -203,6 +203,42 @@ export function LeftPanel() {
                       }`}
                     >
                       👤 {actor.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Social Groups Section */}
+            <div className="space-y-1 pt-1">
+              <div className="text-[11px] font-semibold text-foreground flex items-center gap-1">
+                👥 Social Groups ({(scene.groups || []).length})
+                <button
+                  onClick={() => addGroup({
+                    id: `group_${Date.now()}`,
+                    type: 'couple',
+                    members: []
+                  })}
+                  className="ml-auto text-[10px] text-primary hover:underline font-normal select-none"
+                >
+                  ➕ Add
+                </button>
+              </div>
+              {(!scene.groups || scene.groups.length === 0) ? (
+                <div className="text-[11px] text-muted-foreground ml-2 py-0.5">No social groups</div>
+              ) : (
+                <div className="ml-2 space-y-1">
+                  {scene.groups.map((group) => (
+                    <button
+                      key={group.id}
+                      onClick={() => setSelection('group', group.id)}
+                      className={`w-full text-left text-[11px] px-2 py-1 rounded transition-colors truncate ${
+                        ui.selection.type === 'group' && ui.selection.id === group.id
+                          ? 'bg-primary text-primary-foreground font-semibold'
+                          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      👥 {group.label || `${group.type.charAt(0).toUpperCase() + group.type.slice(1)}`} ({group.members.length} members)
                     </button>
                   ))}
                 </div>

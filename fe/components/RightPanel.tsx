@@ -15,9 +15,10 @@ import {
 } from '@/components/ui/select';
 import { mockArchetypes, mockGarments, mockAtmospheres } from '@/lib/mock-data';
 import { ClothingClosetModal } from '@/components/ClothingClosetModal';
+import { ActorRelationship } from '@/lib/types';
 
 export function RightPanel() {
-  const { scene, ui, selection, updateActor, updateProp, updateAtmosphere, updateCamera, removeActor, removeProp, catalog } =
+  const { scene, ui, selection, setSelection, updateActor, updateProp, updateAtmosphere, updateCamera, removeActor, removeProp, updateGroup, removeGroup, catalog } =
     useScene();
 
   const [closetOpen, setClosetOpen] = useState(false);
@@ -137,7 +138,7 @@ export function RightPanel() {
                       <label className="text-[10px] text-muted-foreground font-bold uppercase">Gender</label>
                       <Select
                         value={actor.gender || 'woman'}
-                        onValueChange={(value) => updateActor(actor.id, { gender: value })}
+                        onValueChange={(value) => updateActor(actor.id, { gender: value || undefined })}
                       >
                         <SelectTrigger className="h-7 text-xs w-full">
                           <SelectValue />
@@ -157,7 +158,7 @@ export function RightPanel() {
                         value={actor.morphology?.skin_tone || 'olive'}
                         onValueChange={(value) =>
                           updateActor(actor.id, {
-                            morphology: { ...actor.morphology, skin_tone: value }
+                            morphology: { ...actor.morphology, skin_tone: value || undefined }
                           })
                         }
                       >
@@ -571,8 +572,8 @@ export function RightPanel() {
                                       }
                                     }
                                     const updatedRels = (actor.relationships || []).map((r) =>
-                                      r.id === rel.id ? { ...r, targetPropId: val, type: newType } : r
-                                    );
+                                      r.id === rel.id ? { ...r, targetPropId: val || undefined, type: newType } : r
+                                    ) as ActorRelationship[];
                                     updateActor(actor.id, { relationships: updatedRels });
                                   }}
                                 >
@@ -802,7 +803,7 @@ export function RightPanel() {
             <label className="text-xs font-semibold text-muted-foreground">CATEGORY</label>
             <Select
               value={prop.category || 'fixture'}
-              onValueChange={(val: 'fixture' | 'object') => updateProp(prop.id, { category: val, spatialRole: val === 'object' ? undefined : prop.spatialRole })}
+              onValueChange={(val: 'fixture' | 'object' | null) => { if (val) updateProp(prop.id, { category: val, spatialRole: val === 'object' ? undefined : prop.spatialRole }); }}
             >
               <SelectTrigger className="h-8 text-xs w-full">
                 <SelectValue />
@@ -900,6 +901,115 @@ export function RightPanel() {
               </Select>
             </div>
           )}
+
+          {/* Owner (Possession) */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground">OWNER (POSSESSION)</label>
+            <Select
+              value={prop.owner || 'none'}
+              onValueChange={(val: string | null) => updateProp(prop.id, { owner: (val === 'none' || !val) ? undefined : val })}
+            >
+              <SelectTrigger className="h-8 text-xs w-full">
+                <SelectValue placeholder="Select owner" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (a/an)</SelectItem>
+                {scene.actors.map((actor) => (
+                  <SelectItem key={actor.id} value={actor.id}>
+                    👤 {actor.name || actor.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Social Group Inspector
+  if (selection.type === 'group') {
+    const group = scene.groups?.find((g) => g.id === selection.id);
+    if (!group) return null;
+
+    return (
+      <div className="w-80 border-l border-border bg-background flex flex-col h-full animate-in slide-in-from-right duration-200">
+        {/* Header */}
+        <div className="p-3 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold">👥 {group.label || `${group.type.charAt(0).toUpperCase() + group.type.slice(1)} Group`}</h3>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-6 text-xs"
+            onClick={() => {
+              removeGroup(group.id);
+              setSelection(null, null);
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+
+        {/* Form Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Group Type */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground font-bold">GROUP TYPE</label>
+            <Select
+              value={group.type}
+              onValueChange={(val: 'couple' | 'family' | 'team' | null) => { if (val) updateGroup(group.id, { type: val }); }}
+            >
+              <SelectTrigger className="h-8 text-xs w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="couple">👩‍❤️‍👨 Couple</SelectItem>
+                <SelectItem value="family">👨‍👩‍👧‍👦 Family</SelectItem>
+                <SelectItem value="team">🤝 Team</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Group Label */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground font-bold">CUSTOM LABEL</label>
+            <Input
+              value={group.label || ''}
+              onChange={(e) => updateGroup(group.id, { label: e.target.value })}
+              className="h-8 text-xs"
+              placeholder="e.g. stylish couple, modern family"
+            />
+          </div>
+
+          {/* Members Checklist */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-muted-foreground font-bold">MEMBERS</label>
+            {scene.actors.length === 0 ? (
+              <div className="text-xs text-muted-foreground">No actors available to add.</div>
+            ) : (
+              <div className="border border-border rounded p-2 space-y-2 bg-muted/10">
+                {scene.actors.map((actor) => {
+                  const isMember = group.members.includes(actor.id);
+                  return (
+                    <label key={actor.id} className="flex items-center gap-2 text-xs font-medium text-foreground cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isMember}
+                        onChange={() => {
+                          const newMembers = isMember
+                            ? group.members.filter((id) => id !== actor.id)
+                            : [...group.members, actor.id];
+                          updateGroup(group.id, { members: newMembers });
+                        }}
+                        className="rounded border-input text-primary focus:ring-ring focus:ring-offset-background h-3.5 w-3.5"
+                      />
+                      👤 {actor.name || actor.id}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );

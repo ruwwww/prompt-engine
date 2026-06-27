@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { SceneState, ActorState, PropState, AtmosphereState, CameraState, EightFieldPrompt, OutlinerSelection, UIState } from './types';
+import { SceneState, ActorState, PropState, AtmosphereState, CameraState, EightFieldPrompt, OutlinerSelection, UIState, GroupState } from './types';
 
 interface SceneContextType {
   scene: SceneState;
@@ -15,6 +15,9 @@ interface SceneContextType {
   addProp: (prop: PropState) => void;
   updateProp: (id: string, updates: Partial<PropState>) => void;
   removeProp: (id: string) => void;
+  updateGroup: (id: string, updates: Partial<GroupState>) => void;
+  addGroup: (group: GroupState) => void;
+  removeGroup: (id: string) => void;
   updateAtmosphere: (updates: Partial<AtmosphereState>) => void;
   updateCamera: (updates: Partial<CameraState>) => void;
   updateSceneName: (name: string) => void;
@@ -43,6 +46,7 @@ const defaultScene: SceneState = {
   name: 'Untitled Scene',
   actors: [],
   props: [],
+  groups: [],
   atmosphere: {
     id: 'atm-1',
     preset: '',
@@ -155,6 +159,29 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
       }
       return prev;
     });
+  }, []);
+
+  const addGroup = useCallback((group: GroupState) => {
+    setScene((prev) => ({
+      ...prev,
+      groups: [...(prev.groups || []), group],
+    }));
+  }, []);
+
+  const updateGroup = useCallback((id: string, updates: Partial<GroupState>) => {
+    setScene((prev) => ({
+      ...prev,
+      groups: (prev.groups || []).map((g) =>
+        g.id === id ? { ...g, ...updates } : g
+      ),
+    }));
+  }, []);
+
+  const removeGroup = useCallback((id: string) => {
+    setScene((prev) => ({
+      ...prev,
+      groups: (prev.groups || []).filter((g) => g.id !== id),
+    }));
   }, []);
 
   const updateAtmosphere = useCallback((updates: Partial<AtmosphereState>) => {
@@ -373,6 +400,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
         color: prop.color || undefined,
         shape: prop.shape || undefined,
         spatial_role: prop.spatialRole || undefined,
+        owner: prop.owner || undefined,
       };
     });
 
@@ -384,6 +412,15 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
       relationships,
       body_config: body_config_payload,
     };
+
+    if (activeScene.groups && activeScene.groups.length > 0) {
+      payload.groups = activeScene.groups.map(g => ({
+        id: g.id,
+        type: g.type,
+        label: g.label || undefined,
+        members: g.members
+      }));
+    }
 
     if (activeScene.actors.length > 0 && activeScene.actors[0].pose?.posture) {
       payload.pose = activeScene.actors[0].pose.posture.toLowerCase().replace(/ /g, "_");
@@ -434,7 +471,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
             ?.map((zone) => `${zone.garment} in ${zone.color}`)
             .join(', ') || 'casual clothing';
           eightField.action =
-            actor.relationships?.[0]?.type === 'proposal'
+            (actor.relationships?.[0]?.type as string) === 'proposal'
               ? 'proposing to someone'
               : actor.relationships?.[0]?.type || 'standing';
         } else {
@@ -581,6 +618,9 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
         addProp,
         updateProp,
         removeProp,
+        addGroup,
+        updateGroup,
+        removeGroup,
         updateAtmosphere,
         updateCamera,
         updateSceneName,

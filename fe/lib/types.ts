@@ -42,6 +42,13 @@ export interface ActorState {
   relationships?: ActorRelationship[];
 }
 
+export interface GroupState {
+  id: string;
+  type: 'couple' | 'family' | 'team';
+  label?: string;
+  members: string[]; // Actor IDs
+}
+
 export interface PropState {
   id: string;
   category: 'fixture' | 'object';
@@ -52,6 +59,7 @@ export interface PropState {
   color?: string;
   shape?: string;
   spatialRole?: 'Boundary' | 'Surface' | 'Anchor' | 'Frame';
+  owner?: string; // Actor ID
 }
 
 export interface AtmosphereState {
@@ -90,6 +98,7 @@ export interface SceneState {
   name: string;
   actors: ActorState[];
   props: PropState[];
+  groups?: GroupState[];
   atmosphere: AtmosphereState;
   camera: CameraState;
   promptOutput: string;
@@ -98,7 +107,7 @@ export interface SceneState {
   autoCompile: boolean;
 }
 
-export type SelectionType = 'actor' | 'prop' | 'atmosphere' | 'camera' | null;
+export type SelectionType = 'actor' | 'prop' | 'atmosphere' | 'camera' | 'group' | null;
 
 export interface OutlinerSelection {
   type: SelectionType;
