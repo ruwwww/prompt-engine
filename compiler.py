@@ -13,6 +13,10 @@ from jinja2 import Environment, FileSystemLoader, TemplateNotFound
 from field_compilers import (
     SubjectCompiler,
     ClothingCompiler,
+    ActionCompiler,
+    ObjectsCompiler,
+    EnvironmentCompiler,
+    LightingCompiler,
 )
 
 
@@ -1161,6 +1165,10 @@ class Assembler:
         # --- Instantiate field compilers ---
         self.subject_compiler = SubjectCompiler()
         self.clothing_compiler = ClothingCompiler()
+        self.objects_compiler = ObjectsCompiler()
+        self.action_compiler = ActionCompiler()
+        self.environment_compiler = EnvironmentCompiler()
+        self.lighting_compiler = LightingCompiler()
 
     def resolve_scene(self, scene_data: dict, strict: bool = False) -> dict:
         """Run the full resolution pipeline and return the resolved component trees
@@ -2206,16 +2214,29 @@ class Assembler:
             lines.append(f"Clothing: {_clothing_text}")
             lines.append(f"Action: {combined['action_phrase']}")
             
-            environment = output_formatter.format_environment_field(
-                env_label, env_prep, background_noise_phrases
+            _environment_text = self.environment_compiler.process(
+                env_label=env_label,
+                env_preposition=env_prep,
+                background_elements=background_noise_phrases if background_noise_phrases else None,
             )
+            if not _environment_text:
+                _environment_text = output_formatter.format_environment_field(
+                    env_label, env_prep, background_noise_phrases
+                )
+            environment = _environment_text
             lines.append(f"Environment: {environment}")
             
             objects = output_formatter.format_objects_field(prop_phrases)
             if objects:
                 lines.append(f"Objects: {objects}")
                 
-            lighting = output_formatter.format_lighting_field(lighting_phrase, "")
+            _lighting_text = self.lighting_compiler.process(
+                lighting_phrase=lighting_phrase,
+                weather_phrase="",
+            )
+            if not _lighting_text:
+                _lighting_text = output_formatter.format_lighting_field(lighting_phrase, "")
+            lighting = _lighting_text
             lines.append(f"Lighting: {lighting}")
             
             camera_desc = output_formatter.format_camera_field(

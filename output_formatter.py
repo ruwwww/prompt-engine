@@ -182,18 +182,22 @@ def render_full_output(scene_data: dict) -> str:
         scene_data.get("accessories", [])
     )
     clothing = _clothing_text if _clothing_text else format_clothing_field(scene_data.get("clothing_items", []), pronoun)
-    action = format_action_field(
+    _action_text = scene_data.get("_action_text", "")
+    action = _action_text if _action_text else format_action_field(
         scene_data.get("posture_phrase", ""),
         scene_data.get("action_clauses", []),
         pronoun
     )
-    environment = format_environment_field(
+    _environment_text = scene_data.get("_environment_text", "")
+    environment = _environment_text if _environment_text else format_environment_field(
         scene_data.get("env_label", ""),
         scene_data.get("env_preposition", "in"),
         scene_data.get("background_elements", [])
     )
-    objects = format_objects_field(scene_data.get("scene_props", []))
-    lighting = format_lighting_field(
+    _objects_text = scene_data.get("_objects_text", "")
+    objects = _objects_text if _objects_text else format_objects_field(scene_data.get("scene_props", []))
+    _lighting_text = scene_data.get("_lighting_text", "")
+    lighting = _lighting_text if _lighting_text else format_lighting_field(
         scene_data.get("lighting_phrase", ""),
         scene_data.get("weather_phrase", "")
     )
