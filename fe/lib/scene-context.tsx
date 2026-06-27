@@ -358,15 +358,21 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
     });
 
     activeScene.props.forEach((prop) => {
-      let tKey = prop.type.replace(/[^a-zA-Z]/g, "");
+      let tKey = prop.type ? prop.type.replace(/[^a-zA-Z]/g, "") : "";
       tKey = tKey.charAt(0).toUpperCase() + tKey.slice(1);
-      if (!tKey) tKey = "Fixture";
+      if (!tKey) {
+        tKey = prop.category === 'object' ? "Object" : "Fixture";
+      }
 
       objects[prop.id] = {
-        type: "fixture",
+        type: prop.category || "fixture",
         template_key: tKey,
         label: prop.label,
         details: prop.details,
+        material: prop.material || undefined,
+        color: prop.color || undefined,
+        shape: prop.shape || undefined,
+        spatial_role: prop.spatialRole || undefined,
       };
     });
 

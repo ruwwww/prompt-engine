@@ -134,6 +134,7 @@ export const mockProps = [
     type: 'arch',
     label: 'Massive heart-shaped arch',
     details: 'Made entirely of red roses with glowing text',
+    category: 'fixture' as const,
   },
   {
     id: 'bench',
@@ -142,6 +143,7 @@ export const mockProps = [
     type: 'bench',
     label: 'Wooden park bench',
     details: 'Old weathered wood with faded paint',
+    category: 'fixture' as const,
   },
   {
     id: 'table',
@@ -150,6 +152,7 @@ export const mockProps = [
     type: 'table',
     label: 'Round bistro table',
     details: 'Wrought iron with marble top',
+    category: 'fixture' as const,
   },
   {
     id: 'wall',
@@ -158,6 +161,7 @@ export const mockProps = [
     type: 'wall',
     label: 'Whitewashed stone wall',
     details: 'Ancient brick with ivy climbing',
+    category: 'fixture' as const,
   },
   {
     id: 'tree',
@@ -166,6 +170,34 @@ export const mockProps = [
     type: 'tree',
     label: 'Ancient oak tree',
     details: 'Gnarled branches with deep roots',
+    category: 'fixture' as const,
+  },
+  {
+    id: 'laptop',
+    name: 'Laptop',
+    icon: '💻',
+    type: 'object',
+    label: 'Silver laptop',
+    details: 'Open, showing a code editor on screen',
+    category: 'object' as const,
+  },
+  {
+    id: 'cup',
+    name: 'Coffee Cup',
+    icon: '☕',
+    type: 'drink',
+    label: 'Ceramic coffee cup',
+    details: 'Steaming hot black coffee inside',
+    category: 'object' as const,
+  },
+  {
+    id: 'book',
+    name: 'Book',
+    icon: '📖',
+    type: 'item',
+    label: 'Leather-bound book',
+    details: 'Ancient looking with gold lettering on the spine',
+    category: 'object' as const,
   },
 ];
 

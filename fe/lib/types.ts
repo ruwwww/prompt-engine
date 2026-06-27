@@ -9,7 +9,7 @@ export interface ClothingZone {
 
 export interface ActorRelationship {
   id: string;
-  type: 'holding' | 'sitting_at' | 'leaning_on' | 'standing_next_to' | 'framing' | 'kneeling_before';
+  type: 'holding' | 'sitting_at' | 'leaning_on' | 'standing_next_to' | 'framing' | 'kneeling_before' | '';
   targetPropId?: string; // For holding, leaning, sitting, kneeling, next_to
   subjects?: string[]; // For framing: array of actor IDs
   details?: string;
@@ -44,9 +44,14 @@ export interface ActorState {
 
 export interface PropState {
   id: string;
+  category: 'fixture' | 'object';
   type: string;
   label: string;
   details?: string;
+  material?: string;
+  color?: string;
+  shape?: string;
+  spatialRole?: 'Boundary' | 'Surface' | 'Anchor' | 'Frame';
 }
 
 export interface AtmosphereState {

@@ -123,6 +123,7 @@ export function LeftPanel() {
 
     const newProp: PropState = {
       id: `prop-${Date.now()}`,
+      category: prop.category || 'fixture',
       type: prop.type,
       label: prop.label,
       details: prop.details,
@@ -185,8 +186,11 @@ export function LeftPanel() {
 
             {/* Props Section */}
             <div className="space-y-1 pt-1">
-              <div className="text-xs font-semibold text-foreground flex items-center gap-1">
+              <div className="text-[11px] font-semibold text-foreground flex items-center gap-1">
                 🏺 Props ({scene.props.length})
+                <span className="text-[10px] text-muted-foreground font-normal ml-auto">
+                  {scene.props.filter(p => p.category === 'fixture' || !p.category).length}🏗️ | {scene.props.filter(p => p.category === 'object').length}📦
+                </span>
               </div>
               {scene.props.length === 0 ? (
                 <div className="text-[11px] text-muted-foreground ml-2 py-0.5">No props in scene</div>
@@ -196,13 +200,13 @@ export function LeftPanel() {
                     <button
                       key={prop.id}
                       onClick={() => setSelection('prop', prop.id)}
-                      className={`w-full text-left text-xs px-2 py-1 rounded transition-colors ${
+                      className={`w-full text-left text-[11px] px-2 py-1 rounded transition-colors truncate ${
                         ui.selection.type === 'prop' && ui.selection.id === prop.id
                           ? 'bg-primary text-primary-foreground'
-                          : 'hover:bg-muted'
+                          : 'hover:bg-muted text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      🏺 {prop.label}
+                      {prop.category === 'object' ? '📦' : '🏗️'} {prop.label}
                     </button>
                   ))}
                 </div>
