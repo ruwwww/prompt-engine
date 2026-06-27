@@ -284,6 +284,22 @@
       }
     }
   },
+  "kneeling_before": {
+    "tags": ["action"],
+    "priority": 80,
+    "chain_order": 1,
+    "required_zones": {
+      "actor": "LowerBody"
+    },
+    "roles": {
+      "actor": {
+        "allowed": ["human", "orc", "elf"]
+      },
+      "target": {
+        "allowed": ["human", "fixture", "furniture"]
+      }
+    }
+  },
   "framing": {
     "tags": ["spatial"],
     "priority": 85,

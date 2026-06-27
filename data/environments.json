@@ -121,6 +121,59 @@
       "lighting_key": "dim"
     }
   },
+  "rainy_alley": {
+    "label": "rainy alley",
+    "article": "a",
+    "template_key": "StandardEnvironment",
+    "default_lighting": "neon",
+    "default_weather": "rainy",
+    "volume": {
+      "containment": "open",
+      "orientation": "horizontal",
+      "boundary": "hard",
+      "scale": "district",
+      "entry_axis": "aperture"
+    },
+    "primary_surface": {
+      "material": "concrete",
+      "texture": "rough",
+      "normal": "up",
+      "afforded_postures": ["stand_on", "sit_on", "lie_on"]
+    },
+    "fixtures": {
+      "wall": {
+        "fixture_type": "structural",
+        "spatial_role": "boundary",
+        "contact_geometry": "face",
+        "affordances": [
+          { "affordance_type": "lean_on_surface" },
+          { "affordance_type": "stand_next_to" }
+        ]
+      },
+      "dumpster": {
+        "fixture_type": "prop",
+        "spatial_role": "anchor",
+        "contact_geometry": "top",
+        "affordances": [
+          { "affordance_type": "sit_on_face" },
+          { "affordance_type": "lean_on_surface" }
+        ]
+      },
+      "ground": {
+        "fixture_type": "surface_prop",
+        "spatial_role": "anchor",
+        "contact_geometry": "face",
+        "affordances": [
+          { "affordance_type": "sit_on_face" },
+          { "affordance_type": "lie_on_face" }
+        ]
+      }
+    },
+    "atmosphere": {
+      "weather_key": "rainy",
+      "lighting_key": "neon"
+    }
+  },
   "bathroom": {
     "label": "bathroom",
     "article": "a",
@@ -179,6 +232,67 @@
     "atmosphere": {
       "weather_key": null,
       "lighting_key": "bright"
+    }
+  },
+  "romantic_beach": {
+    "label": "romantic beach",
+    "article": "a",
+    "template_key": "StandardEnvironment",
+    "default_lighting": "golden_hour",
+    "default_weather": "breezy",
+    "volume": {
+      "containment": "open",
+      "orientation": "horizontal",
+      "boundary": "soft",
+      "scale": "landscape",
+      "entry_axis": "none"
+    },
+    "primary_surface": {
+      "material": "sand",
+      "texture": "yielding",
+      "normal": "up",
+      "afforded_postures": ["stand_on", "sit_on", "lie_on"]
+    },
+    "fixtures": {
+      "shoreline": {
+        "fixture_type": "natural_feature",
+        "spatial_role": "boundary",
+        "contact_geometry": "edge",
+        "affordances": [
+          { "affordance_type": "stand_at_edge" },
+          { "affordance_type": "sit_at_edge" }
+        ]
+      },
+      "rock": {
+        "fixture_type": "natural_feature",
+        "spatial_role": "anchor",
+        "contact_geometry": "top",
+        "affordances": [
+          { "affordance_type": "sit_on_face" },
+          { "affordance_type": "stand_on_face" }
+        ]
+      },
+      "towel": {
+        "fixture_type": "prop",
+        "spatial_role": "anchor",
+        "contact_geometry": "face",
+        "affordances": [
+          { "affordance_type": "lie_on_face" },
+          { "affordance_type": "sit_on_face" }
+        ]
+      },
+      "water": {
+        "fixture_type": "natural_feature",
+        "spatial_role": "boundary",
+        "contact_geometry": "face",
+        "affordances": [
+          { "affordance_type": "stand_on_face" }
+        ]
+      }
+    },
+    "atmosphere": {
+      "weather_key": "breezy",
+      "lighting_key": "golden_hour"
     }
   },
   "beach": {

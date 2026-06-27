@@ -198,13 +198,13 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
 
     const render_profile = (activeScene.camera.renderProfile || "cinematic").toLowerCase();
 
-    const environment = {
-      type: activeScene.atmosphere.preset || "beach",
+    const environment = activeScene.atmosphere.preset ? {
+      type: activeScene.atmosphere.preset,
       ground: activeScene.atmosphere.ground || "",
       envelope: activeScene.atmosphere.envelope || "",
       vista: activeScene.atmosphere.vista || "",
       background: activeScene.atmosphere.background || "",
-    };
+    } : undefined;
 
     const objects: Record<string, any> = {};
     const relationships: any[] = [];
@@ -373,7 +373,7 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
     const payload: any = {
       camera,
       render_profile,
-      environment,
+      ...(environment ? { environment } : {}),
       objects,
       relationships,
       body_config: body_config_payload,
@@ -442,7 +442,18 @@ export function SceneProvider({ children }: { children: React.ReactNode }) {
         eightField.camera = `${activeScene.camera.framing} shot at ${activeScene.camera.angle}`;
         eightField.style = `${activeScene.camera.renderProfile} style`;
 
-        const fullPrompt = `${eightField.subject}. ${eightField.clothing}. ${eightField.action}. ${eightField.environment}. ${eightField.lighting}. ${eightField.camera}. ${eightField.style}.`;
+        const lead = `${eightField.subject}. ${eightField.clothing}. ${eightField.action}. ${eightField.environment}. ${eightField.lighting}. ${eightField.camera}. ${eightField.style}.`;
+        const fullPrompt = [
+          lead,
+          eightField.subject ? `Subject: ${eightField.subject}` : null,
+          eightField.clothing ? `Clothing: ${eightField.clothing}` : null,
+          eightField.action ? `Action: ${eightField.action}` : null,
+          eightField.environment ? `Environment: ${eightField.environment}` : null,
+          eightField.objects ? `Objects: ${eightField.objects}` : null,
+          eightField.lighting ? `Lighting: ${eightField.lighting}` : null,
+          eightField.camera ? `Camera: ${eightField.camera}` : null,
+          eightField.style ? `Style Details: ${eightField.style}` : null
+        ].filter((x) => x !== null && x !== '').join('\n\n');
 
         setScene((prev) => ({
           ...prev,

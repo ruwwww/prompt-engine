@@ -13,7 +13,7 @@
     "narrative_mode": "scene_description"
   },
   "character_sheet": {
-    "include_tags": ["identity", "emotion", "clothing", "accessory", "action", "interaction", "style", "body_art", "pose", "body_config", "gaze", "environment", "lighting", "weather"],
+    "include_tags": ["identity", "emotion", "clothing", "accessory", "action", "interaction", "spatial", "style", "body_art", "pose", "body_config", "gaze", "environment", "lighting", "weather"],
     "max_fragments": 14
   }
 }

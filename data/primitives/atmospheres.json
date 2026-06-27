@@ -4,6 +4,11 @@
     "envelope": "romantic golden sunset lighting",
     "vista": "gentle ocean waves in the distance"
   },
+  "rainy_alley": {
+    "ground": "wet cobblestone floor",
+    "envelope": "dim flickering neon light",
+    "vista": "narrow alley stretching into darkness"
+  },
   "beach": {
     "ground": "sandy shore",
     "envelope": "warm golden sunset lighting",

@@ -33,13 +33,13 @@ function buildScenePayload(activeScene: any) {
 
   const render_profile = (activeScene.camera.renderProfile || "cinematic").toLowerCase();
 
-  const environment = {
-    type: activeScene.atmosphere.preset || "beach",
+  const environment = activeScene.atmosphere.preset ? {
+    type: activeScene.atmosphere.preset,
     ground: activeScene.atmosphere.ground || "",
     envelope: activeScene.atmosphere.envelope || "",
     vista: activeScene.atmosphere.vista || "",
     background: activeScene.atmosphere.background || "",
-  };
+  } : undefined;
 
   const objects: Record<string, any> = {};
   const relationships: any[] = [];
@@ -191,7 +191,7 @@ function buildScenePayload(activeScene: any) {
   const payload: any = {
     camera,
     render_profile,
-    environment,
+    ...(environment ? { environment } : {}),
     objects,
     relationships,
     body_config: body_config_payload,
@@ -209,7 +209,7 @@ export function CenterPanel() {
   const [copied, setCopied] = useState(false);
   const [copiedInput, setCopiedInput] = useState(false);
   const [copiedResolved, setCopiedResolved] = useState(false);
-  const [viewMode, setViewMode] = useState<'breakdown' | 'json'>('breakdown');
+  const [viewMode, setViewMode] = useState<'breakdown' | 'raw' | 'json'>('breakdown');
   const [resolvedJson, setResolvedJson] = useState<string>('{}');
   const [validationResult, setValidationResult] = useState<{
     show: boolean;
@@ -309,6 +309,14 @@ export function CenterPanel() {
           </Button>
           <Button
             size="sm"
+            variant={viewMode === 'raw' ? 'default' : 'ghost'}
+            className="text-xs h-7 px-2 font-semibold"
+            onClick={() => setViewMode('raw')}
+          >
+            📝 Raw Prompt
+          </Button>
+          <Button
+            size="sm"
             variant={viewMode === 'json' ? 'default' : 'ghost'}
             className="text-xs h-7 px-2 font-semibold"
             onClick={() => setViewMode('json')}
@@ -362,6 +370,16 @@ export function CenterPanel() {
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="w-full h-full">
             <div className="p-4 space-y-3">
+              {scene.promptOutput && (
+                <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-md">
+                  <h4 className="text-xs font-semibold uppercase tracking-wider text-primary mb-1">
+                    🌟 Scene Overview
+                  </h4>
+                  <p className="text-sm font-medium text-foreground leading-relaxed">
+                    {scene.promptOutput.split('\n')[0]}
+                  </p>
+                </div>
+              )}
               {[
                 { label: 'Subject', value: scene.eightFieldPrompt.subject === 'Empty scene (no actors)' ? '' : scene.eightFieldPrompt.subject, placeholder: 'No subject / actors added' },
                 { label: 'Clothing', value: scene.eightFieldPrompt.clothing, placeholder: 'No clothing specified' },
@@ -389,6 +407,14 @@ export function CenterPanel() {
               })}
             </div>
           </ScrollArea>
+        </div>
+      ) : viewMode === 'raw' ? (
+        <div className="flex-1 p-4 min-h-0 flex flex-col">
+          <textarea
+            className="flex-1 w-full p-4 font-mono text-sm bg-muted/20 border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary text-foreground leading-relaxed h-full overflow-y-auto"
+            value={scene.promptOutput}
+            readOnly
+          />
         </div>
       ) : (
         <div className="flex-1 flex gap-2 p-3 min-h-0 overflow-hidden">

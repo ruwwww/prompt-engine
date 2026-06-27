@@ -182,19 +182,25 @@ def render_full_output(scene_data: dict) -> str:
         scene_data.get("mood", "")
     )
 
-    lines = [lead, ""]
-    lines.append(f"Subject: {subject}")
-    lines.append(f"Clothing: {clothing}")
-    lines.append(f"Action: {action}")
-    lines.append(f"Environment: {environment}")
+    lines = [lead]
+    if subject:
+        lines.append(f"Subject: {subject}")
+    if clothing:
+        lines.append(f"Clothing: {clothing}")
+    if action:
+        lines.append(f"Action: {action}")
+    if environment:
+        lines.append(f"Environment: {environment}")
     if objects:
         lines.append(f"Objects: {objects}")
-    lines.append(f"Lighting: {lighting}")
-    lines.append(f"Camera: {camera}")
+    if lighting:
+        lines.append(f"Lighting: {lighting}")
+    if camera:
+        lines.append(f"Camera: {camera}")
     if style:
         lines.append(f"Style Details: {style}")
 
-    return "\n".join(lines)
+    return "\n\n".join(lines)
 
 
 # ── Private helpers ──────────────────────────────────────────────────────────
