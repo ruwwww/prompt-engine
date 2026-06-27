@@ -166,5 +166,13 @@
     "finite_past": "sat",
     "transitivity": "prepositional",
     "reciprocal_form": null
+  },
+  "framing": {
+    "participle": "framing",
+    "finite_3sg": "frames",
+    "finite_pl": "frame",
+    "finite_past": "framed",
+    "transitivity": "transitive",
+    "reciprocal_form": null
   }
 }

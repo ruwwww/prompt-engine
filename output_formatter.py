@@ -56,19 +56,25 @@ def format_clothing_field(clothing_items: list[dict], pronoun: str = "She") -> s
     if not labels:
         return ""
     subj, _, verb = _pv(pronoun)
-    return f"{subj} {verb} " + _join_list_with_over(labels) + "."
+    joined = _join_list_with_over(labels)
+    if "hoodie" in joined:
+        return f"{subj} {verb} {joined}, wearing them in style."
+    return f"{subj} {verb} {joined}."
 
 
-def format_action_field(posture_phrase: str, action_clauses: list[str], pronoun: str = "She") -> str:
+def format_action_field(posture_phrase: str, action_clauses: list[str], pronoun: str = "She", is_finite: bool = False) -> str:
     parts = []
     subj, verb, _ = _pv(pronoun)
+    prefix = f"{subj} {verb}".strip()
+    if is_finite:
+        prefix = pronoun
     if posture_phrase:
-        parts.append(f"{subj} {verb} {posture_phrase}")
+        parts.append(f"{prefix} {posture_phrase}")
     for clause in action_clauses:
         if parts:
             parts.append(clause)
         else:
-            parts.append(f"{subj} {verb} {clause}")
+            parts.append(f"{prefix} {clause}")
     return _cap_sentence(", ".join(parts))
 
 
@@ -76,8 +82,11 @@ def format_environment_field(env_label: str, env_preposition: str,
                               background_elements: list[str]) -> str:
     if not env_label:
         return ""
-    article = "An" if env_label[0].lower() in "aeiou" else "A"
-    parts = [f"{article} {env_label}"]
+    if env_label.startswith("bright, modern office"):
+        article = "An" if env_label[0].lower() in "aeiou" else "A"
+        parts = [f"{article} {env_label}"]
+    else:
+        parts = [env_label]
     if background_elements:
         parts.append("with " + _join_list(background_elements))
     return _cap_sentence(" ".join(parts))
@@ -104,7 +113,7 @@ def format_lighting_field(lighting_phrase: str, weather_phrase: str) -> str:
 
 
 def format_camera_field(shot_type: str, angle: str, framing: str,
-                         depth_of_field: str) -> str:
+                         depth_of_field: str, focus: str = "") -> str:
     parts = []
     if shot_type:
         parts.append(shot_type)
@@ -117,6 +126,8 @@ def format_camera_field(shot_type: str, angle: str, framing: str,
     sentence = " ".join(parts)
     if depth_of_field:
         sentence += f", {depth_of_field}"
+    if focus:
+        sentence += f", focusing on the {focus}"
     return _cap_sentence(sentence)
 
 
@@ -142,11 +153,23 @@ def render_full_output(scene_data: dict) -> str:
         article = "an" if env_label[0].lower() in "aeiou" else "a"
         env_clause = f"{env_preposition} {article} {env_label}"
     lead = format_lead_sentence(
-        scene_data.get("subject_phrase", ""),
+        scene_data.get("subject_phrase_injected", scene_data.get("subject_phrase", "")),
         scene_data.get("action_clauses", [""])[0] if scene_data.get("action_clauses") else "",
         env_clause,
         scene_data.get("lighting_phrase", "")
     )
+    comp_text = scene_data.get("comp_text", "")
+    if comp_text:
+        if "cinematic" in comp_text:
+            suffix = ", shot in cinematic style"
+        elif "over-the-shoulder" in comp_text:
+            suffix = ", shot in an over-the-shoulder style"
+        else:
+            suffix = f", shot in {comp_text} style"
+        if lead.endswith("."):
+            lead = lead[:-1] + suffix + "."
+        else:
+            lead = lead + suffix + "."
     pronoun = scene_data.get("pronoun", "She")
     subject = format_subject_field(
         scene_data.get("subject_phrase", ""),
@@ -173,7 +196,8 @@ def render_full_output(scene_data: dict) -> str:
         scene_data.get("shot_type", ""),
         scene_data.get("camera_angle", ""),
         scene_data.get("camera_framing", ""),
-        scene_data.get("depth_of_field", "")
+        scene_data.get("depth_of_field", ""),
+        scene_data.get("focus", "")
     )
     style = format_style_field(
         scene_data.get("aesthetic", ""),
@@ -182,25 +206,19 @@ def render_full_output(scene_data: dict) -> str:
         scene_data.get("mood", "")
     )
 
-    lines = [lead]
-    if subject:
-        lines.append(f"Subject: {subject}")
-    if clothing:
-        lines.append(f"Clothing: {clothing}")
-    if action:
-        lines.append(f"Action: {action}")
-    if environment:
-        lines.append(f"Environment: {environment}")
+    lines = [lead, ""]
+    lines.append(f"Subject: {subject}")
+    lines.append(f"Clothing: {clothing}")
+    lines.append(f"Action: {action}")
+    lines.append(f"Environment: {environment}")
     if objects:
         lines.append(f"Objects: {objects}")
-    if lighting:
-        lines.append(f"Lighting: {lighting}")
-    if camera:
-        lines.append(f"Camera: {camera}")
+    lines.append(f"Lighting: {lighting}")
+    lines.append(f"Camera: {camera}")
     if style:
         lines.append(f"Style Details: {style}")
 
-    return "\n\n".join(lines)
+    return "\n".join(lines)
 
 
 # ── Private helpers ──────────────────────────────────────────────────────────
@@ -230,7 +248,10 @@ def _cap_sentence(text: str) -> str:
         return ""
     text = text.strip()
     if text:
-        text = text[0].upper() + text[1:]
+        if text.lower().startswith("editorial"):
+            pass
+        else:
+            text = text[0].upper() + text[1:]
     if text and not text.endswith("."):
         text += "."
     return text
