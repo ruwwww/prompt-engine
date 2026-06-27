@@ -1,35 +1,43 @@
-"""StyleCompiler — renders the Style Details labeled output field.
+"""StyleCompiler — renders the Style Details labeled field.
 
-Formats the aesthetic treatment from render profile, style overlay,
-color palette, render quality, and mood data.
+Takes aesthetic, color palette, render quality, and mood
+and produces a concise Style Details description.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict
-
-from field_compilers.base import CompilerBase
+from .base import CompilerBase, cap_sentence
 
 
 class StyleCompiler(CompilerBase):
-    """Produces the Style Details: field content."""
+    """Renders the Style Details labeled field from style parameters."""
 
     def process(
         self,
-        style_overlay: str = "",
-        render_profile: Dict[str, Any] = None,
+        aesthetic: str = "",
+        color_palette: str = "",
+        render_quality: str = "",
         mood: str = "",
         **kwargs,
     ) -> str:
-        """Render the Style Details field.
+        """Produce the Style Details field text.
 
         Args:
-            style_overlay: The resolved style overlay text (from styles.json).
-            render_profile: The active render profile dict.
-            mood: The scene mood string.
+            aesthetic: The aesthetic/style name (e.g. "photorealistic", "cinematic").
+            color_palette: Color palette description (e.g. "vibrant reds").
+            render_quality: Render quality description (e.g. "high detail").
+            mood: Mood description (e.g. "dreamy", "melancholic").
 
         Returns:
-            The rendered Style Details field text, or empty string.
+            Rendered Style Details field, or "" if no data.
         """
-        # Phase 0 stub — delegates to existing logic in Assembler.
-        return ""
+        parts = []
+        if aesthetic:
+            parts.append(aesthetic)
+        if color_palette:
+            parts.append(f"with {color_palette}")
+        if render_quality:
+            parts.append(render_quality)
+        if mood:
+            parts.append(f"conveying a {mood} mood")
+        return cap_sentence(", ".join(parts))

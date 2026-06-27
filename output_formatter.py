@@ -27,6 +27,18 @@ def format_lead_sentence(subject_phrase: str, action_clause: str,
     return sentence
 
 
+_PRONOUN_VERB = {
+    "She": ("She", "is", "wears"),
+    "He": ("He", "is", "wears"),
+    "They": ("They", "are", "wear"),
+}
+
+def _pv(pronoun: str) -> tuple:
+    return _PRONOUN_VERB.get(pronoun, ("They", "are", "wear"))
+
+
+# ── DEPRECATED FALLBACKS (kept for Strangler Fig safety) ──────────────
+
 def format_subject_field(identity_phrase: str, held_items: list[str],
                           accessories: list[str]) -> str:
     parts = []
@@ -50,6 +62,7 @@ _PRONOUN_VERB = {
 def _pv(pronoun: str) -> tuple:
     return _PRONOUN_VERB.get(pronoun, ("They", "are", "wear"))
 
+
 def format_clothing_field(clothing_items: list[dict], pronoun: str = "She") -> str:
     sorted_items = sorted(clothing_items, key=lambda x: x.get("layer_order", 0), reverse=True)
     labels = [item["label"] for item in sorted_items]
@@ -62,7 +75,8 @@ def format_clothing_field(clothing_items: list[dict], pronoun: str = "She") -> s
     return f"{subj} {verb} {joined}."
 
 
-def format_action_field(posture_phrase: str, action_clauses: list[str], pronoun: str = "She", is_finite: bool = False) -> str:
+def format_action_field(posture_phrase: str, action_clauses: list[str],
+                         pronoun: str = "She", is_finite: bool = False) -> str:
     parts = []
     subj, verb, _ = _pv(pronoun)
     prefix = f"{subj} {verb}".strip()
@@ -145,6 +159,7 @@ def format_style_field(aesthetic: str, color_palette: str,
     return _cap_sentence(", ".join(parts))
 
 
+
 def render_full_output(scene_data: dict) -> str:
     env_label = scene_data.get("env_label", "")
     env_preposition = scene_data.get("env_preposition", "in")
@@ -201,14 +216,16 @@ def render_full_output(scene_data: dict) -> str:
         scene_data.get("lighting_phrase", ""),
         scene_data.get("weather_phrase", "")
     )
-    camera = format_camera_field(
+    _camera_text = scene_data.get("_camera_text", "")
+    camera = _camera_text if _camera_text else format_camera_field(
         scene_data.get("shot_type", ""),
         scene_data.get("camera_angle", ""),
         scene_data.get("camera_framing", ""),
         scene_data.get("depth_of_field", ""),
         scene_data.get("focus", "")
     )
-    style = format_style_field(
+    _style_text = scene_data.get("_style_text", "")
+    style = _style_text if _style_text else format_style_field(
         scene_data.get("aesthetic", ""),
         scene_data.get("color_palette", ""),
         scene_data.get("render_quality", ""),

@@ -17,6 +17,8 @@ from field_compilers import (
     ObjectsCompiler,
     EnvironmentCompiler,
     LightingCompiler,
+    CameraCompiler,
+    StyleCompiler,
 )
 
 
@@ -591,7 +593,6 @@ def apply_environment(
     composition_db: dict,
     jinja2_env: object = None,
     relationship_target_ids: set = None,
-    atmosphere_db: dict = None,
 ) -> list:
     """Process environment and emit text fragments.
     Returns a list of fragment dicts."""
@@ -1143,7 +1144,6 @@ class Assembler:
         self.spatial_prepositions_db = _load_json("spatial_prepositions.json")
         self.affordance_types_db = _load_json("affordance_types.json")
         self.action_grammar_db = _load_json("action_grammar.json")
-        self.atmosphere_db = _load_json("atmosphere.json")
 
         # --- Merge all primitive catalogs into a single primitives_db ---
         self.primitives_db = {}
@@ -1169,6 +1169,8 @@ class Assembler:
         self.action_compiler = ActionCompiler()
         self.environment_compiler = EnvironmentCompiler()
         self.lighting_compiler = LightingCompiler()
+        self.camera_compiler = CameraCompiler()
+        self.style_compiler = StyleCompiler()
 
     def resolve_scene(self, scene_data: dict, strict: bool = False) -> dict:
         """Run the full resolution pipeline and return the resolved component trees
@@ -2012,7 +2014,6 @@ class Assembler:
             self.weather_db, self.composition_db,
             self.jinja2_env,
             relationship_target_ids=relationship_target_ids,
-            atmosphere_db=self.atmosphere_db,
         )
         all_fragments.extend(env_frags)
 
@@ -2239,21 +2240,38 @@ class Assembler:
             lighting = _lighting_text
             lines.append(f"Lighting: {lighting}")
             
-            camera_desc = output_formatter.format_camera_field(
-                camera.get("shot_type", ""),
-                camera.get("angle", ""),
-                clean_framing,
-                camera.get("depth_of_field", ""),
-                camera.get("focus", "")
+            _camera_text = self.camera_compiler.process(
+                shot_type=camera.get("shot_type", ""),
+                angle=camera.get("angle", ""),
+                framing=clean_framing,
+                depth_of_field=camera.get("depth_of_field", ""),
+                focus=camera.get("focus", ""),
             )
+            if not _camera_text:
+                _camera_text = output_formatter.format_camera_field(
+                    camera.get("shot_type", ""),
+                    camera.get("angle", ""),
+                    clean_framing,
+                    camera.get("depth_of_field", ""),
+                    camera.get("focus", "")
+                )
+            camera_desc = _camera_text
             lines.append(f"Camera: {camera_desc}")
             
-            style = output_formatter.format_style_field(
-                style_overlay or render_profile.get("aesthetic", ""),
-                render_profile.get("color_palette", ""),
-                render_profile.get("quality", ""),
-                scene_data.get("mood", "")
+            _style_text = self.style_compiler.process(
+                aesthetic=style_overlay or render_profile.get("aesthetic", ""),
+                color_palette=render_profile.get("color_palette", ""),
+                render_quality=render_profile.get("quality", ""),
+                mood=scene_data.get("mood", ""),
             )
+            if not _style_text:
+                _style_text = output_formatter.format_style_field(
+                    style_overlay or render_profile.get("aesthetic", ""),
+                    render_profile.get("color_palette", ""),
+                    render_profile.get("quality", ""),
+                    scene_data.get("mood", "")
+                )
+            style = _style_text
             if style:
                 lines.append(f"Style Details: {style}")
                 
