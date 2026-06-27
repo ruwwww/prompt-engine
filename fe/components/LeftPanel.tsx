@@ -95,8 +95,17 @@ export function LeftPanel() {
       }
     });
 
+    const actorCount = scene.actors.length + 1;
+    const actorSlug = archetypeId.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    let actorId = `actor-${actorCount}-${actorSlug}`;
+    let actorIndex = 1;
+    while (scene.actors.some(a => a.id === actorId)) {
+      actorId = `actor-${actorCount}-${actorSlug}-${actorIndex}`;
+      actorIndex++;
+    }
+
     const newActor: ActorState = {
-      id: `actor-${Date.now()}`,
+      id: actorId,
       name: `${archetype.name}_${Date.now().toString().slice(-4)}`,
       archetype: archetypeId,
       gender: preset.gender || (archetypeId.includes('woman') || archetypeId.includes('influencer') ? 'woman' : 'man'),
@@ -121,8 +130,17 @@ export function LeftPanel() {
     const prop = mockProps.find((p) => p.id === propId);
     if (!prop) return;
 
+    const propCount = scene.props.length + 1;
+    const propSlug = prop.type.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    let generatedPropId = `prop-${propCount}-${propSlug}`;
+    let propIndex = 1;
+    while (scene.props.some(p => p.id === generatedPropId)) {
+      generatedPropId = `prop-${propCount}-${propSlug}-${propIndex}`;
+      propIndex++;
+    }
+
     const newProp: PropState = {
-      id: `prop-${Date.now()}`,
+      id: generatedPropId,
       category: prop.category || 'fixture',
       type: prop.type,
       label: prop.label,
