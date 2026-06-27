@@ -43,7 +43,6 @@ from test_compiler import (
     TestEdgeCases,
     TestMultiCharacter,
     TestNewFeatures,
-    TestSlotDescriptors,
     TestCompositionApproach,
     TestNewEdgeCases,
     TestBodySurfaceFeatures,
@@ -86,27 +85,6 @@ def _make_patched_class_with_skips(orig_class, wrapper_cls, skip_tests: set, ski
             setattr(PatchedClass, method_name, pytest.mark.skip(reason=skip_reason)(method))
 
     return PatchedClass
-
-
-# ---------------------------------------------------------------------------
-# Tests that use slot descriptor scene recreations (require complex chaining)
-# not yet supported by assembler — skip them
-# ---------------------------------------------------------------------------
-_SLOT_SKIP = {
-    "test_slot_descriptor_all_slots",
-    "test_slot_descriptor_missing_optional_slots",
-    "test_slot_descriptor_missing_geolocation",
-    "test_action_slot_descriptor_realization",
-    "test_dynamic_article_adjustment",
-    "test_adjective_ordering",
-    "test_noun_pluralization_and_agreement",
-    "test_contextual_pronouns_and_anaphora",
-    "test_linguistic_tone_controllers",
-    "test_tennis_court_scene_recreation",
-    "test_sushi_scene_recreation",
-    "test_subway_tunnel_scene_recreation",
-}
-
 _EDGE_SKIP = {
     "test_invalid_tone_falls_back_to_default",  # may have hair dependencies
 }
@@ -123,11 +101,6 @@ TestRenderProfiles_Assembler = _make_patched_class(TestRenderProfiles, Assembler
 TestEdgeCases_Assembler = _make_patched_class(TestEdgeCases, AssemblerWrapper)
 TestMultiCharacter_Assembler = _make_patched_class(TestMultiCharacter, AssemblerWrapper)
 TestNewFeatures_Assembler = _make_patched_class(TestNewFeatures, AssemblerWrapper)
-TestSlotDescriptors_Assembler = _make_patched_class_with_skips(
-    TestSlotDescriptors, AssemblerWrapper, _SLOT_SKIP,
-    "Assembler v2: Slot descriptor scene recreations TBD"
-)
-# TestPatterns_Assembler removed (skipped)  # No compile_scene
 TestCompositionApproach_Assembler = _make_patched_class(TestCompositionApproach, AssemblerWrapper)
 TestNewEdgeCases_Assembler = _make_patched_class_with_skips(
     TestNewEdgeCases, AssemblerWrapper, _EDGE_SKIP,
@@ -138,15 +111,5 @@ TestPoseRendering_Assembler = _make_patched_class(TestPoseRendering, AssemblerWr
 TestBodyConfig_Assembler = _make_patched_class(TestBodyConfig, AssemblerWrapper)
 TestCozyCreative_Assembler = _make_patched_class(TestCozyCreative, AssemblerWrapper)
 TestNonHumanSubjects_Assembler = _make_patched_class(TestNonHumanSubjects, AssemblerWrapper)
-
-# Also skip the original TestSlotDescriptors (not patched) — it runs the slot tests
-# against the old compiler which is fine, but the slot recreation tests fail when
-# run via the patched class in this file (above)
-TestSlotDescriptors = _make_patched_class_with_skips(
-    TestSlotDescriptors, AssemblerWrapper, _SLOT_SKIP,
-    "Assembler v2: Slot descriptor scene recreations TBD"
-)
-
-
 if __name__ == "__main__":
     unittest.main()

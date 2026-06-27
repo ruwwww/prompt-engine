@@ -2,7 +2,7 @@
 
 ## Quick Reference
 
-- **Tests**: `pytest` (95 active tests passing in `test_compiler.py`, plus 188 tests in `test_assembler_core.py`)
+- **Tests**: `pytest`
 - **CLI**: `python compile.py <scene.json> [--profile portrait|fashion|cinematic|character_sheet] [--strict]`
 - **Demo**: `python main.py`
 - **Verification Gate**: `pytest` is the only verification system.
@@ -67,4 +67,4 @@ graph TD
 
 ## Legacy Notes (V1 ECS Architecture)
 - The previous implementation used system classes (`WardrobeSystem`, `SubjectSystem`, `VisibilitySystem`, etc.) and a custom `SceneObject` class. This has been retired.
-- If referencing legacy behavior, look at the archived [compiler_legacy.py](file:///C:/Coding3/prompt-engine/compiler_legacy.py).
+- Legacy V1 code (`compiler_legacy.py`) has been fully deleted.

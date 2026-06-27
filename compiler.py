@@ -26,11 +26,6 @@ from field_compilers import (
 # Camera Framing Mapping
 # ---------------------------------------------------------------------------
 
-CAMERA_FRAMING_MAP = {
-    "close_up": "close-up",
-    "medium": "medium",
-    "full_body": "full-body",
-}
 
 # ---------------------------------------------------------------------------
 # Shared utility (ported from compiler.py)
@@ -1259,526 +1254,16 @@ class Assembler:
             "render_profile": render_profile_name,
         }
 
-    def _render_object_label(self, obj: dict) -> str:
-        """Render the base noun phrase of an object without articles or possession."""
-        template_key = obj.get("template_key", "")
-        phrase = ""
-        if self.jinja2_env:
-            t_name = (template_key + ".jinja2") if template_key else "Object.jinja2"
-            try:
-                if template_key:
-                    self.jinja2_env.get_template(t_name)
-                    phrase = _render_jinja2_template(self.jinja2_env, t_name, obj)
-                else:
-                    phrase = _render_jinja2_template(self.jinja2_env, "Object.jinja2", obj)
-            except Exception:
-                pass
-        
-        if not phrase:
-            label = obj.get("label")
-            if label:
-                phrase = label
-            else:
-                parts = [obj.get("material", ""), obj.get("color", ""), template_key.lower().replace("_", " ") if template_key else obj.get("type", "object")]
-                phrase = " ".join(p for p in parts if p).strip()
-                if not phrase:
-                    phrase = "object"
-        return phrase
-
-    def _render_object(self, obj: dict, scene_objects: dict = None) -> str:
-        """Render an object into a descriptive noun phrase using its template or fallback,
-        taking possession (owner) and spatial context (location) into account."""
-        if scene_objects is None:
-            scene_objects = {}
-        
-        label = self._render_object_label(obj)
-        
-        # Check possession/ownership
-        owner_id = obj.get("owner")
-        phrase = ""
-        if owner_id:
-            owner = scene_objects.get(owner_id)
-            if owner:
-                gender = owner.get("gender", "neutral")
-                possessive = "his" if gender == "man" else "her" if gender == "woman" else "their"
-                phrase = f"{possessive} {label}"
-        
-        if not phrase:
-            if label and not label.startswith(("a ", "an ", "the ")):
-                first_char = label[0].lower()
-                article = "an" if first_char in "aeiou" else "a"
-                phrase = f"{article} {label}"
-            else:
-                phrase = label
-
-        # Check spatial context (location)
-        location_id = obj.get("location")
-        if location_id:
-            location = scene_objects.get(location_id)
-            if location:
-                location_label = location.get("label", location_id)
-                # Keep compatibility with both fixture labels/templates
-                phrase = f"{phrase} on the {location_label}"
-        
-        return phrase
-
-    def _is_object_visible(self, obj: dict, visible_zones: set) -> bool:
-        """Check if an object is visible based on camera framing zones."""
-        # Default to LowerBody for floor / environment objects if zone is not explicitly provided.
-        obj_zone = obj.get("zone", "LowerBody")
-        return obj_zone in visible_zones
-
-    def _is_excluded_by_relationship(self, obj_id: str, relationships: list) -> bool:
-        """Only exclude objects that are actively target of interaction like 'holding' or 'using'."""
-        for rel in relationships:
-            rel_type = rel.get("type", "")
-            if rel.get("object") == obj_id and rel_type in ("holding", "using"):
-                return True
-            if rel.get("target") == obj_id and rel_type in ("holding", "using"):
-                return True
-        return False
-
-    def _collect_objects(self, scene_objects: dict, relationships: list, visible_zones: set) -> list:
-        """Collect and deduplicate visible and non-interaction-excluded objects, rendering them with counts and ownership/context."""
-        label_counts = {}
-        # Keep track of the first raw object of each label to copy properties like owner and location
-        label_to_obj = {}
-
-        for obj_id, obj in scene_objects.items():
-            if obj.get("type") in ("object", "drink", "item"):
-                if not self._is_object_visible(obj, visible_zones):
-                    continue
-                if self._is_excluded_by_relationship(obj_id, relationships):
-                    continue
-
-                label = self._render_object_label(obj)
-                if not label:
-                    continue
-                
-                label_counts[label] = label_counts.get(label, 0) + 1
-                if label not in label_to_obj:
-                    label_to_obj[label] = obj
-
-        prop_phrases = []
-        for label, count in label_counts.items():
-            obj = label_to_obj[label]
-            # Support pluralization
-            rendered_label = label
-            if count > 1:
-                # Basic pluralization: add 's' unless it already ends with 's' or is irregular
-                if label.endswith("s"):
-                    rendered_label = f"{count} {label}"
-                else:
-                    rendered_label = f"{count} {label}s"
-            
-            # Now build the full phrase with possession (owner)
-            owner_id = obj.get("owner")
-            phrase = ""
-            if owner_id and count == 1: # Possession usually applies to singular or is prepended
-                owner = scene_objects.get(owner_id)
-                if owner:
-                    gender = owner.get("gender", "neutral")
-                    possessive = "his" if gender == "man" else "her" if gender == "woman" else "their"
-                    phrase = f"{possessive} {rendered_label}"
-            
-            if not phrase:
-                if count > 1:
-                    phrase = rendered_label
-                elif rendered_label and not rendered_label.startswith(("a ", "an ", "the ")):
-                    first_char = rendered_label[0].lower()
-                    article = "an" if first_char in "aeiou" else "a"
-                    phrase = f"{article} {rendered_label}"
-                else:
-                    phrase = rendered_label
-
-            # Check spatial context (location)
-            location_id = obj.get("location")
-            if location_id:
-                location = scene_objects.get(location_id)
-                if location:
-                    location_label = location.get("label", location_id)
-                    phrase = f"{phrase} on the {location_label}"
-            
-            prop_phrases.append(phrase)
-
-        return prop_phrases
 
 
 
-    def inject_camera_descriptor(self, state: dict) -> dict:
-        """Inject Camera text based on framing value (if toggle is ON).
-        Returns state with '_camera_text' key containing the camera descriptor string.
-        If user has manually defined a Camera key in scene data, does nothing."""
-        inject = state.get("_inject_camera", True)
-        if not inject:
-            return state
-        camera = state.get("camera", {})
-        if "Camera" in state.get("scene_data", {}):
-            return state
-        framing = camera.get("framing", "full_body")
-        mapped_framing = CAMERA_FRAMING_MAP.get(framing, "full-body")
-        shot_type = camera.get("shot_type", "")
-        angle = camera.get("angle", "")
-        # Phase 1: Try Jinja2 camera template with richer context
-        text = ""
-        if self.jinja2_env:
-            text = _render_jinja2_template(self.jinja2_env, "Camera.jinja2", {
-                "framing": mapped_framing,
-                "shot_type": shot_type,
-                "angle": angle,
-            })
-        # Phase 2: Plain string fallback
-        if not text:
-            if shot_type:
-                text = f"{shot_type} shot of"
-            elif mapped_framing:
-                text = f"{mapped_framing} shot of"
-            else:
-                text = "Shot of"
-        state["_camera_text"] = text
-        return state
 
-    def _pluralize_subject_type(self, subj_type: str) -> str:
-        plurals = {
-            "woman": "women",
-            "man": "men",
-            "person": "people",
-            "child": "children",
-            "girl": "girls",
-            "boy": "boys",
-            "orc": "orcs",
-            "elf": "elves",
-            "creature": "creatures",
-            "human": "humans",
-            "adult": "adults"
-        }
-        return plurals.get(subj_type, subj_type + "s")
 
-    def _build_actor_description(self, actor_id: str, frags: list, scene_objects: dict, narrative_mode: str = "fact_chain") -> dict:
-        obj = scene_objects.get(actor_id, {})
-        gender = obj.get("gender", "person")
-        morphology = obj.get("morphology", {})
-        subject_type = _get_subject_type(gender, morphology)
-        
-        identity_adjectives = []
-        hair_phrase = ""
-        clothing_items = []
-        accessories = []
-        posture_phrase = ""
-        action_clauses = []
-        extra_identity_texts = []
-        
-        CLOTHING_ZONES = {"UpperBody", "LowerBody", "Feet"}
-        ACCESSORY_ZONES = {"Hands", "Jewelry", "Accessories", "Headwear"}
-        
-        for f in frags:
-            zone = f.get("zone", "")
-            frag_type = f.get("frag_type", "")
-            
-            if zone == "_subject_type":
-                subject_type = f["text"]
-            elif zone == "Hair":
-                hair_phrase = f["text"]
-            elif zone == "Face":
-                if f["text"] not in identity_adjectives:
-                    identity_adjectives.append(f["text"])
-            elif zone in CLOTHING_ZONES:
-                if not any(item["label"] == f["text"] for item in clothing_items):
-                    clothing_items.append({"layer_order": f.get("priority", 50), "label": f["text"]})
-            elif zone in ACCESSORY_ZONES:
-                if f["text"] not in accessories:
-                    accessories.append(f["text"])
-            elif frag_type == "relationship":
-                clause = f.get("clause_text", f["text"])
-                if clause not in action_clauses:
-                    action_clauses.append(clause)
-            elif zone in ("body_config", "_pose", "pose"):
-                posture_texts = [p.strip() for p in posture_phrase.split(",")] if posture_phrase else []
-                if f["text"] not in posture_texts:
-                    if posture_phrase:
-                        posture_phrase += ", " + f["text"]
-                    else:
-                        posture_phrase = f["text"]
-            elif zone in ("Tusks", "Ears", "Jaw", "Eyes"):
-                if f["text"] not in extra_identity_texts:
-                    extra_identity_texts.append(f["text"])
-                    
-        render_style = obj.get("render_style", "")
-        
-        adj_part = ", ".join(identity_adjectives) if identity_adjectives else ""
-        subject_phrase_parts = []
-        if render_style:
-            subject_phrase_parts.append(render_style)
-        if adj_part:
-            subject_phrase_parts.append(adj_part)
-        subject_phrase_parts.append(subject_type)
-        subject_phrase = " ".join(subject_phrase_parts)
-        
-        with_parts = []
-        if hair_phrase:
-            with_parts.append(hair_phrase)
-        for extra in extra_identity_texts:
-            with_parts.append(extra)
-            
-        if with_parts:
-            subject_phrase += " with " + output_formatter._join_list(with_parts)
-            
-        pronoun = "She"
-        if subject_type in ("man", "boy"):
-            pronoun = "He"
-        elif subject_type not in ("woman", "girl"):
-            pronoun = "They"
-            
-        if narrative_mode == "scene_description":
-            rel_info = []
-            for f in frags:
-                if f.get("frag_type") == "relationship":
-                    clause = f.get("clause_text", f["text"])
-                    rel_info.append((clause, f.get("chain_order", 99), f.get("action_id", "")))
-            rel_info.sort(key=lambda x: x[1])
-            if rel_info:
-                first_clause, _, first_act_id = rel_info[0]
-                number = "plural" if pronoun == "They" else "singular"
-                finite_first = _to_finite(first_clause, first_act_id, self.action_grammar_db, number)
-                
-                chained_clauses = [finite_first]
-                for clause, _, _ in rel_info[1:]:
-                    chained_clauses.append(clause)
-                action_clauses = [" ".join(chained_clauses)]
-            else:
-                action_clauses = []
-            
-        return {
-            "actor_id": actor_id,
-            "subject_phrase": subject_phrase,
-            "subject_type": subject_type,
-            "clothing_items": clothing_items,
-            "accessories": accessories,
-            "posture_phrase": posture_phrase,
-            "action_clauses": action_clauses,
-            "pronoun": pronoun,
-            "render_style": render_style
-        }
 
-    def _combine_actor_descriptions(self, descriptions: list, scene_objects: dict, scene_data: dict, narrative_mode: str = "fact_chain") -> dict:
-        groups = scene_data.get("groups", [])
-        
-        desc_by_id = {d["actor_id"]: d for d in descriptions}
-        
-        actor_to_group = {}
-        group_by_id = {}
-        for g in groups:
-            group_by_id[g["id"]] = g
-            for member in g.get("members", []):
-                if member in desc_by_id:
-                    actor_to_group[member] = g
-                    
-        grouped_actors = defaultdict(list)
-        non_grouped_actors = []
-        for d in descriptions:
-            g = actor_to_group.get(d["actor_id"])
-            if g:
-                grouped_actors[g["id"]].append(d)
-            else:
-                non_grouped_actors.append(d)
-                
-        # Build combined subject phrase
-        subj_phrases = []
-        processed_groups = set()
-        for d in descriptions:
-            actor_id = d["actor_id"]
-            g = actor_to_group.get(actor_id)
-            if g:
-                if g["id"] not in processed_groups:
-                    processed_groups.add(g["id"])
-                    label = g.get("label") or g.get("type") or "group"
-                    article = "an" if label[0].lower() in "aeiou" else "a"
-                    subj_phrases.append(f"{article} {label}")
-            else:
-                phrase = d["subject_phrase"]
-                if phrase.startswith("A "):
-                    phrase = "a " + phrase[2:]
-                elif phrase.startswith("An "):
-                    phrase = "an " + phrase[3:]
-                subj_phrases.append(phrase)
-                
-        if len(subj_phrases) == 1:
-            subject_phrase = subj_phrases[0]
-        elif len(subj_phrases) == 2:
-            subject_phrase = f"{subj_phrases[0]} and {subj_phrases[1]}"
-        else:
-            subject_phrase = ", ".join(subj_phrases[:-1]) + f", and {subj_phrases[-1]}"
-            
-        if subject_phrase:
-            subject_phrase = subject_phrase[0].upper() + subject_phrase[1:]
-            
-        # Build clothing
-        clothing_parts = []
-        for gid, members in grouped_actors.items():
-            member_clothing_sets = []
-            for m in members:
-                labels = sorted([item["label"] for item in m["clothing_items"]])
-                member_clothing_sets.append(tuple(labels))
-            if len(set(member_clothing_sets)) == 1 and members[0]["clothing_items"]:
-                pronoun = "Both" if len(members) == 2 else "They"
-                labels = [item["label"] for item in sorted(members[0]["clothing_items"], key=lambda x: x.get("layer_order", 0), reverse=True)]
-                if labels:
-                    labels[0] = "matching " + labels[0]
-                c_phrase = f"{pronoun} wear " + output_formatter._join_list_with_over(labels) + "."
-                clothing_parts.append(c_phrase)
-            else:
-                for m in members:
-                    subj_t = m["subject_type"]
-                    style_prefix = ""
-                    if m["render_style"]:
-                        if "photoreal" in m["render_style"].lower():
-                            style_prefix = "realistic "
-                        elif "stylized" in m["render_style"].lower() or "anim" in m["render_style"].lower():
-                            style_prefix = "animated "
-                        else:
-                            style_prefix = m["render_style"] + " "
-                    identifier = f"The {style_prefix}{subj_t}"
-                    sorted_items = sorted(m["clothing_items"], key=lambda x: x.get("layer_order", 0), reverse=True)
-                    labels = [item["label"] for item in sorted_items]
-                    if labels:
-                        c_phrase = f"{identifier} wears " + output_formatter._join_list_with_over(labels) + "."
-                        clothing_parts.append(c_phrase)
-                        
-        for d in non_grouped_actors:
-            c_phrase = output_formatter.format_clothing_field(d["clothing_items"], d["pronoun"])
-            if c_phrase:
-                clothing_parts.append(c_phrase)
-        clothing_phrase = " ".join(clothing_parts)
-        
-        # Build action
-        action_parts = []
-        holding_objs = {}
-        for d in descriptions:
-            actor_id = d["actor_id"]
-            held = []
-            for rel in scene_data.get("relationships", []):
-                if rel.get("type") == "holding" and rel.get("actor") == actor_id:
-                    obj_id = rel.get("object")
-                    if obj_id in scene_objects:
-                        held.append(obj_id)
-            holding_objs[actor_id] = held
 
-        # Handle matching held items (e.g. suitcases)
-        matching_held_clause = ""
-        if len(descriptions) == 2:
-            a1_id, a2_id = descriptions[0]["actor_id"], descriptions[1]["actor_id"]
-            a1_held = holding_objs.get(a1_id, [])
-            a2_held = holding_objs.get(a2_id, [])
-            if len(a1_held) == 1 and len(a2_held) == 1:
-                o1 = scene_objects[a1_held[0]]
-                o2 = scene_objects[a2_held[0]]
-                if o1.get("label") == o2.get("label") and o1.get("label"):
-                    label = o1["label"]
-                    plural_label = label + "s" if not label.endswith("s") else label
-                    matching_held_clause = f"Both hold their matching {plural_label}"
-                    for d in descriptions:
-                        d["action_clauses"] = [
-                            c for c in d["action_clauses"]
-                            if not (c.startswith("holding ") or c.startswith("holds ") or c.startswith("is holding "))
-                        ]
+    
 
-        # First check if all same action for all actors
-        all_action_sets = []
-        for d in descriptions:
-            action_text = d["posture_phrase"] + " | " + " & ".join(d["action_clauses"])
-            all_action_sets.append(action_text)
-        all_same_action = len(set(all_action_sets)) == 1
-
-        if all_same_action and len(descriptions) > 1:
-            pronoun = "Both" if len(descriptions) == 2 else "They"
-            act_phrase = output_formatter.format_action_field(descriptions[0]["posture_phrase"], descriptions[0]["action_clauses"], pronoun, is_finite=(narrative_mode == "scene_description"))
-            action_parts.append(act_phrase)
-        elif matching_held_clause:
-            a1_other = descriptions[0]["action_clauses"]
-            a2_other = descriptions[1]["action_clauses"]
-            if a1_other == a2_other:
-                other_clause = " and ".join(a1_other) if a1_other else ""
-                if other_clause:
-                    if other_clause.startswith("looking "):
-                        other_clause = "look " + other_clause[8:]
-                    elif other_clause.startswith("smiling "):
-                        other_clause = "smile " + other_clause[8:]
-                    combined_act = f"Both hold their matching {plural_label} and {other_clause}"
-                else:
-                    combined_act = f"Both hold their matching {plural_label}"
-                action_parts.append(output_formatter._cap_sentence(combined_act))
-            else:
-                action_parts.append(output_formatter._cap_sentence(matching_held_clause))
-                for d in descriptions:
-                    subj_t = d["subject_type"]
-                    style_prefix = ""
-                    if d["render_style"]:
-                        if "photoreal" in d["render_style"].lower():
-                            style_prefix = "realistic "
-                        elif "stylized" in d["render_style"].lower() or "anim" in d["render_style"].lower():
-                            style_prefix = "animated "
-                        else:
-                            style_prefix = d["render_style"] + " "
-                    identifier = f"The {style_prefix}{subj_t}"
-                    parts = []
-                    verb_be = "" if narrative_mode == "scene_description" else " is"
-                    if d["posture_phrase"]:
-                        parts.append(f"{identifier}{verb_be} {d['posture_phrase']}")
-                    for clause in d["action_clauses"]:
-                        if parts:
-                            parts.append(clause)
-                        else:
-                            parts.append(f"{identifier}{verb_be} {clause}")
-                    if parts:
-                        action_parts.append(output_formatter._cap_sentence(", ".join(parts)))
-        else:
-            for gid, members in grouped_actors.items():
-                member_action_sets = []
-                for m in members:
-                    action_text = m["posture_phrase"] + " | " + " & ".join(m["action_clauses"])
-                    member_action_sets.append(action_text)
-                if len(set(member_action_sets)) == 1:
-                    pronoun = "Both" if len(members) == 2 else "They"
-                    act_phrase = output_formatter.format_action_field(members[0]["posture_phrase"], members[0]["action_clauses"], pronoun, is_finite=(narrative_mode == "scene_description"))
-                    action_parts.append(act_phrase)
-                else:
-                    for m in members:
-                        subj_t = m["subject_type"]
-                        style_prefix = ""
-                        if m["render_style"]:
-                            if "photoreal" in m["render_style"].lower():
-                                style_prefix = "realistic "
-                            elif "stylized" in m["render_style"].lower() or "anim" in m["render_style"].lower():
-                                style_prefix = "animated "
-                            else:
-                                style_prefix = m["render_style"] + " "
-                        identifier = f"The {style_prefix}{subj_t}"
-                        parts = []
-                        verb_be = "" if narrative_mode == "scene_description" else " is"
-                        if m["posture_phrase"]:
-                            parts.append(f"{identifier}{verb_be} {m['posture_phrase']}")
-                        for clause in m["action_clauses"]:
-                            if parts:
-                                parts.append(clause)
-                            else:
-                                parts.append(f"{identifier}{verb_be} {clause}")
-                        if parts:
-                            action_parts.append(output_formatter._cap_sentence(", ".join(parts)))
-                            
-            for d in non_grouped_actors:
-                act_phrase = output_formatter.format_action_field(d["posture_phrase"], d["action_clauses"], d["pronoun"], is_finite=(narrative_mode == "scene_description"))
-                if act_phrase:
-                    action_parts.append(act_phrase)
-                    
-        action_phrase = " ".join(action_parts)
-        
-        return {
-            "subject_phrase": subject_phrase,
-            "clothing_phrase": clothing_phrase,
-            "action_phrase": action_phrase,
-            "pronoun": "They" if (len(descriptions) > 1 or all_same_subj) else descriptions[0]["pronoun"]
-        }
-
+    
     def assemble(self, scene_data: dict, strict: bool = False, inject_camera_descriptor: bool = True, output_format: str = "legacy") -> str:
         """Assemble a scene into a prompt string.
 
@@ -2107,33 +1592,8 @@ class Assembler:
                 else:
                     global_frags.append(f)
             
-            descriptions = []
-            for actor_id in physical_ids:
-                frags = actor_frags[actor_id]
-                desc = self._build_actor_description(actor_id, frags, scene_objects, narrative_mode)
-                descriptions.append(desc)
-                
-            combined = self._combine_actor_descriptions(descriptions, scene_objects, scene_data, narrative_mode)
-            
-            # Add global action/relationship clauses
-            global_clauses = []
-            for f in global_frags:
-                if f.get("frag_type") == "relationship":
-                    clause = f.get("clause_text", f["text"])
-                    if narrative_mode == "scene_description":
-                        action_id = f.get("action_id", "")
-                        clause = _to_finite(clause, action_id, self.action_grammar_db, "singular")
-                    if clause and clause not in global_clauses:
-                        global_clauses.append(clause)
-            if global_clauses:
-                if combined["action_phrase"]:
-                    combined["action_phrase"] += ", " + ", ".join(global_clauses)
-                else:
-                    combined["action_phrase"] = ", ".join(global_clauses)
-            clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
-            
-            # Gather non-interacted objects
-            prop_phrases = self._collect_objects(scene_objects, scene_data.get("relationships", []), camera_framing_zones)
+            # Use CAMERA_FRAMING_MAP for clean framing
+            clean_framing = {"close_up": "close-up", "medium": "medium", "full_body": "full-body"}.get(camera.get("framing", ""), camera.get("framing", ""))
             
             # Rest of the multi-actor flow:
             # Gather background noise elements
@@ -2149,30 +1609,72 @@ class Assembler:
                 env_clause = f"{env_prep} {article} {env_label}"
                 
             first_action = ""
-            for d in descriptions:
-                if d["action_clauses"]:
-                    first_action = d["action_clauses"][0]
-                    break
-            if not first_action and global_clauses:
-                first_action = global_clauses[0]
+            if narrative_mode == "scene_description":
+                rel_info = []
+                for f in filtered:
+                    if f.get("frag_type") == "relationship":
+                        clause = f.get("clause_text", f.get("text", ""))
+                        rel_info.append((clause, f.get("chain_order", 99), f.get("action_id", "")))
+                rel_info.sort(key=lambda x: x[1])
+                if rel_info:
+                    first_clause, _, first_act_id = rel_info[0]
+                    number = "singular"
+                    first_action = _to_finite(first_clause, first_act_id, self.action_grammar_db, number)
+            else:
+                for f in filtered:
+                    if f.get("frag_type") == "relationship":
+                        clause = f.get("clause_text", f.get("text", ""))
+                        if clause:
+                            first_action = clause
+                            break
                 
             # Get camera descriptor
             camera_text = ""
             if inject_camera_descriptor:
-                state_desc = self.inject_camera_descriptor({"camera": camera, "scene_data": scene_data, "_inject_camera": inject_camera_descriptor})
-                camera_text = state_desc.get("_camera_text", "")
+                camera_text = self.camera_compiler.process(
+                    shot_type=camera.get("shot_type", ""),
+                    angle=camera.get("angle", ""),
+                    framing=clean_framing,
+                    depth_of_field=camera.get("depth_of_field", ""),
+                    focus=camera.get("focus", ""),
+                )
                 
-            lead_subject = combined["subject_phrase"]
+                
+            # Build lead subject (fallback for lead sentence header)
+            lead_subject = ""
+            if actor_frags:
+                lead_subject_parts = []
+                for actor_id in physical_ids:
+                    frags = actor_frags[actor_id]
+                    subject_type = "person"
+                    for f in frags:
+                        if f.get("zone") == "_subject_type":
+                            subject_type = f["text"]
+                    render_style = scene_objects.get(actor_id, {}).get("render_style", "")
+                    part = subject_type
+                    if render_style:
+                        part = f"{render_style} {part}"
+                    article = "an" if part[0].lower() in "aeiou" else "a"
+                    lead_subject_parts.append(f"{article} {part}")
+                if len(lead_subject_parts) == 1:
+                    lead_subject = lead_subject_parts[0]
+                elif len(lead_subject_parts) == 2:
+                    lead_subject = f"{lead_subject_parts[0]} and {lead_subject_parts[1]}"
+                else:
+                    lead_subject = ", ".join(lead_subject_parts[:-1]) + f", and {lead_subject_parts[-1]}"
+                lead_subject = lead_subject[0].upper() + lead_subject[1:] if lead_subject else ""
+            
             if camera_text:
-                subj_lower = combined["subject_phrase"]
+                subj_lower = lead_subject
                 if subj_lower.startswith("A "):
                     subj_lower = "a " + subj_lower[2:]
                 elif subj_lower.startswith("An "):
                     subj_lower = "an " + subj_lower[3:]
                 else:
                     subj_lower = subj_lower[0].lower() + subj_lower[1:]
-                cam_lower = camera_text[0].lower() + camera_text[1:] if camera_text else ""
-                lead_subject = f"{cam_lower} {subj_lower}"
+                cam_phrase = camera_text.rstrip(".").strip()
+                cam_lower = cam_phrase[0].lower() + cam_phrase[1:] if cam_phrase else ""
+                lead_subject = f"{cam_lower} of {subj_lower}"
                     
             lead = output_formatter.format_lead_sentence(
                 lead_subject,
@@ -2194,6 +1696,42 @@ class Assembler:
             
             lines = [lead, ""]
 
+            # Build action phrase from relationship, body_config, and pose fragments
+            action_clauses_multi = []
+            posture_phrase_multi = ""
+            for f in filtered:
+                frag_type = f.get("frag_type", "")
+                zone = f.get("zone", "")
+                if frag_type == "relationship":
+                    clause = f.get("clause_text", f.get("text", ""))
+                    if clause and clause not in action_clauses_multi:
+                        action_clauses_multi.append(clause)
+                elif zone in ("body_config", "_pose", "pose"):
+                    if posture_phrase_multi:
+                        posture_phrase_multi += ", " + f["text"]
+                    else:
+                        posture_phrase_multi = f["text"]
+            # For scene_description mode, chain relationship clauses with finite verbs
+            if narrative_mode == "scene_description" and action_clauses_multi:
+                rel_info = []
+                for f in filtered:
+                    if f.get("frag_type") == "relationship":
+                        clause = f.get("clause_text", f.get("text", ""))
+                        rel_info.append((clause, f.get("chain_order", 99), f.get("action_id", "")))
+                rel_info.sort(key=lambda x: x[1])
+                if rel_info:
+                    chained = []
+                    for clause, _, act_id in rel_info:
+                        finite_form = _to_finite(clause, act_id, self.action_grammar_db, "singular")
+                        chained.append(finite_form)
+                    action_clauses_multi = [" ".join(chained)]
+
+            action_parts = []
+            if posture_phrase_multi:
+                action_parts.append(posture_phrase_multi)
+            action_parts.extend(action_clauses_multi)
+            action_phrase = ", ".join(action_parts)
+
             # Use SubjectCompiler for individual identity
             _subject_text = self.subject_compiler.process(
                 fragments_by_actor=actor_frags,
@@ -2201,7 +1739,7 @@ class Assembler:
                 scene_objects=scene_objects,
             )
             if not _subject_text:
-                _subject_text = output_formatter._cap_sentence(combined['subject_phrase'])
+                _subject_text = ""
             lines.append(f"Subject: {_subject_text}")
 
             # Use ClothingCompiler for matching detection
@@ -2211,9 +1749,9 @@ class Assembler:
                 scene_objects=scene_objects,
             )
             if not _clothing_text:
-                _clothing_text = combined['clothing_phrase']
+                _clothing_text = ""
             lines.append(f"Clothing: {_clothing_text}")
-            lines.append(f"Action: {combined['action_phrase']}")
+            lines.append(f"Action: {action_phrase}")
             
             _environment_text = self.environment_compiler.process(
                 env_label=env_label,
@@ -2227,7 +1765,12 @@ class Assembler:
             environment = _environment_text
             lines.append(f"Environment: {environment}")
             
-            objects = output_formatter.format_objects_field(prop_phrases)
+            _objects_text_multi = self.objects_compiler.process(
+                scene_objects=scene_objects,
+                relationships=scene_data.get("relationships", []),
+                camera_framing_zones=camera_framing_zones,
+            )
+            objects = _objects_text_multi if _objects_text_multi else output_formatter.format_objects_field([])
             if objects:
                 lines.append(f"Objects: {objects}")
                 
@@ -2348,8 +1891,15 @@ class Assembler:
         # Get camera descriptor
         camera_text = ""
         if inject_camera_descriptor:
-            state_desc = self.inject_camera_descriptor({"camera": camera, "scene_data": scene_data, "_inject_camera": inject_camera_descriptor})
-            camera_text = state_desc.get("_camera_text", "")
+            _framing_map = {"close_up": "close-up", "medium": "medium", "full_body": "full-body"}
+            _clean_framing = _framing_map.get(camera.get("framing", ""), camera.get("framing", ""))
+            camera_text = self.camera_compiler.process(
+                shot_type=camera.get("shot_type", ""),
+                angle=camera.get("angle", ""),
+                framing=_clean_framing,
+                depth_of_field=camera.get("depth_of_field", ""),
+                focus=camera.get("focus", ""),
+            )
             
         lead_subject = subject_phrase
         if camera_text:
@@ -2360,8 +1910,9 @@ class Assembler:
                 subj_lower = "an " + subj_lower[3:]
             else:
                 subj_lower = subj_lower[0].lower() + subj_lower[1:]
-            cam_lower = camera_text[0].lower() + camera_text[1:] if camera_text else ""
-            lead_subject = f"{cam_lower} {subj_lower}"
+            cam_phrase = camera_text.rstrip(".").strip()
+            cam_lower = cam_phrase[0].lower() + cam_phrase[1:] if cam_phrase else ""
+            lead_subject = f"{cam_lower} of {subj_lower}"
 
         # Derive pronoun from subject type
         pronoun = "She"
@@ -2390,10 +1941,15 @@ class Assembler:
                 action_clauses = []
 
         # Clean camera framing: "full_body" -> "full-body"
-        clean_framing = CAMERA_FRAMING_MAP.get(camera.get("framing", ""), camera.get("framing", ""))
+        clean_framing = {"close_up": "close-up", "medium": "medium", "full_body": "full-body"}.get(camera.get("framing", ""), camera.get("framing", ""))
 
         # Gather non-interacted objects
-        prop_phrases = self._collect_objects(scene_objects, scene_data.get("relationships", []), camera_framing_zones)
+        _objects_text = self.objects_compiler.process(
+            scene_objects=scene_objects,
+            relationships=scene_data.get("relationships", []),
+            camera_framing_zones=camera_framing_zones,
+        )
+        prop_phrases = []
 
         # Gather background noise elements
         background_noise_phrases = []
@@ -2418,6 +1974,7 @@ class Assembler:
         return output_formatter.render_full_output({
             "_subject_text": _subject_text,
             "_clothing_text": _clothing_text,
+            "_objects_text": _objects_text,
             "subject_phrase": subject_phrase,
             "held_items": held_items,
             "accessories": accessories,
